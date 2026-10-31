@@ -363,7 +363,8 @@ Ao final desta etapa, você terá um projeto `primeiro-projeto` no GitLab com o 
 
 **6.** No **console web do GitLab**, crie um novo projeto. Acesse [Novo projeto](https://gitlab.com/projects/new) e clique em **Create blank project**.
 
-<!-- NOVA-IMAGEM: img/gitlab-3.0.png | capturar: página https://gitlab.com/projects/new com o cartão "Create blank project" destacado -->
+<!-- NOVA-IMAGEM: img/gitlab-3.0.png | capturar: página https://gitlab.com/projects/new com o cartão "Create blank project" destacado | depois de salvar o arquivo, descomente a linha abaixo -->
+<!-- ![Página Novo projeto do GitLab com o cartão Create blank project destacado](img/gitlab-3.0.png) -->
 
 ---
 
