@@ -337,7 +337,6 @@ terraform workspace list
 
 O `default` foi criado automaticamente pelo Terraform e sempre existe.
 
-<!-- TROCAR-IMAGEM: images/workspacescommands.png | capturar de novo o terminal com a saída de `terraform workspace list` mostrando default, * dev e prod (a imagem atual é da versão antiga do lab) -->
 ![Saída de terraform workspace list](images/workspacescommands.png)
 
 *Saída de `terraform workspace list`: o `*` marca o workspace atual.*

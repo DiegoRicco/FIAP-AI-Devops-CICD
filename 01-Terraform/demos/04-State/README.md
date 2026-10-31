@@ -131,10 +131,8 @@ O bucket `base-config-<SEU-RM>` foi criado no setup da disciplina e vai guardar 
 aws s3 ls
 ```
 
-<!-- TROCAR-IMAGEM: images/s3nome.png | motivo: mostra o bucket base-config-654 e o caminho antigo FIAP-CICD-DevSecOps/02-Terraform | capturar: terminal do Codespaces em /workspaces/FIAP-AI-Devops-CICD/01-Terraform/demos/04-State rodando aws s3 ls, com a linha base-config-<RM> -->
 ![](images/s3nome.png)
 
-*Print de uma versão anterior do curso: o nome do bucket e o caminho no prompt serão diferentes no seu terminal.*
 
 > Saída esperada: uma linha com o seu bucket, por exemplo `2026-10-24 10:00:00 base-config-12345`. Se a lista vier vazia, crie o bucket voltando ao [setup](../../../00-create-codespaces/README.md). Se aparecer `ExpiredToken`, atualize as credenciais do Academy.
 
@@ -186,10 +184,9 @@ grep -E 'bucket|key' state.tf
 >     key    = "demo-state/quantum/terraform.tfstate"
 > ```
 
-Prefere ver o arquivo? `code state.tf` abre no editor. O print abaixo é de uma versão anterior da demo: no seu arquivo valem o nome do bucket e a `key` da saída acima.
+Prefere ver o arquivo? `code state.tf` abre no editor. O print abaixo mostra o `state.tf` já com o bucket trocado; no seu arquivo aparece o seu RM.
 
-<!-- TROCAR-IMAGEM: images/state.png | motivo: mostra bucket "lab-fiap-SUA TURMA-SEU RM", key "teste" e nenhum use_lockfile | capturar: VS Code do Codespaces com test/state.tf aberto depois do passo 4, mostrando bucket base-config-<RM>, key demo-state/quantum/terraform.tfstate e use_lockfile = true -->
-![](images/state.png)
+![state.tf com o bucket base-config trocado, a key demo-state/quantum/terraform.tfstate e use_lockfile = true](images/state.png)
 
 <details>
 <summary><b>💡 Clique para entender: o bloco backend "s3"</b></summary>
@@ -288,19 +285,53 @@ A VPC `fiap-lab` da demo 01.2 não existe nesta conta ou não tem subnets públi
 
 ```bash
 BUCKET=$(aws s3 ls | awk '{print $3}' | grep '^base-config' | head -1)
+echo "Bucket: $BUCKET"
 aws s3 ls "s3://$BUCKET/demo-state/quantum/"
 ```
 
-> Saída esperada (data e tamanho variam):
+> Saída esperada (o RM, a data e o tamanho variam):
 >
 > ```text
+> Bucket: base-config-12345
 > 2026-10-24 12:43:18      23825 terraform.tfstate
 > ```
 
-Se quiser ver pelo navegador, abra o [console do S3](https://s3.console.aws.amazon.com/s3/buckets?region=us-east-1), entre no seu bucket e nas pastas `demo-state/` e `quantum/`. O print abaixo é de uma versão anterior da demo (outro bucket e outra `key`): no seu console vale o caminho `demo-state/quantum/terraform.tfstate`.
+<details>
+<summary><b>⚠ Se der erro: a listagem vem vazia</b></summary>
+<blockquote>
 
-<!-- TROCAR-IMAGEM: images/states3.png | motivo: mostra o bucket base-config-654 com um objeto "teste" na raiz | capturar: console S3 > base-config-<RM> > demo-state/ > quantum/, mostrando o objeto terraform.tfstate depois do passo 6 -->
-![images/states3.png](images/states3.png)
+Se só aparece a linha `Bucket:` e nada embaixo, ainda não existe state em `demo-state/quantum/` nesse bucket. O Terraform só grava o state quando o `apply` termina. Há duas causas comuns.
+
+**Causa 1: o `apply` do passo 6 não terminou.** A última linha dele precisa ser `Apply complete! Resources: 1 added`. Se ele falhou antes de criar a EC2, nada foi gravado. Rode o passo 6 de novo e repita este passo.
+
+**Causa 2: o bucket da linha `Bucket:` não é o do `state.tf`.** Compare os dois:
+
+```bash
+cd /workspaces/FIAP-AI-Devops-CICD/01-Terraform/demos/04-State/test
+BUCKET=$(aws s3 ls | awk '{print $3}' | grep '^base-config' | head -1)
+echo "Bucket: $BUCKET"
+grep bucket state.tf
+```
+
+> Saída esperada: o mesmo nome nas duas linhas, por exemplo `Bucket: base-config-12345` e `bucket = "base-config-12345"`.
+
+Se os nomes forem diferentes (ou o `state.tf` ainda disser `base-config-SEU-RM`), refaça os passos 4 e 5 e depois o 6.
+
+Para ter certeza de que o state existe, peça a lista dos recursos que o Terraform conhece:
+
+```bash
+cd /workspaces/FIAP-AI-Devops-CICD/01-Terraform/demos/04-State/test
+terraform state list
+```
+
+> Saída esperada: aparece `aws_instance.example`, entre outras linhas que começam com `data.`. Com isso o state existe e está no bucket do `state.tf`.
+
+</blockquote>
+</details>
+
+Se quiser ver pelo navegador, abra o [console do S3](https://s3.console.aws.amazon.com/s3/buckets?region=us-east-1), entre no seu bucket e nas pastas `demo-state/` e `quantum/`. Lá está o objeto `terraform.tfstate`:
+
+![Console S3 em base-config, pasta demo-state/quantum/ com o objeto terraform.tfstate](images/states3.png)
 
 <details>
 <summary><b>💡 Clique para entender: o que é gravado no S3</b></summary>
@@ -388,10 +419,7 @@ terraform apply -auto-approve
 > Apply complete! Resources: 0 added, 0 changed, 0 destroyed.
 > ```
 
-<!-- TROCAR-IMAGEM: images/apply0.png | motivo: o conteudo esta certo, mas o prompt mostra o caminho antigo FIAP-CICD-DevSecOps/02-Terraform | capturar: terminal do Codespaces em /workspaces/FIAP-AI-Devops-CICD/01-Terraform/demos/04-State/test no fim do passo 10, com "No changes" e "Apply complete! Resources: 0 added, 0 changed, 0 destroyed." -->
-![apply](images/apply0.png)
-
-*Print de uma versão anterior do curso: o caminho no prompt muda, mas as linhas `No changes` e `0 added, 0 changed, 0 destroyed` são as mesmas que você deve ver.*
+![Terminal com No changes e Apply complete! Resources: 0 added, 0 changed, 0 destroyed.](images/apply0.png)
 
 Esse "nada a fazer" é a prova do conceito: mesmo sem nenhum arquivo local de estado, o Terraform sabe exatamente o que existe, porque a verdade está no S3, não no seu Codespaces. Se aparecesse `1 to add`, seria sinal de que o `state.tf` aponta para outra `key` ou outro bucket.
 

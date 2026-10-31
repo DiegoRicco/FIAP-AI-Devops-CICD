@@ -301,15 +301,13 @@ aws ec2 describe-subnets --filters "Name=vpc-id,Values=$VPC_ID" "Name=tag:Tier,V
 
 Se a primeira linha vier `VPC: None`, o `apply` do passo 4 não terminou: volte a ele. Para ver o mesmo pelo console: [VPCs](https://us-east-1.console.aws.amazon.com/vpc/home?region=us-east-1#vpcs:) e [Subnets](https://us-east-1.console.aws.amazon.com/vpc/home?region=us-east-1#subnets:).
 
-<!-- TROCAR-IMAGEM: images/vpccreated.png | motivo: mostra o CIDR antigo 9.0.x; o código cria 10.0.0.0/16 e subnets 10.0.4.0/22 a 10.0.24.0/22 | capturar: console VPC > Suas VPCs filtrando por fiap-lab, depois do passo 4 -->
+
 ![Console VPC mostrando a VPC fiap-lab criada pelo módulo](images/vpccreated.png)
 
-*Print de uma execução anterior: os nomes estão certos, mas o seu console mostra o CIDR 10.0.x, como na tabela acima.*
 
-<!-- TROCAR-IMAGEM: images/subnetscreated.png | motivo: mostra o CIDR antigo 9.0.x; o código cria 10.0.0.0/16 e subnets 10.0.4.0/22 a 10.0.24.0/22 | capturar: console VPC > Sub-redes filtrando por fiap-lab, depois do passo 4 -->
 ![Console VPC mostrando as subnets públicas fiap-lab, uma por zona de disponibilidade](images/subnetscreated.png)
 
-*Print de uma execução anterior: os nomes estão certos, mas o seu console mostra o CIDR 10.0.x, como na tabela acima.*
+
 
 ### Checkpoint
 

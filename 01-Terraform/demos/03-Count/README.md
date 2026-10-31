@@ -473,15 +473,19 @@ terraform plan
 
 O `0 to add, 0 to change, 0 to destroy` diz que nada vai mudar. A linha `data.http.alb will be read` é o check block avisando que vai testar o ALB de novo no próximo `apply`; não é uma mudança.
 
-Se preferir ver no console: abra o [painel EC2 → Target Groups](https://us-east-1.console.aws.amazon.com/ec2/home?region=us-east-1#TargetGroups:), clique em `quantum-ai-tg` e vá até a aba **Targets**. As duas máquinas passam de `initial` (ou `unhealthy`) para `healthy`.
+Se preferir ver no console: abra o [painel EC2 → Target Groups](https://us-east-1.console.aws.amazon.com/ec2/home?region=us-east-1#TargetGroups:), clique em `quantum-ai-tg` e vá até a aba **Targets**. Cada máquina passa por três estados, sempre nesta ordem: `Unused` → `Initial` → `Healthy`. Se uma delas aparecer `Unhealthy` no caminho, o health check ainda não passou; espere e atualize a página.
 
-<!-- TROCAR-IMAGEM: images/stillinregistration.png | motivo: Classic ELB e código antigo | capturar: aba Targets do quantum-ai-tg logo apos o passo 5, com 2 alvos em initial -->
-![Aba Targets do target group com as duas máquinas ainda em verificação](images/stillinregistration.png)
+`Unused`: a máquina está registrada, mas o ALB ainda não manda tráfego para o target group (o listener está sendo ligado). É assim nos primeiros segundos depois do `apply`.
 
-<!-- TROCAR-IMAGEM: images/inservice2.png | motivo: Classic ELB e código antigo | capturar: aba Targets do quantum-ai-tg com 2 alvos healthy -->
-![Aba Targets do target group com as duas máquinas healthy](images/inservice2.png)
+![Aba Targets do quantum-ai-tg com as duas máquinas em Unused](images/tg-unused.png)
 
-Print de uma versão anterior do lab (Classic ELB e código antigo). No seu console aparece o target group `quantum-ai-tg` com `Health status: healthy`.
+`Initial`: o ALB começou a testar as máquinas com o health check e espera as primeiras respostas.
+
+![Aba Targets do quantum-ai-tg com as duas máquinas em Initial](images/stillinregistration.png)
+
+`Healthy`: as duas passaram no health check e já recebem clientes. É o estado que o loop acima espera.
+
+![Aba Targets do quantum-ai-tg com as duas máquinas em Healthy](images/inservice2.png)
 
 <details>
 <summary><b>⚠ Se der erro: o laço termina e as máquinas continuam <code>unhealthy</code></b></summary>
@@ -531,7 +535,8 @@ echo "http://$(terraform output -raw alb_public)/"
 
 Copie o endereço e cole na barra do navegador. Você verá a página do **Quantum Commerce AI Customer Assistant**, com o título **A camada web do assistente está escalando.** e, no topo, o status **Instância 1 de 2 atrás do ALB — servida por ip-10-0-...** (ou **Instância 2 de 2**). O mesmo hostname aparece no rodapé, na linha **Servido por:**. A lista **O que ainda falta** continua dizendo que API, RAG e modelo de IA ainda não estão integrados: é verdade, e a página não finge o contrário.
 
-<!-- NOVA-IMAGEM: images/qc-count-alb.png | capturar: navegador em http://<alb_public>/ apos o passo 6, janela 1440x900, mostrando o status "Instância N de 2 atrás do ALB — servida por ip-..." e o rodapé "Servido por" -->
+
+![](images/qc-count-alb.png)
 
 Recarregue a página algumas vezes (`F5`): o hostname muda entre as duas máquinas. Se ele não mudar, é o navegador reaproveitando a conexão; o passo 8 mostra o balanceamento sem essa interferência.
 
@@ -627,8 +632,8 @@ grep -n '^  count = [0-9]' main.tf
 > 110:  count = 3
 > ```
 
-<!-- TROCAR-IMAGEM: images/countmod.png | motivo: Classic ELB e código antigo (t2.micro, key_name, SSH); oculto porque o bloco de código do passo 4 já mostra o trecho certo | capturar: editor com o bloco aws_instance.web e a linha count = 3 -->
-<!-- ![main.tf com o count alterado](images/countmod.png) -->
+
+![main.tf com o count alterado](images/countmod.png)
 
 ---
 
@@ -657,7 +662,7 @@ Leia com calma, porque é aqui que está a lição:
 - **`aws_instance.web[2]` e `aws_lb_target_group_attachment.web[2]`**: a máquina nova e o registro dela no ALB. As EC2 `[0]` e `[1]` **não aparecem**: elas não mudam.
 - **`terraform_data.provisiona[0]` e `[1]` `must be replaced`**: o "destroy" do resumo é só isto. Esses recursos não são máquinas: são o **envio da página**. Como a página de cada máquina diz "Instância N de M", e o M passou de 2 para 3, o Terraform reenvia a página para as máquinas antigas. Nenhuma EC2 é destruída.
 
-<!-- TROCAR-IMAGEM: images/plan.png | motivo: print da versao anterior (3 to add) | capturar: terminal com o plan do passo 10 mostrando "Plan: 5 to add, 0 to change, 2 to destroy." -->
+![Plano mostrando a escala para 3 máquinas](images/plan.png)
 
 ---
 
@@ -708,10 +713,7 @@ done | sort | uniq -c
 
 No [painel EC2 → Target Groups](https://us-east-1.console.aws.amazon.com/ec2/home?region=us-east-1#TargetGroups:) → `quantum-ai-tg` → aba **Targets**, a terceira máquina apareceu na lista: você está **vendo a camada web crescer**.
 
-<!-- TROCAR-IMAGEM: images/inservice3.png | motivo: Classic ELB e código antigo | capturar: aba Targets do quantum-ai-tg com 3 alvos healthy -->
-![Aba Targets com as três máquinas healthy](images/inservice3.png)
-
-Print de uma versão anterior do lab (Classic ELB e código antigo). No seu console aparece o target group `quantum-ai-tg` com `Health status: healthy`.
+![Aba Targets do quantum-ai-tg com as três máquinas em Healthy](images/inservice3.png)
 
 <details>
 <summary><b>⚠ Se der erro: aparecem só 2 linhas, ou alguma ainda diz "de 2"</b></summary>
@@ -786,9 +788,9 @@ done | sort | uniq -c
 >    6 Instância 2 de 2 atrás do ALB — servida por ip-10-0-5-11.ec2.internal
 > ```
 
-No console (`quantum-ai-tg` → aba **Targets**), a máquina removida passa por `draining` (o ALB para de mandar clientes novos e espera 30 s pelos que estavam em andamento) e some da lista.
+No console (`quantum-ai-tg` → aba **Targets**), a máquina removida passa uns 30 s em `draining` (o ALB para de mandar clientes novos e espera os que estavam em andamento) e depois some da lista. No fim, sobram as duas máquinas, em `Healthy`:
 
-<!-- TROCAR-IMAGEM: images/inservice1.png | motivo: mostra o target group antigo com 1 alvo; o lab agora reduz para 2 | capturar: aba Targets do quantum-ai-tg com 2 alvos healthy e 1 em draining -->
+![Aba Targets do quantum-ai-tg com nginx-001 e nginx-002 em Healthy, depois da redução](images/inservice1.png)
 
 ---
 
