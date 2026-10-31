@@ -1,0 +1,27 @@
+---
+# O TFLint roda no stage de validacao do modulo 03, ao lado do Checkov, para pegar
+# erros que o 'terraform validate' nao ve (tipos de instancia invalidos, atributos
+# depreciados, boas praticas AWS). Mesmo padrao do Terraform: versao fixa e
+# checksum oficial, em vez de executar o script de instalacao da branch master.
+- name: Baixar o TFLint {{ tflint_version }}
+  get_url:
+    url: "https://github.com/terraform-linters/tflint/releases/download/v{{ tflint_version }}/tflint_linux_amd64.zip"
+    dest: "/usr/local/src/tflint_{{ tflint_version }}_linux_amd64.zip"
+    checksum: "sha256:https://github.com/terraform-linters/tflint/releases/download/v{{ tflint_version }}/checksums.txt"
+    mode: "0644"
+
+- name: Instalar o TFLint em /usr/local/bin
+  unarchive:
+    src: "/usr/local/src/tflint_{{ tflint_version }}_linux_amd64.zip"
+    dest: /usr/local/bin
+    remote_src: true
+    mode: "0755"
+
+- name: Confirmar a versao do TFLint
+  command: tflint --version
+  register: tflint_version_output
+  changed_when: false
+
+- name: Mostrar a versao do TFLint
+  debug:
+    msg: "{{ tflint_version_output.stdout_lines }}"

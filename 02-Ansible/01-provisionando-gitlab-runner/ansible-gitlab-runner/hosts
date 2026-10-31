@@ -1,0 +1,14 @@
+[runner]
+# O alvo agora e o INSTANCE ID da EC2 (i-...), nao o IP, porque o Ansible conecta
+# via AWS Systems Manager (SSM) em vez de SSH. Substitua a linha abaixo pelo id da
+# sua instancia. Pegue o id com (na pasta terraform-gitlab-runner):
+#   terraform output -raw instance_id
+<INSTANCE ID DO SERVER>
+
+[all:vars]
+# Conexao via SSM: sem chave SSH, sem porta 22. O plugin usa um bucket S3 para
+# transferir arquivos durante a execucao — use o bucket do setup (base-config-<RM>).
+ansible_connection=community.aws.aws_ssm
+ansible_aws_ssm_bucket_name=base-config-SEU-RM
+ansible_aws_ssm_region=us-east-1
+ansible_become=true

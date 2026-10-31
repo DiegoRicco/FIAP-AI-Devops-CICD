@@ -1,0 +1,50 @@
+---
+# O shell executor clona o repositorio do projeto com git a cada job.
+- name: Garantir o git instalado
+  apt:
+    name: git
+    state: present
+
+- name: Criar o usuario gitlab-runner
+  user:
+    name: "{{ gitlab_runner_user }}"
+    state: present
+    shell: /bin/bash
+    create_home: true
+    home: "/home/{{ gitlab_runner_user }}"
+
+# O shell executor do GitLab roda os jobs num shell de LOGIN, que processa o
+# .bash_logout do usuario. O .bash_logout padrao do Ubuntu chama 'clear_console',
+# que falha sem TTY e quebra TODO job com "prepare environment: exit status 1".
+# Ref: https://docs.gitlab.com/runner/shells/#shell-profile-loading
+- name: Neutralizar o .bash_logout do gitlab-runner (evita falha do shell executor)
+  copy:
+    dest: "/home/{{ gitlab_runner_user }}/.bash_logout"
+    content: ""
+    owner: "{{ gitlab_runner_user }}"
+    group: "{{ gitlab_runner_user }}"
+    mode: "0644"
+
+# Sem 'force', o get_url so baixa se o binario ainda nao existe: rodar o playbook
+# de novo nao troca a versao de um runner que ja esta funcionando.
+- name: Baixar o GitLab Runner
+  get_url:
+    url: "https://gitlab-runner-downloads.s3.amazonaws.com/latest/binaries/gitlab-runner-linux-amd64"
+    dest: "/usr/local/bin/{{ gitlab_runner_executable }}"
+    mode: "0755"
+
+# O 'gitlab-runner install' falha se o servico ja existe; o 'creates' faz o
+# Ansible pular o comando quando a unit do systemd ja foi criada.
+- name: Instalar o servico do GitLab Runner
+  command: "{{ gitlab_runner_executable }} install --user={{ gitlab_runner_user }} --working-directory=/home/{{ gitlab_runner_user }}"
+  args:
+    creates: /etc/systemd/system/gitlab-runner.service
+
+- name: Ajustar o systemd do GitLab Runner
+  import_tasks: systemd-reload.yml
+
+- name: Iniciar e habilitar o servico do GitLab Runner
+  systemd:
+    name: gitlab-runner
+    state: started
+    enabled: true

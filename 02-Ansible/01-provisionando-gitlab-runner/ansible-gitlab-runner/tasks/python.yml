@@ -1,0 +1,17 @@
+---
+# O venv fica em /opt/venv (local neutro), e nao no home do 'ubuntu': o pipeline
+# do modulo 03 roda como usuario 'gitlab-runner', que nao tem acesso ao home do
+# 'ubuntu' (permissao 700). Em /opt/venv qualquer usuario consegue ativar o Checkov.
+# Usamos o Python 3 nativo do Ubuntu 22.04 com 'python3 -m venv', sem depender do
+# pacote 'virtualenv'.
+- name: Copiar requirements.txt do venv
+  copy:
+    src: requirements.txt
+    dest: /opt/venv-requirements.txt
+    mode: "0644"
+
+- name: Criar o virtualenv (Python nativo) e instalar o Checkov
+  pip:
+    requirements: /opt/venv-requirements.txt
+    virtualenv: /opt/venv
+    virtualenv_command: /usr/bin/python3 -m venv

@@ -1,0 +1,23 @@
+---
+- hosts: all
+  become: true
+  vars:
+    terraform_version: "1.10.5"
+    tflint_version: "0.65.0"
+    gitlab_runner_timeout_stop_seconds: 30
+    gitlab_runner_user: gitlab-runner
+    gitlab_runner_config_file: /etc/gitlab-runner/config.toml
+    gitlab_runner_executable: gitlab-runner
+    # Descricao do runner no GitLab. O README sobrescreve com --extra-vars.
+    gitlab_runner_name: quantum-ai-gitlab-runner
+    # Token de autenticacao do runner: lido do SSM Parameter Store (SecureString),
+    # nunca hardcoded. O aluno guarda em /fiap/gitlab-runner/token (ver README).
+    gitlab_runner_token_ssm_path: /fiap/gitlab-runner/token
+    gitlab_runner_ssm_region: us-east-1
+
+  tasks:
+    - include_tasks: tasks/python.yml
+    - include_tasks: tasks/terraform.yml
+    - include_tasks: tasks/tflint.yml
+    - include_tasks: tasks/gitlab-runner.yml
+    - include_tasks: tasks/register-runner.yml

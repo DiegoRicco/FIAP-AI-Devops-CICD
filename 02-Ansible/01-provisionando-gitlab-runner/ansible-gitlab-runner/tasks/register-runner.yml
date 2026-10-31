@@ -1,0 +1,55 @@
+---
+# O token de autenticacao do runner (glrt-...) NAO fica neste arquivo. O aluno o
+# guarda uma vez no AWS SSM Parameter Store como SecureString e o lookup o le
+# aqui, no controller (Codespaces), com as credenciais AWS do ambiente.
+- name: Ler o token do runner do SSM Parameter Store
+  set_fact:
+    gitlab_runner_token: "{{ lookup('amazon.aws.ssm_parameter', gitlab_runner_token_ssm_path, region=gitlab_runner_ssm_region, on_missing='skip') | default('', true) }}"
+  no_log: true
+
+- name: Abortar se o token nao foi encontrado no SSM
+  fail:
+    msg: >-
+      Token do runner nao encontrado em '{{ gitlab_runner_token_ssm_path }}' (SSM
+      Parameter Store, regiao {{ gitlab_runner_ssm_region }}). Guarde o token glrt-
+      do GitLab com: aws ssm put-parameter --name '{{ gitlab_runner_token_ssm_path }}'
+      --type SecureString --value 'glrt-SEU-TOKEN' --region {{ gitlab_runner_ssm_region }} --overwrite
+  when: gitlab_runner_token | length == 0
+
+# Idempotencia do registro: se o config.toml ja tem ESTE token, a maquina ja esta
+# vinculada e nada e feito. So registra quando o token mudou (runner novo na UI)
+# ou quando ainda nao ha registro. O token vai pelo stdin para nao aparecer na
+# lista de processos da EC2.
+- name: Verificar se esta maquina ja esta registrada com o token atual
+  command: grep -qF -f - "{{ gitlab_runner_config_file }}"
+  args:
+    stdin: "{{ gitlab_runner_token }}"
+  register: runner_already_registered
+  failed_when: false
+  changed_when: false
+  no_log: true
+
+# O 'register' acrescenta um bloco [[runners]] ao config.toml. Apagar o arquivo
+# antes garante um unico runner nesta maquina, sem entradas antigas com token
+# revogado.
+- name: Limpar o registro anterior
+  file:
+    path: "{{ gitlab_runner_config_file }}"
+    state: absent
+  when: runner_already_registered.rc != 0
+
+# As tags (shell,terraform), o nivel de acesso e o "run untagged" sao definidos na
+# CRIACAO do runner pela UI do GitLab (token glrt-, fluxo do GitLab 16+). Com token
+# de autenticacao, o 'register' ignora --tag-list/--locked/--access-level/
+# --run-untagged. Por isso o registro abaixo so vincula esta maquina ao runner ja
+# criado, preservando as tags definidas na UI.
+- name: Registrar o runner no GitLab (vincula esta maquina ao runner criado na UI)
+  command: >
+    {{ gitlab_runner_executable }} register
+    --non-interactive
+    --url 'https://gitlab.com/'
+    --token '{{ gitlab_runner_token }}'
+    --description '{{ gitlab_runner_name }}'
+    --executor 'shell'
+  when: runner_already_registered.rc != 0
+  no_log: true

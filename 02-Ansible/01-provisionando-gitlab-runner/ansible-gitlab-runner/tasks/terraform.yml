@@ -1,0 +1,26 @@
+---
+# A versao fica fixa (a mesma do Codespaces) para o pipeline gerar o mesmo
+# resultado que o aluno ve na maquina dele. O checksum oficial da HashiCorp
+# garante que o binario nao foi corrompido nem adulterado no download.
+- name: Baixar o Terraform {{ terraform_version }}
+  get_url:
+    url: "https://releases.hashicorp.com/terraform/{{ terraform_version }}/terraform_{{ terraform_version }}_linux_amd64.zip"
+    dest: "/usr/local/src/terraform_{{ terraform_version }}_linux_amd64.zip"
+    checksum: "sha256:https://releases.hashicorp.com/terraform/{{ terraform_version }}/terraform_{{ terraform_version }}_SHA256SUMS"
+    mode: "0644"
+
+- name: Instalar o Terraform em /usr/local/bin
+  unarchive:
+    src: "/usr/local/src/terraform_{{ terraform_version }}_linux_amd64.zip"
+    dest: /usr/local/bin
+    remote_src: true
+    mode: "0755"
+
+- name: Validar a instalacao do Terraform
+  command: terraform version
+  register: terraform_version_output
+  changed_when: false
+
+- name: Mostrar a versao do Terraform
+  debug:
+    msg: "{{ terraform_version_output.stdout_lines | first }}"

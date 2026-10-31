@@ -1,0 +1,36 @@
+---
+- name: Garantir o diretorio de drop-ins do servico gitlab-runner
+  file:
+    path: /etc/systemd/system/gitlab-runner.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+# Permite 'systemctl reload gitlab-runner' recarregar a configuracao sem matar
+# jobs em execucao.
+- name: Adicionar o comando de reload ao servico
+  copy:
+    dest: /etc/systemd/system/gitlab-runner.service.d/exec-reload.conf
+    content: |
+      [Service]
+      ExecReload=/bin/kill -HUP $MAINPID
+    mode: "0644"
+  register: gitlab_runner_exec_reload
+
+# SIGQUIT faz o runner terminar os jobs em andamento antes de parar.
+# https://docs.gitlab.com/runner/configuration/init.html#overriding-systemd
+- name: Configurar a parada graciosa do servico
+  copy:
+    dest: /etc/systemd/system/gitlab-runner.service.d/kill.conf
+    content: |
+      [Service]
+      TimeoutStopSec={{ gitlab_runner_timeout_stop_seconds }}
+      KillSignal=SIGQUIT
+    mode: "0644"
+  register: gitlab_runner_kill_timeout
+
+- name: Recarregar o systemd quando os drop-ins mudarem
+  systemd:
+    daemon_reload: true
+  when: gitlab_runner_exec_reload.changed or gitlab_runner_kill_timeout.changed
