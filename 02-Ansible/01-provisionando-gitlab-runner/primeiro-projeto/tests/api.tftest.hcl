@@ -26,7 +26,12 @@ run "valida_recursos_da_api" {
   }
 
   assert {
-    condition     = length(aws_apigatewayv2_route.routes) == 3
-    error_message = "A API deve expor exatamente 3 rotas (lista, consulta e atualizacao)."
+    condition     = length(aws_apigatewayv2_route.routes) == 4
+    error_message = "A API deve expor exatamente 4 rotas (lista, consulta, atualizacao e assistente)."
+  }
+
+  assert {
+    condition     = contains(keys(aws_apigatewayv2_route.routes), "POST /assistente/perguntas")
+    error_message = "A rota do Assistente de Politicas (POST /assistente/perguntas) precisa existir."
   }
 }

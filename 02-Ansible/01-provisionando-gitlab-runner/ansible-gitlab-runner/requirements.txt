@@ -1,1 +1,7 @@
-checkov
+# Versoes fixas: o mesmo comando deve dar o mesmo resultado em qualquer runner.
+checkov==3.4.0
+# pytest roda os testes do Assistente de Politicas no pipeline (modulo 03).
+pytest==8.4.2
+# boto3 explicito: o teste da Lambda usa o Stubber do botocore. Sem esta linha
+# ele so chegaria como dependencia do checkov e sumiria se o checkov mudasse.
+boto3==1.35.49

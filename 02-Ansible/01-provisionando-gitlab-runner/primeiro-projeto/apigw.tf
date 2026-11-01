@@ -21,6 +21,7 @@ resource "aws_apigatewayv2_route" "routes" {
     "GET /pedidos",
     "GET /pedidos/{id}",
     "PUT /pedidos/{id}",
+    "POST /assistente/perguntas",
   ])
   api_id    = aws_apigatewayv2_api.http.id
   route_key = each.value

@@ -1,10 +1,12 @@
 # Empacota o codigo da Lambda (pasta src/) num zip. O archive_file roda no
 # proprio Terraform — sem etapa de build externa. O hash do zip vira o
-# source_code_hash, entao alterar handler.py reimplanta a funcao no proximo apply.
+# source_code_hash, entao alterar handler.py, rag.py ou uma politica .md reimplanta a funcao no proximo apply.
 data "archive_file" "lambda_zip" {
   type        = "zip"
   source_dir  = "${path.module}/src"
   output_path = "${path.module}/build/lambda.zip"
+  # .pyc gerado ao rodar os testes mudaria o hash e redeployaria a Lambda a toa.
+  excludes = ["__pycache__", "__pycache__/*"]
 }
 
 resource "aws_lambda_function" "api" {

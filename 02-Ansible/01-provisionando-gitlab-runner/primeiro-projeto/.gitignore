@@ -6,3 +6,10 @@ build/
 *.tfstate.*
 planfile
 Checkov-Report.xml
+# Bytecode e relatorios gerados pelos testes Python
+__pycache__/
+.pytest_cache/
+pytest-report.xml
+avaliacao-report.xml
+tflint-report.xml
+checkov-report.xml

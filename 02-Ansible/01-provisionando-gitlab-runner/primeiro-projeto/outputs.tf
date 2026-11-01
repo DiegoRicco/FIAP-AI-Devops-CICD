@@ -9,3 +9,8 @@ output "pedidos_table" {
   description = "Nome da tabela DynamoDB de status dos pedidos."
   value       = aws_dynamodb_table.pedidos.name
 }
+
+output "assistente_url" {
+  description = "URL completa do Assistente de Politicas (POST com {\"pergunta\": \"...\"})."
+  value       = "${trimsuffix(aws_apigatewayv2_stage.default.invoke_url, "/")}/assistente/perguntas"
+}
