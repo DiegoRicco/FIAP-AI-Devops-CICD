@@ -56,7 +56,7 @@ O lab cria **uma EC2 `t3.small`** com disco de 30 GB, que fica ligada porque o m
 - **S3** (state remoto) e **SSM Parameter Store** (token): centavos ou zero
 
 > [!CAUTION]
-> **Não destrua o runner no fim deste módulo.** Os pipelines do módulo 03 dependem dele. O `terraform destroy` do runner está no **[passo 11 do Lab 03.2](../03-CICD/02-Validando-e-gerando-relatorios/README.md#passo-11)**, e o Trabalho Final explica como subi-lo de novo se precisar. Quando o curso acabar, esse destroy zera o custo. A rede `fiap-lab` não é destruída em nenhum desses momentos.
+> **Não destrua o runner no fim deste módulo.** Os pipelines do módulo 03 dependem dele. O `terraform destroy` do runner está no **[passo 15 do Lab 03.2](../03-CICD/02-Validando-e-gerando-relatorios/README.md#passo-15)**, e o Trabalho Final explica como subi-lo de novo se precisar. Quando o curso acabar, esse destroy zera o custo. A rede `fiap-lab` não é destruída em nenhum desses momentos.
 
 ## Próximo módulo
 

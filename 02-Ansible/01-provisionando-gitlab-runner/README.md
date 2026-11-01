@@ -7,7 +7,7 @@
 >
 > **Diego Tavares**, AI SRE sênior, completa: *— "Faz uma vez com calma para entender cada peça. Depois, rodar o playbook de novo tem que dar exatamente a mesma máquina."*
 
-Esse laboratório é o que vamos fazer juntos durante a aula: criar o projeto `primeiro-projeto` no GitLab, provisionar uma EC2 com Terraform e rodar um playbook Ansible que a transforma num **GitLab Runner registrado** e dedicado a esse projeto. Nenhuma IA roda nesta máquina: ela é a esteira que, no módulo 03, vai publicar a **API de pedidos** que o assistente consulta.
+Esse laboratório é o que vamos fazer juntos durante a aula: criar o projeto `primeiro-projeto` no GitLab, provisionar uma EC2 com Terraform e rodar um playbook Ansible que a transforma num **GitLab Runner registrado** e dedicado a esse projeto. Nenhuma IA roda nesta máquina: ela é a esteira que, no módulo 03, vai testar e publicar o **Assistente de Políticas** e a **API de pedidos** que ele consulta.
 
 Nunca usou Ansible ou um terminal? Tudo bem: cada passo diz o que fazer, onde rodar, o que deve aparecer e o que fazer se aparecer outra coisa. Copie o bloco cinza inteiro, cole no terminal indicado e aperte Enter. Se aparecer `Error:`, `ERRO:` ou `FAILED!`, pare no passo em que está e abra o bloco **⚠ Se der erro** logo abaixo dele.
 
@@ -55,7 +55,7 @@ Vamos separar com clareza **quem faz o quê**: o **Terraform** cria a EC2 e prep
 
 ## O que você terá ao final
 
-Ao final deste laboratório, você terá uma EC2 `quantum-ai-gitlab-runner` rodando como **GitLab Runner registrado** (executor `shell`, tags `shell` e `terraform`), com Terraform, TFLint, Checkov, Python, `jq`, AWS CLI e git instalados, visível no painel do projeto `primeiro-projeto` e configurada inteiramente por um playbook Ansible. **Helena vai querer ver o runner aparecendo "online" no painel de CI/CD do projeto**: esse é o entregável simbólico do lab.
+Ao final deste laboratório, você terá uma EC2 `quantum-ai-gitlab-runner` rodando como **GitLab Runner registrado** (executor `shell`, tags `shell` e `terraform`), com Terraform, TFLint, Checkov e pytest (no `/opt/venv`), Python, `jq`, AWS CLI e git instalados, visível no painel do projeto `primeiro-projeto` e configurada inteiramente por um playbook Ansible. **Helena vai querer ver o runner aparecendo "online" no painel de CI/CD do projeto**: esse é o entregável simbólico do lab.
 
 > [!TIP]
 > Sempre que encontrar um bloco com o título **💡 Clique para entender**, abra esse trecho. Ele traz a anatomia do comando, o contexto prático e links oficiais para aprofundamento.
@@ -95,7 +95,7 @@ Documentação oficial:
 
 ## Contexto
 
-A Quantum Commerce está montando o pipeline de entrega contínua do AI Customer Assistant. O passo de hoje é ter um runner **dedicado**, dentro da conta AWS da empresa, capaz de rodar Terraform com as credenciais certas. Em vez de configurar esse servidor à mão toda vez que precisar de um runner novo, vamos codificar a configuração com Ansible: um playbook que qualquer pessoa do time roda e obtém exatamente o mesmo runner. Esse runner é a peça que o módulo 03 (CI/CD) usa para automatizar `plan`/`apply` da API de pedidos.
+A Quantum Commerce está montando o pipeline de entrega contínua do AI Customer Assistant. O passo de hoje é ter um runner **dedicado**, dentro da conta AWS da empresa, capaz de rodar Terraform com as credenciais certas. Em vez de configurar esse servidor à mão toda vez que precisar de um runner novo, vamos codificar a configuração com Ansible: um playbook que qualquer pessoa do time roda e obtém exatamente o mesmo runner. Esse runner é a peça que o módulo 03 (CI/CD) usa para testar e automatizar `plan`/`apply` do Assistente de Políticas e da API de pedidos.
 
 ![Arquitetura do lab 02.1: Codespaces roda Terraform e Ansible; Terraform cria a EC2 do runner na VPC fiap-lab; Ansible configura a EC2 via SSM; o Ansible lê o token no SSM Parameter Store e registra o runner no GitLab](img/arquitetura-ansible-runner.png)
 
@@ -106,7 +106,7 @@ A Quantum Commerce está montando o pipeline de entrega contínua do AI Customer
 | Peça | O que faz neste lab | Em uma frase |
 |------|---------------------|--------------|
 | **Terraform** | Cria a EC2 `quantum-ai-gitlab-runner` e o Security Group (só saída, sem porta de entrada) | O **que existe** |
-| **Ansible** | Instala Terraform, TFLint, Checkov, git e o `gitlab-runner` dentro da EC2, ajusta o serviço e registra o runner | **Como a máquina está** por dentro |
+| **Ansible** | Instala Terraform, TFLint, Checkov e pytest (no `/opt/venv`), git e o `gitlab-runner` dentro da EC2, ajusta o serviço e registra o runner | **Como a máquina está** por dentro |
 | **SSM (AWS Systems Manager)** | Leva os comandos do Codespaces até a EC2 | O canal: sem SSH, sem chave e sem porta 22 |
 | **GitLab** | Guarda o código do `primeiro-projeto` e entrega os jobs ao runner | Quem **dispara** o runner a cada `git push` |
 
@@ -403,9 +403,9 @@ cp -frv /workspaces/FIAP-AI-Devops-CICD/02-Ansible/01-provisionando-gitlab-runne
 ls /home/vscode/environment/primeiro-projeto
 ```
 
-O `mkdir -p` garante que a pasta de destino existe (sem ele, o `cp` criaria a cópia com outro nome). O `ls` deve listar `apigw.tf`, `dynamodb.tf`, `lambda.tf`, `main.tf`, `outputs.tf`, `src`, `state.tf`, `tests` e `versions.tf`. É neste caminho, `/home/vscode/environment/primeiro-projeto`, que os labs do módulo 03 trabalham.
+O `mkdir -p` garante que a pasta de destino existe (sem ele, o `cp` criaria a cópia com outro nome). O `ls` deve listar `apigw.tf`, `avaliacao`, `dynamodb.tf`, `lambda.tf`, `main.tf`, `outputs.tf`, `pytest.ini`, `src`, `state.tf`, `tests` e `versions.tf`. É neste caminho, `/home/vscode/environment/primeiro-projeto`, que os labs do módulo 03 trabalham.
 
-**9.3.** Entre na pasta copiada (este é o projeto da **API de pedidos** da Quantum Commerce, que o módulo 03 vai publicar pelo pipeline):
+**9.3.** Entre na pasta copiada. Este é o projeto do **Assistente de Políticas** da Quantum Commerce (o código em `src/`, as políticas em `src/politicas/` e os testes em `tests/` e `avaliacao/`) junto com a **API de pedidos**; o módulo 03 vai publicá-lo pelo pipeline:
 
 ```bash
 cd /home/vscode/environment/primeiro-projeto
@@ -716,7 +716,7 @@ Repare na divisão de responsabilidades: o Terraform **cria** a EC2 (recurso de 
 
 A novidade é **como** esse bootstrap chega na máquina: não há SSH nem chave. A EC2 sobe **sem `key_name`** e o Security Group só tem regra de **saída**: nenhuma porta de entrada, nem a 22. Em vez disso, o Terraform usa um `terraform_data` com `local-exec` que (1) espera o SSM Agent da instância reportar `Online`, (2) envia o `install-python.sh` por `aws ssm send-command` e (3) aborta o apply se o script falhar. Quem autentica tudo isso é o `LabInstanceProfile` anexado à EC2 mais as credenciais AWS do seu ambiente — por isso `aws` e `jq` são pré-requisitos (passo 3.5).
 
-A configuração de verdade (instalar `gitlab-runner`, Terraform, TFLint, Checkov, ajustar o `systemd`, registrar o runner) fica para o **Ansible**, na próxima parte, que também conecta via SSM (plugin `community.aws.aws_ssm`).
+A configuração de verdade (instalar `gitlab-runner`, Terraform, TFLint, Checkov e pytest, ajustar o `systemd`, registrar o runner) fica para o **Ansible**, na próxima parte, que também conecta via SSM (plugin `community.aws.aws_ssm`).
 
 A AMI é resolvida dinamicamente por um `data "aws_ami"` (Ubuntu 22.04 mais recente da Canonical) em vez de um ID fixo — assim o lab não quebra quando a AMI antiga é despublicada.
 
@@ -950,7 +950,7 @@ As três últimas linhas são o registro: `is valid` é o GitLab confirmando que
 > [!WARNING]
 > Não use `gitlab-runner list` para essa conferência: ele imprime o token `glrt-...` inteiro na tela. Quem tem o token consegue se passar pelo seu runner. Se ele aparecer num print ou num chat, gere outro token no GitLab e grave de novo no SSM (passo 16).
 
-O `CHANGED` na primeira linha é normal: o módulo `shell` sempre se declara "mudou" porque o Ansible não sabe o que um comando livre faz. São essas ferramentas que os labs 03.1 e 03.2 chamam no pipeline: `terraform`, `tflint`, o Checkov em `/opt/venv`, `python3` (validação da Lambda), `jq` e `aws`.
+O `CHANGED` na primeira linha é normal: o módulo `shell` sempre se declara "mudou" porque o Ansible não sabe o que um comando livre faz. São essas ferramentas que os labs 03.1 e 03.2 chamam no pipeline: `terraform`, `tflint`, o Checkov e o pytest em `/opt/venv` (o pytest roda os testes do assistente), `jq` e `aws`.
 
 <details>
 <summary><b>⚠ Se der erro: <code>command not found</code> para alguma ferramenta</b></summary>
@@ -995,15 +995,15 @@ Se você gerar um token novo no GitLab e regravar o parâmetro no SSM (passo 16)
 ## Conclusão
 
 > [!CAUTION]
-> **NÃO destrua o runner agora.** A EC2 que você acabou de configurar é o **mesmo runner que o módulo 03 (CI/CD) vai usar** para rodar os pipelines. Sem ela, os jobs do próximo módulo ficam parados em "stuck". Ela custa enquanto existir: a `t3.small` sai por ~US$ 0,02/h (~US$ 0,50 por dia, ~US$ 3,50 por semana), mais ~US$ 0,08/dia do disco de 30 GB. O `terraform destroy` do runner está no **[passo 11 do Lab 03.2](../../03-CICD/02-Validando-e-gerando-relatorios/README.md#passo-11)**: rode lá, ao terminar o CI/CD, ou quando o curso acabar. A rede `fiap-lab` não é destruída em nenhum desses momentos.
+> **NÃO destrua o runner agora.** A EC2 que você acabou de configurar é o **mesmo runner que o módulo 03 (CI/CD) vai usar** para rodar os pipelines. Sem ela, os jobs do próximo módulo ficam parados em "stuck". Ela custa enquanto existir: a `t3.small` sai por ~US$ 0,02/h (~US$ 0,50 por dia, ~US$ 3,50 por semana), mais ~US$ 0,08/dia do disco de 30 GB. O `terraform destroy` do runner está no **[passo 15 do Lab 03.2](../../03-CICD/02-Validando-e-gerando-relatorios/README.md#passo-15)**: rode lá, ao terminar o CI/CD, ou quando o curso acabar. A rede `fiap-lab` não é destruída em nenhum desses momentos.
 
 **O que você precisa ter para entrar no módulo 03:**
 
-- o projeto **`primeiro-projeto`** no seu GitLab, com o código da API de pedidos versionado (Parte 4)
+- o projeto **`primeiro-projeto`** no seu GitLab, com o código do Assistente de Políticas e da API de pedidos versionado (Parte 4)
 - a chave SSH do GitLab em **`/home/vscode/.ssh/gitlab`**, cadastrada no GitLab (Parte 3); em terminal novo, rode de novo o `eval $(ssh-agent -s)` + `ssh-add` do passo 5.6
 - a cópia local do projeto em **`/home/vscode/environment/primeiro-projeto`** (passo 9)
 - o runner **Online** no `primeiro-projeto`, executor **`shell`**, tags **`shell,terraform`** (passos 14 e 26)
-- no runner: `terraform`, `tflint`, `checkov` em `/opt/venv`, `python3`, `jq`, `aws` e `git` (passo 27)
+- no runner: `terraform`, `tflint`, `checkov` e `pytest` em `/opt/venv`, `python3`, `jq`, `aws` e `git` (passo 27)
 
 Se você chegou até aqui, então já executou:
 
@@ -1016,7 +1016,7 @@ Se você chegou até aqui, então já executou:
 
 - conferência das ferramentas no runner e prova de idempotência (`changed=0` na segunda execução)
 
-**Mensagem para Helena**: o runner da Quantum Commerce agora sobe por código. O "documento de 30 passos" virou um `terraform apply` seguido de um `ansible-playbook`: qualquer pessoa do time sobe um runner idêntico, e rodar de novo não muda nada. Está pronto para automatizar o deploy da API de pedidos no módulo de CI/CD.
+**Mensagem para Helena**: o runner da Quantum Commerce agora sobe por código. O "documento de 30 passos" virou um `terraform apply` seguido de um `ansible-playbook`: qualquer pessoa do time sobe um runner idêntico, e rodar de novo não muda nada. Está pronto para testar e automatizar o deploy do Assistente de Políticas no módulo de CI/CD.
 
 Este laboratório forma a base para o próximo módulo: com o runner registrado, o GitLab pode executar pipelines automatizados.
 
