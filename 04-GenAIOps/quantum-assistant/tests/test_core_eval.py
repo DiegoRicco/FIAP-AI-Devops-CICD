@@ -1,6 +1,8 @@
 """Gate de avaliacao: baseline aprova, regressoes reprovam com regra dura, revert volta.
 
-Roda numa COPIA do projeto (tmp_path) para nunca sujar o repositorio.
+Roda numa COPIA do projeto (tmp_path) para nunca sujar o repositorio. A copia
+comeca com as duas regressoes REVERTIDAS: este teste prova o MECANISMO do gate e
+nao pode depender de o aluno ter ou nao aplicado a falha planejada no repositorio.
 """
 import json
 import os
@@ -12,6 +14,7 @@ import pytest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PARTS = ("core", "corpus", "prompts", "config", "orders", "evals", "scripts")
+KINDS = ("obsolete-priority", "remove-active-filter")
 
 
 @pytest.fixture
@@ -20,6 +23,8 @@ def copia(tmp_path):
     for part in PARTS:
         shutil.copytree(os.path.join(ROOT, part), dest / part,
                         ignore=shutil.ignore_patterns("__pycache__"))
+    for kind in KINDS:
+        inject(dest, kind, "--revert")
     return dest
 
 
@@ -58,7 +63,7 @@ def test_baseline_aprova(copia, tmp_path):
     assert 'failures="0"' in junit
 
 
-@pytest.mark.parametrize("kind", ["obsolete-priority", "remove-active-filter"])
+@pytest.mark.parametrize("kind", KINDS)
 def test_regressao_reprova_e_revert_volta(copia, tmp_path, kind):
     inject(copia, kind, "--apply")
     code, report, junit = run_eval(copia, tmp_path)

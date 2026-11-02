@@ -1,10 +1,18 @@
 """Testes do core: vigencia, ACL/tenant, pedidos, injection, determinismo e versoes.
 
 Rodam sem rede e sem dependencia (stdlib + pytest), em Python 3.10 e 3.12.
+
+Por que os testes de vigencia e de versao usam um corpus PROPRIO (fixture em
+tmp_path) e filtros explicitos: teste de unidade prova que o CODIGO filtra e
+versiona certo. Se ele lesse corpus/ e config/ do repositorio, a regressao
+planejada da aula (republicar a v2, desligar o filtro) quebraria o stage test, e
+o gate de qualidade (evaluate), que e quem deve barrar CONTEUDO, nunca rodaria.
 """
 import json
 import os
+import shutil
 import sys
+import textwrap
 
 import pytest
 
@@ -16,11 +24,98 @@ from core.orders import InMemoryOrders, OrderLookupError, OrdersClient  # noqa: 
 
 AS_OF = "2026-11-01"
 ANA = "lab-token-ana"
+# Filtros fixados no teste: o config/settings.json do repositorio pode estar com a
+# regressao "remove-active-filter" aplicada, e isso e assunto do eval, nao daqui.
+FILTERS = {"require_active": True, "respect_effective_date": True,
+           "enforce_tenant": True, "enforce_access_level": True}
+
+FIXTURE_DOCS = {
+    "trocas-v3.md": """\
+        ---
+        doc_id: politica-trocas
+        title: Politica de trocas
+        version: 3
+        effective_date: 2026-01-01
+        status: active
+        tenant: quantum
+        access_level: public
+        category: policy
+        supersedes: politica-trocas@v2
+        ---
+        # Fixture de teste: politica ficticia
+
+        ## Prazo para troca
+
+        Voce tem ate 30 dias corridos, contados a partir do recebimento, para trocar o produto. Depois de 30 dias, a troca so acontece com defeito.
+
+        ## Como solicitar a troca
+
+        Acesse Minha Conta, abra o pedido e clique em Solicitar troca.
+        """,
+    "trocas-v2.md": """\
+        ---
+        doc_id: politica-trocas
+        title: Politica de trocas
+        version: 2
+        effective_date: 2024-03-01
+        status: obsolete
+        tenant: quantum
+        access_level: public
+        category: policy
+        ---
+        # Fixture de teste: versao obsoleta
+
+        ## Prazo para troca
+
+        O prazo para troca de produtos e de 15 dias corridos apos o recebimento.
+        """,
+    "entrega.md": """\
+        ---
+        doc_id: politica-entrega
+        title: Entrega
+        version: 1
+        effective_date: 2025-01-01
+        status: active
+        tenant: quantum
+        access_level: public
+        category: policy
+        ---
+        # Fixture de teste: documento de contraste para o BM25
+
+        ## Prazos de entrega
+
+        Nas capitais a entrega leva de 2 a 5 dias uteis. No interior, de 4 a 10 dias uteis.
+
+        ## Frete gratis
+
+        O frete e gratis para compras acima de R$ 299 nas regioes Sul e Sudeste.
+
+        ## Tentativas de entrega
+
+        A transportadora faz ate 3 tentativas de entrega no endereco cadastrado.
+        """,
+}
+
+
+def build_fixture_root(base):
+    """Raiz minima do assistente: corpus proprio + templates, config e pedidos do codigo."""
+    root = base / "fixture-root"
+    (root / "corpus").mkdir(parents=True)
+    for name, text in FIXTURE_DOCS.items():
+        (root / "corpus" / name).write_text(textwrap.dedent(text), encoding="utf-8")
+    for part in ("prompts", "config", "orders"):
+        shutil.copytree(os.path.join(ROOT, part), root / part)
+    return root
+
+
+@pytest.fixture
+def fixture_root(tmp_path):
+    return build_fixture_root(tmp_path)
 
 
 @pytest.fixture(scope="module")
 def assistant():
-    return Assistant({"as_of_date": AS_OF})
+    return Assistant({"as_of_date": AS_OF, "filters": FILTERS})
 
 
 def cited(resp):
@@ -53,11 +148,12 @@ def test_motivos_de_recusa_sao_do_contrato(assistant):
 
 
 # ---------------------------------------------------------------- vigencia
-def test_politica_vigente_vence_a_obsoleta(assistant):
-    resp = assistant.answer("O prazo de troca ainda e de 15 dias?")
+def test_politica_vigente_vence_a_obsoleta(fixture_root):
+    a = Assistant({"as_of_date": AS_OF, "filters": FILTERS}, root=str(fixture_root))
+    resp = a.answer("O prazo de troca ainda e de 15 dias?")
     assert cited(resp) == ["politica-trocas@v3"]
     assert "30 dias" in resp["answer"] and "15 dias" not in resp["answer"]
-    assert not any("@v2#" in c for c in retrieved(resp) if c.startswith("politica-trocas"))
+    assert not any(c.startswith("politica-trocas@v2#") for c in retrieved(resp))
 
 
 def test_documento_futuro_nao_vale_antes_da_data(assistant):
@@ -67,21 +163,22 @@ def test_documento_futuro_nao_vale_antes_da_data(assistant):
 
 
 def test_documento_futuro_passa_a_valer_na_data():
-    futuro = Assistant({"as_of_date": "2027-11-25"})
+    futuro = Assistant({"as_of_date": "2027-11-25", "filters": FILTERS})
     resp = futuro.answer("Ate quando posso trocar um produto comprado na Black Friday?")
     assert "campanha-black-friday@v1" in cited(resp)
     assert "10 de janeiro" in resp["answer"]
 
 
 def test_documento_expirado_sai_do_ar():
-    depois = Assistant({"as_of_date": "2027-12-10"})
+    depois = Assistant({"as_of_date": "2027-12-10", "filters": FILTERS})
     resp = depois.answer("Ate quando posso trocar um produto comprado na Black Friday?")
     assert "campanha-black-friday@v1" not in cited(resp)
 
 
-def test_sem_filtro_de_status_a_obsoleta_vaza():
+def test_sem_filtro_de_status_a_obsoleta_vaza(fixture_root):
     """Prova que o filtro e o que protege: desligado, a v2 aparece no ranking."""
-    sem_filtro = Assistant({"as_of_date": AS_OF, "filters": {"require_active": False}})
+    sem_filtro = Assistant({"as_of_date": AS_OF, "filters": {**FILTERS, "require_active": False}},
+                           root=str(fixture_root))
     resp = sem_filtro.answer("O prazo de troca ainda e de 15 dias?")
     assert any(c.startswith("politica-trocas@v2#") for c in retrieved(resp))
 
@@ -153,7 +250,7 @@ def test_cliente_que_sempre_falha_vira_indisponivel():
         def lookup(self, order_id, auth_token, request_id=None):
             raise OrderLookupError("order_api_unavailable", "timeout")
 
-    resp = Assistant({"as_of_date": AS_OF}, orders=Fora()).answer("Status do pedido Q-1001?", auth_token=ANA)
+    resp = Assistant({"as_of_date": AS_OF, "filters": FILTERS}, orders=Fora()).answer("Status do pedido Q-1001?", auth_token=ANA)
     assert resp["abstain_reason"] == "order_api_unavailable"
 
 
@@ -188,7 +285,8 @@ def test_sem_evidencia_nao_inventa(assistant):
 
 # ---------------------------------------------------------------- determinismo e versoes
 def test_mesma_entrada_mesma_saida():
-    a, b = Assistant({"as_of_date": AS_OF}), Assistant({"as_of_date": AS_OF})
+    a = Assistant({"as_of_date": AS_OF, "filters": FILTERS})
+    b = Assistant({"as_of_date": AS_OF, "filters": FILTERS})
     for q in ("Qual o prazo para trocar uma roupa?", "Quais formas de pagamento a loja aceita?"):
         ra, rb = a.answer(q, request_id="fixo"), b.answer(q, request_id="fixo")
         assert json.dumps(ra, sort_keys=True) == json.dumps(rb, sort_keys=True)
@@ -203,22 +301,19 @@ def test_versoes(assistant):
 
 
 def test_mudar_parametro_muda_index_version_mas_nao_corpus(assistant):
-    outro = Assistant({"as_of_date": AS_OF, "retrieval": {"k": 5}})
+    outro = Assistant({"as_of_date": AS_OF, "filters": FILTERS, "retrieval": {"k": 5}})
     assert outro.versions["corpus_version"] == assistant.versions["corpus_version"]
     assert outro.versions["index_version"] != assistant.versions["index_version"]
 
 
-def test_mudar_corpus_muda_corpus_version(tmp_path):
-    import shutil
-    copia = tmp_path / "qa"
-    for pasta in ("core", "corpus", "prompts", "config", "orders", "evals"):
-        shutil.copytree(os.path.join(ROOT, pasta), copia / pasta)
-    base = Assistant({"as_of_date": AS_OF}, root=str(copia)).versions
-    alvo = copia / "corpus" / "trocas-v2.md"
+def test_mudar_corpus_muda_corpus_version(fixture_root):
+    base = Assistant({"as_of_date": AS_OF, "filters": FILTERS}, root=str(fixture_root)).versions
+    alvo = fixture_root / "corpus" / "trocas-v2.md"
     alvo.write_text(alvo.read_text(encoding="utf-8").replace("status: obsolete", "status: active"), encoding="utf-8")
-    depois = Assistant({"as_of_date": AS_OF}, root=str(copia)).versions
+    depois = Assistant({"as_of_date": AS_OF, "filters": FILTERS}, root=str(fixture_root)).versions
     assert depois["corpus_version"] != base["corpus_version"]
     assert depois["index_version"] != base["index_version"]
+    assert depois["prompt_version"] == base["prompt_version"]
 
 
 def test_inmemory_usa_a_regra_do_servidor():

@@ -1,0 +1,337 @@
+# Pipeline de release do Quantum Commerce AI Customer Assistant (Demo 5.1).
+#
+# Onde fica: o aluno copia ESTE arquivo para a RAIZ do repositorio GitLab
+# (primeiro-projeto). A aplicacao fica em quantum-assistant/, e por isso todo
+# job comeca com "cd quantum-assistant". Os arquivos do modulo 03 continuam na
+# raiz e nao sao aplicados por este pipeline.
+#
+# Ideia central: nada chega ao cliente (alias "live") sem passar, nesta ordem,
+# por seguranca da infra, contrato da API, qualidade do retrieval, regras de
+# negocio, implantacao como "candidate" e verificacao na nuvem.
+#
+# Regra de ouro dos gates: o JUnit e so a VITRINE do resultado. Quem reprova o
+# job e o exit code do comando. Por isso cada gate usa
+#   set +e; comando; rc=$?; set -e; exit $rc
+# e nunca "|| true", que publicaria o relatorio e esconderia a reprovacao.
+
+stages:
+  - preflight
+  - validate
+  - test
+  - evaluate
+  - package
+  - approve
+  - deploy
+  - postdeploy
+  - promote
+  - rollback
+
+variables:
+  AWS_DEFAULT_REGION: "us-east-1"
+  # "true" exige um clique humano antes do deploy (job approve).
+  REQUIRE_MANUAL_APPROVAL: "false"
+  # Vazio = descobre o bucket base-config-* da conta. Para fixar, defina em
+  # Settings > CI/CD > Variables.
+  TF_STATE_BUCKET: ""
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+  # O lock file do Terraform nao e versionado (infra/.gitignore); sem esta
+  # variavel o cache de providers seria ignorado e cada job baixaria de novo.
+  TF_PLUGIN_CACHE_MAY_BREAK_DEPENDENCY_LOCK_FILE: "true"
+
+default:
+  # Runner shell da EC2 quantum-ai-gitlab-runner, preparado no modulo 02.
+  tags:
+    - shell
+  before_script:
+    - cd quantum-assistant
+    # A EC2 do runner tem a LabRole: o bucket do state e descoberto na conta.
+    - export TF_STATE_BUCKET="${TF_STATE_BUCKET:-$(aws s3 ls | awk '{print $3}' | grep '^base-config' | head -1)}"
+    - echo "bucket do state -> ${TF_STATE_BUCKET:-NAO ENCONTRADO}"
+    # Cache de providers no HOME do runner: o provider AWS tem centenas de MB.
+    - export TF_PLUGIN_CACHE_DIR="$HOME/.terraform.d/plugin-cache"
+    - mkdir -p "$TF_PLUGIN_CACHE_DIR"
+
+# Fluxo normal de release. Um pipeline disparado com QC_ACTION=rollback roda
+# SO o job rollback (ver o fim do arquivo).
+.release-flow:
+  rules:
+    - if: $QC_ACTION == "rollback"
+      when: never
+    - when: on_success
+
+# ---------- preflight: o ambiente permite rodar? ----------
+# Falha de credencial ou bucket aparece aqui em segundos, e nao no minuto 8
+# disfarcada de "gate reprovado".
+preflight:
+  stage: preflight
+  extends: .release-flow
+  script:
+    - source /opt/venv/bin/activate
+    - scripts/preflight.sh --bucket "$TF_STATE_BUCKET"
+
+# ---------- validate: a infraestrutura e segura e valida? ----------
+security-gate:
+  stage: validate
+  extends: .release-flow
+  needs: [preflight]
+  script:
+    - source /opt/venv/bin/activate
+    - mkdir -p reports
+    - terraform -chdir=infra fmt -check -recursive
+    - terraform -chdir=infra init -backend=false
+    - terraform -chdir=infra validate
+    # terraform test faz um plan (nao cria nada) e confere o contrato do
+    # release: publish=true, aliases candidate/live, 5 rotas. Precisa do zip.
+    - python3 release/build_bundle.py > /dev/null
+    - terraform -chdir=infra test
+    # Checkov BLOQUEANTE: as unicas excecoes aceitas estao em
+    # infra/.checkov.yaml, cada uma com o motivo (X-Ray bloqueado no Learner
+    # Lab, KMS proprio sem dado sensivel, API publica de laboratorio...).
+    # Achado novo fora daquela lista reprova o job.
+    - |
+      set +e
+      tflint --chdir infra --format junit > reports/junit-tflint.xml
+      rc_tflint=$?
+      checkov -d infra --config-file infra/.checkov.yaml --quiet --compact \
+        -o cli -o junitxml --output-file-path console,reports/junit-checkov.xml
+      rc_checkov=$?
+      set -e
+      echo "tflint exit=$rc_tflint | checkov exit=$rc_checkov"
+      # "if ... exit 1" e nao "[ ] && [ ]": com set -e, uma lista && que falha
+      # no primeiro teste NAO derruba o script, e o job sairia verde.
+      if [ "$rc_tflint" -ne 0 ] || [ "$rc_checkov" -ne 0 ]; then exit 1; fi
+  artifacts:
+    when: always
+    paths:
+      - quantum-assistant/reports/
+    reports:
+      junit:
+        - quantum-assistant/reports/junit-tflint.xml
+        - quantum-assistant/reports/junit-checkov.xml
+
+# ---------- test: o codigo cumpre o contrato? ----------
+# Unitarios e contratos (core, adapters da Lambda, cliente HTTP de pedidos,
+# CLI de eval). Os testes usam corpus proprio de teste, entao uma mudanca so
+# de politica passa aqui e e reprovada onde deve: no gate de qualidade.
+# Fica FORA tests/test_ops_monitor_and_faults.py: e ferramenta da Demo 5.2
+# (operacao local) e le o corpus real, nao e contrato desta API.
+api-contract-gate:
+  stage: test
+  extends: .release-flow
+  needs: [preflight]
+  script:
+    - source /opt/venv/bin/activate
+    - mkdir -p reports
+    - |
+      set +e
+      python3 -m pytest -p no:cacheprovider tests/ \
+        --ignore=tests/test_ops_monitor_and_faults.py \
+        --junitxml=reports/junit-pytest.xml
+      rc=$?
+      set -e
+      exit $rc
+  artifacts:
+    when: always
+    paths:
+      - quantum-assistant/reports/
+    reports:
+      junit: quantum-assistant/reports/junit-pytest.xml
+
+# ---------- evaluate: a resposta continua certa? ----------
+# Golden set offline, seed fixa, sem AWS. Os dois gates juntos cobrem os 10
+# slices do golden_v1. Regra dura (fonte obsoleta, ACL, recusa, pedido,
+# injection) reprova mesmo com media alta.
+retrieval-quality-gate:
+  stage: evaluate
+  extends: .release-flow
+  needs: [api-contract-gate]
+  script:
+    - mkdir -p reports
+    - |
+      set +e
+      python3 evals/run_eval.py --set golden_v1 --target local --seed 42 \
+        --slice politicas,entrega,faq,vigencia,multi_fonte \
+        --out reports/eval-retrieval.json --junit reports/junit-retrieval.xml
+      rc=$?
+      set -e
+      exit $rc
+  artifacts:
+    when: always
+    paths:
+      - quantum-assistant/reports/
+    reports:
+      junit: quantum-assistant/reports/junit-retrieval.xml
+
+business-policy-gate:
+  stage: evaluate
+  extends: .release-flow
+  needs: [api-contract-gate]
+  script:
+    - mkdir -p reports
+    # Dois conjuntos: os slices de negocio do golden e o adversarial
+    # (injection e autorizacao). Os dois rodam sempre; qualquer um reprova.
+    - |
+      set +e
+      python3 evals/run_eval.py --set golden_v1 --target local --seed 42 \
+        --slice pedidos,autorizacao,abstencao,seguranca,dependencia \
+        --out reports/eval-policy.json --junit reports/junit-policy.xml
+      rc_golden=$?
+      python3 evals/run_eval.py --set adversarial --target local --seed 42 \
+        --out reports/eval-adversarial.json --junit reports/junit-adversarial.xml
+      rc_adv=$?
+      set -e
+      echo "golden(negocio) exit=$rc_golden | adversarial exit=$rc_adv"
+      if [ "$rc_golden" -ne 0 ] || [ "$rc_adv" -ne 0 ]; then exit 1; fi
+  artifacts:
+    when: always
+    paths:
+      - quantum-assistant/reports/
+    reports:
+      junit:
+        - quantum-assistant/reports/junit-policy.xml
+        - quantum-assistant/reports/junit-adversarial.xml
+
+# ---------- package: o pacote avaliado e o plano ----------
+# O bundle (codigo + corpus + prompts + config) e reprodutivel e separado do
+# planfile. O manifesto liga release_id, versoes e o sha256 do zip.
+package:
+  stage: package
+  extends: .release-flow
+  needs: [security-gate, api-contract-gate, retrieval-quality-gate, business-policy-gate]
+  script:
+    - python3 release/build_bundle.py > /dev/null
+    - cat dist/manifest.json
+    - terraform -chdir=infra init -backend-config="bucket=$TF_STATE_BUCKET"
+    - terraform -chdir=infra plan -out=planfile
+  artifacts:
+    paths:
+      - quantum-assistant/dist/
+      - quantum-assistant/infra/planfile
+      - quantum-assistant/infra/.terraform.lock.hcl
+
+# ---------- approve: so quando a politica pede um humano ----------
+# Com REQUIRE_MANUAL_APPROVAL="true" o pipeline PARA aqui ate alguem clicar.
+# Com "false" este job nem existe e a aprovacao e a politica automatica
+# (todos os gates verdes), registrada no manifesto como approved_by.
+approve:
+  stage: approve
+  needs: [package]
+  rules:
+    - if: $QC_ACTION == "rollback"
+      when: never
+    - if: $REQUIRE_MANUAL_APPROVAL == "true"
+      when: manual
+      allow_failure: false
+  script:
+    - echo "release aprovado por $GITLAB_USER_LOGIN"
+
+# ---------- deploy: nova versao da Lambda, so no alias candidate ----------
+# O apply publica uma versao imutavel e move SO o candidate. O live tem
+# ignore_changes no Terraform: o cliente ainda ve o release anterior.
+deploy-candidate:
+  stage: deploy
+  extends: .release-flow
+  needs:
+    - job: security-gate
+      artifacts: false
+    - job: api-contract-gate
+      artifacts: false
+    - job: retrieval-quality-gate
+      artifacts: false
+    - job: business-policy-gate
+      artifacts: false
+    - job: package
+    - job: approve
+      optional: true
+  environment:
+    name: candidate
+  script:
+    - terraform -chdir=infra init -backend-config="bucket=$TF_STATE_BUCKET"
+    - terraform -chdir=infra apply planfile
+    # Os enderecos seguem para os proximos jobs como variaveis (dotenv).
+    - echo "CANDIDATE_URL=$(terraform -chdir=infra output -raw candidate_url)" > deploy.env
+    - echo "ASSISTANT_URL=$(terraform -chdir=infra output -raw assistant_url)" >> deploy.env
+    - echo "CANDIDATE_VERSION=$(terraform -chdir=infra output -raw candidate_version)" >> deploy.env
+    - cat deploy.env
+  artifacts:
+    reports:
+      dotenv: quantum-assistant/deploy.env
+
+# ---------- postdeploy: o que esta NO AR e o que foi avaliado? ----------
+# Contra o /candidate de verdade: /health precisa devolver o release_id e as
+# versoes do manifesto; depois um subset do golden via HTTP, com o
+# release_id conferido em cada resposta.
+postdeploy-synthetic-gate:
+  stage: postdeploy
+  extends: .release-flow
+  needs:
+    - job: deploy-candidate
+    - job: package
+  script:
+    - mkdir -p reports
+    - |
+      set +e
+      python3 scripts/smoke.py --url "$CANDIDATE_URL" --manifest dist/manifest.json --reports reports
+      rc=$?
+      set -e
+      exit $rc
+  artifacts:
+    when: always
+    paths:
+      - quantum-assistant/reports/
+    reports:
+      junit:
+        - quantum-assistant/reports/junit-smoke.xml
+        - quantum-assistant/reports/junit-postdeploy.xml
+
+# ---------- promote: o cliente passa a ver o release verificado ----------
+# promote.sh confere que a versao candidata e o MESMO zip do manifesto
+# (sha256), move o live e grava o registro em s3://<bucket>/quantum-assistant/releases/.
+promote-live:
+  stage: promote
+  extends: .release-flow
+  needs:
+    - job: postdeploy-synthetic-gate
+      artifacts: false
+    - job: deploy-candidate
+    - job: package
+  environment:
+    name: live
+  script:
+    - mkdir -p reports
+    - |
+      if [ "$REQUIRE_MANUAL_APPROVAL" = "true" ]; then APPROVER="$GITLAB_USER_LOGIN"; else APPROVER="politica-automatica"; fi
+    - scripts/promote.sh --bucket "$TF_STATE_BUCKET" --manifest dist/manifest.json --approved-by "$APPROVER" > reports/release-record.json
+    - cat reports/release-record.json
+    # Evidencia final: o endereco do cliente responde com o release promovido.
+    - |
+      EXPECTED=$(jq -r .release_id dist/manifest.json)
+      LIVE=$(curl -s --retry 3 "$ASSISTANT_URL/health" | jq -r .release_id)
+      echo "live /health release_id=$LIVE (esperado $EXPECTED)"
+      if [ "$LIVE" != "$EXPECTED" ]; then exit 1; fi
+  artifacts:
+    paths:
+      - quantum-assistant/reports/release-record.json
+
+# ---------- rollback: manual, a qualquer momento ----------
+# Botao "play" no pipeline: volta o live para a versao promovida antes desta.
+# needs: [] deixa o botao disponivel mesmo com o pipeline vermelho.
+# Sem clicar: Build > Pipelines > Run pipeline com a variavel QC_ACTION=rollback
+# (o pipeline roda so este job).
+rollback:
+  stage: rollback
+  needs: []
+  rules:
+    - if: $QC_ACTION == "rollback"
+      when: on_success
+    - when: manual
+      allow_failure: true
+  environment:
+    name: live
+  script:
+    - scripts/rollback.sh --bucket "$TF_STATE_BUCKET" --reason "rollback manual pelo pipeline $CI_PIPELINE_ID por ${GITLAB_USER_LOGIN}"
+    - |
+      ASSISTANT_URL=$(aws apigatewayv2 get-apis --query "Items[?Name=='qc-assistant'].ApiEndpoint | [0]" --output text)
+      echo "live /health depois do rollback:"
+      curl -s --retry 3 "$ASSISTANT_URL/health" | jq '{release_id, environment, function_version}'
