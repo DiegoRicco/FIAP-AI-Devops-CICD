@@ -1,0 +1,6 @@
+# Artefatos locais do Terraform: nao versionar (o state fica no S3).
+.terraform/
+.terraform.lock.hcl
+planfile
+*.tfstate
+*.tfstate.*
