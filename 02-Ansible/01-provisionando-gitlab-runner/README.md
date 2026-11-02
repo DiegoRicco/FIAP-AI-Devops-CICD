@@ -51,7 +51,7 @@ Vamos separar com clareza **quem faz o quê**: o **Terraform** cria a EC2 e prep
 - conectar o Ansible ao host criado via inventário (`hosts`), usando o connection plugin `community.aws.aws_ssm` (sem chave SSH, sem porta 22)
 - rodar um playbook que instala, configura e **registra** o GitLab Runner — lendo o token direto do SSM
 - conferir as ferramentas instaladas no runner e provar a **idempotência** rodando o playbook pela segunda vez
-- deixar o runner de pé para o módulo 03 (a destruição da infra acontece ao final do Lab 03.2)
+- deixar o runner de pé para os módulos 03 e 04 (entre aulas ele fica desligado; a destruição acontece no fim da demo 04.2)
 
 ## O que você terá ao final
 
@@ -995,7 +995,7 @@ Se você gerar um token novo no GitLab e regravar o parâmetro no SSM (passo 16)
 ## Conclusão
 
 > [!CAUTION]
-> **NÃO destrua o runner agora.** A EC2 que você acabou de configurar é o **mesmo runner que o módulo 03 (CI/CD) vai usar** para rodar os pipelines. Sem ela, os jobs do próximo módulo ficam parados em "stuck". Ela custa enquanto existir: a `t3.small` sai por ~US$ 0,02/h (~US$ 0,50 por dia, ~US$ 3,50 por semana), mais ~US$ 0,08/dia do disco de 30 GB. O `terraform destroy` do runner está no **[passo 15 do Lab 03.2](../../03-CICD/02-Validando-e-gerando-relatorios/README.md#passo-15)**: rode lá, ao terminar o CI/CD, ou quando o curso acabar. A rede `fiap-lab` não é destruída em nenhum desses momentos.
+> **NÃO destrua o runner agora.** A EC2 que você acabou de configurar é o **mesmo runner que o módulo 03 (CI/CD) vai usar** para rodar os pipelines. Sem ela, os jobs do próximo módulo ficam parados em "stuck". Ela custa enquanto existir: a `t3.small` sai por ~US$ 0,02/h (~US$ 0,50 por dia, ~US$ 3,50 por semana), mais ~US$ 0,08/dia do disco de 30 GB. Entre uma aula e outra, **desligue** a EC2 como mostra o **[passo 15 do Lab 03.2](../../03-CICD/02-Validando-e-gerando-relatorios/README.md#passo-15)**; o `terraform destroy` do runner é o **último passo da demo 04.2** (Aula 5), depois que o módulo de GenAIOps também usou este runner. A rede `fiap-lab` não é destruída em nenhum desses momentos.
 
 **O que você precisa ter para entrar no módulo 03:**
 

@@ -65,12 +65,12 @@ Cada aula responde a um pedaço desta pergunta:
 | **2** | **Infrastructure as Code para IA:** Terraform, recursos, módulos, escalabilidade, state e workspaces | [01-Terraform](01-Terraform/README.md) |
 | **3** | **Configuration Management e Automação:** Ansible, idempotência e preparação do GitLab Runner | [02-Ansible](02-Ansible/README.md) |
 | **4** | **CI/CD e Deployment de Aplicações de IA:** GitLab, pipelines, testes, segurança e introdução a testes de prompts | [03-CICD](03-CICD/README.md) |
-| **5** | **GenAIOps e RAG na Prática:** RAG, APIs empresariais, avaliações, observabilidade e quality gates de GenAI | Conduzida em sala. Material escrito em construção, ainda sem pasta neste repositório. |
+| **5** | **GenAIOps e RAG na Prática:** RAG, APIs empresariais, avaliações, observabilidade e quality gates de GenAI | [04-GenAIOps](04-GenAIOps/README.md) |
 | **6** | **Architecture Challenge / Trabalho Final:** aplicação integradora | [Trabalho-final](Trabalho-final/README.md) |
 
 A coluna **Tema** descreve o escopo completo de cada encontro. O que ainda não tem lab escrito é conduzido em sala.
 
-**A numeração das pastas não é o número da aula.** As pastas seguem a ordem dos módulos práticos (`01-Terraform` é o material da Aula 2), e uma aula pode ter várias demos; por isso as pastas não são renomeadas pela sequência dos encontros. Nos labs, siga a ordem das pastas numeradas: `01-Terraform`, `02-Ansible`, `03-CICD` e, por fim, `Trabalho-final`.
+**A numeração das pastas não é o número da aula.** As pastas seguem a ordem dos módulos práticos (`01-Terraform` é o material da Aula 2), e uma aula pode ter várias demos; por isso as pastas não são renomeadas pela sequência dos encontros. Nos labs, siga a ordem das pastas numeradas: `01-Terraform`, `02-Ansible`, `03-CICD`, `04-GenAIOps` e, por fim, `Trabalho-final`.
 
 ---
 
@@ -124,13 +124,15 @@ Os primeiros labs constroem, peça por peça, a base de engenharia que vai suste
 | 02.1 | **Ansible: GitLab Runner** | EC2 criada com Terraform e configurada por um playbook Ansible até virar um GitLab Runner próprio, com acesso via SSM e token guardado no Parameter Store. | [01-provisionando-gitlab-runner](02-Ansible/01-provisionando-gitlab-runner/README.md) |
 | 03.1 | **CI/CD: Primeiro pipeline** | `.gitlab-ci.yml` com `plan` (CI) e `apply` (CD) a cada push na `master`, subindo uma API serverless (API Gateway, Lambda e DynamoDB). | [01-Primeiro-pipeline](03-CICD/01-Primeiro-pipeline/README.md) |
 | 03.2 | **CI/CD: Validação e relatórios** | Stage `validate` com `terraform fmt`/`validate`, TFLint, Checkov, `terraform test` e validação do código da Lambda, com relatório JUnit na aba **Tests** do GitLab. | [02-Validando-e-gerando-relatorios](03-CICD/02-Validando-e-gerando-relatorios/README.md) |
-| 04 (Aula 6) | **Trabalho Final** | Demo Count transformada em módulo, estado remoto, workspaces `dev`/`prod` e pipeline de 3 etapas (validar, gate de segurança, aplicar) no runner próprio. Entrega em `.zip`. | [Trabalho-final](Trabalho-final/README.md) |
+| 04.1 | **GenAIOps: Do RAG ao release confiável** | O assistente da Quantum Commerce evolui para RAG com corpus versionado e API de pedidos; golden set com slices, gates **bloqueantes** no GitLab, release com manifesto de versões, smoke pós-deploy e rollback por conjunto coerente. Uma mudança ruim reprova e o `deploy` não roda. | [01-Release-RAG-Quality-Gates](04-GenAIOps/01-Release-RAG-Quality-Gates/README.md) |
+| 04.2 | **GenAIOps: Operação, observabilidade e qualidade contínua** | O mesmo assistente operado com OpenTelemetry (traces, métricas, logs), probes sintéticos, SLOs e alerta por medição. Um incidente de conteúdo com HTTP 200, diagnóstico pelo trace, mitigação, replay e postmortem que vira novo caso golden. Bootstrap independente da 04.1. | [02-Operacao-Observabilidade-Qualidade-Continua](04-GenAIOps/02-Operacao-Observabilidade-Qualidade-Continua/README.md) |
+| 05 (Aula 6) | **Trabalho Final** | Demo Count transformada em módulo, estado remoto, workspaces `dev`/`prod` e pipeline de 3 etapas (validar, gate de segurança, aplicar) no runner próprio. Entrega em `.zip`. | [Trabalho-final](Trabalho-final/README.md) |
 
 ---
 
 ## Ordem recomendada
 
-As setas mostram a ordem das aulas. Os nós tracejados são as aulas conduzidas em sala, ainda sem pasta neste repositório.
+As setas mostram a ordem das aulas. O nó tracejado é a aula conduzida em sala, ainda sem pasta neste repositório.
 
 ```mermaid
 flowchart LR
@@ -157,10 +159,15 @@ flowchart LR
         C1["03.1 Primeiro pipeline"] --> C2["03.2 Validação<br/>e relatórios"]
     end
 
+    subgraph A5["Aula 5 · GenAIOps · 04-GenAIOps"]
+        direction TB
+        Q1["04.1 Do RAG ao<br/>release confiável"] --> Q2["04.2 Operação e<br/>qualidade contínua"]
+    end
+
     S --> A2
     A2 --> A3
     A3 --> A4
-    A4 --> A5["Aula 5<br/>GenAIOps e RAG<br/>na Prática<br/>(em sala)"]:::sala
+    A4 --> A5
     A5 --> F["Aula 6<br/>Trabalho Final<br/>Trabalho-final"]
 ```
 
@@ -169,6 +176,7 @@ Cada lab assume que os anteriores foram concluídos. Em especial:
 - os labs de **Terraform (01.x)** vão em ordem de dificuldade, e as demos 01.3, 01.4 e 01.5 usam a rede criada na 01.2: mantenha essa VPC de pé até o fim do curso;
 - o lab de **Ansible (02.1)** provisiona o GitLab Runner que executa os pipelines de `03-CICD`; sem ele, o CI/CD não tem onde rodar;
 - os labs de **CI/CD (03.x)** automatizam exatamente o `plan`/`apply` que você aprendeu a rodar na mão em `01-Terraform`;
+- os labs de **GenAIOps (04.x)** usam o mesmo `primeiro-projeto` e o mesmo runner do módulo 03: a 04.1 publica o assistente pelo pipeline com gates bloqueantes; a 04.2 opera o mesmo assistente no Codespaces, com bootstrap próprio, e termina com o destroy do runner;
 - o **Trabalho Final** junta Terraform, Ansible e CI/CD num único projeto entregável.
 
 ---
@@ -194,6 +202,12 @@ Cada lab assume que os anteriores foram concluídos. Em especial:
 ├── 03-CICD/                                    # Aula 4: CI/CD com GitLab
 │   ├── 01-Primeiro-pipeline/                   # 03.1 primeiro pipeline
 │   └── 02-Validando-e-gerando-relatorios/      # 03.2 gate de validação e relatórios
+├── 04-GenAIOps/                                # Aula 5: GenAIOps e RAG na prática
+│   ├── 01-Release-RAG-Quality-Gates/           # 04.1 RAG, golden set, gates bloqueantes e release
+│   ├── 02-Operacao-Observabilidade-Qualidade-Continua/  # 04.2 OTel, SLOs, incidente e postmortem
+│   ├── quantum-assistant/                      # código do assistente (mesmo core nas duas demos)
+│   ├── shared/runner/                          # preflight e recuperação do runner entre aulas
+│   └── guia-professor/                         # roteiros de condução das demos
 ├── Trabalho-final/                             # Aula 6: Trabalho Final
 └── README.md
 ```
@@ -205,7 +219,7 @@ Cada lab assume que os anteriores foram concluídos. Em especial:
 - **Blocos `💡 Clique para entender`:** abra sempre que encontrar um. Eles trazem o porquê de cada comando e links para a documentação oficial.
 - **`cd` absoluto nos comandos:** os blocos de terminal usam caminhos como `/workspaces/FIAP-AI-Devops-CICD/...`, para que cada passo funcione sozinho mesmo se você reabrir o terminal.
 - **Erro `ExpiredToken`?** A sessão do AWS Academy dura 4 horas. Inicie uma nova sessão e recopie as credenciais, como no [Início de aula](00-create-codespaces/Inicio-de-aula.md).
-- **Recursos pagos:** cada lab que cria infraestrutura paga termina com um passo de limpeza (`terraform destroy`). A VPC `fiap-lab` criada na 01.2 fica de pé até o fim do curso (usada pelos labs 01.3 a 01.5, 02.1, 03.x e pelo Trabalho Final); nenhum lab a destrói. Ela é gratuita. O runner da 02.1 fica de pé até o fim de `03-CICD`; o README de cada lab diz quando destruir.
+- **Recursos pagos:** cada lab que cria infraestrutura paga termina com um passo de limpeza (`terraform destroy`). A VPC `fiap-lab` criada na 01.2 fica de pé até o fim do curso (usada pelos labs 01.3 a 01.5, 02.1, 03.x e pelo Trabalho Final); nenhum lab a destrói. Ela é gratuita. O runner da 02.1 fica de pé (desligado entre aulas) até o fim de `04-GenAIOps`; o destroy acontece no último passo da demo 04.2, e o README de cada lab diz quando desligar.
 
 ---
 

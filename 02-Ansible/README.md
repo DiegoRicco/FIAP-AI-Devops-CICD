@@ -49,14 +49,14 @@ Antes de começar o lab deste módulo:
 
 ## Custo do módulo
 
-O lab cria **uma EC2 `t3.small`** com disco de 30 GB, que fica ligada porque o módulo 03 usa:
+O lab cria **uma EC2 `t3.small`** com disco de 30 GB, que fica de pé porque os módulos 03 e 04 usam:
 
 - **EC2 `t3.small`**: ~US$ 0,02/h (~US$ 0,50 por dia ligada, ~US$ 3,50 por semana)
 - **Disco gp3 de 30 GB**: ~US$ 0,08 por dia
 - **S3** (state remoto) e **SSM Parameter Store** (token): centavos ou zero
 
 > [!CAUTION]
-> **Não destrua o runner no fim deste módulo.** Os pipelines do módulo 03 dependem dele. O `terraform destroy` do runner está no **[passo 15 do Lab 03.2](../03-CICD/02-Validando-e-gerando-relatorios/README.md#passo-15)**, e o Trabalho Final explica como subi-lo de novo se precisar. Quando o curso acabar, esse destroy zera o custo. A rede `fiap-lab` não é destruída em nenhum desses momentos.
+> **Não destrua o runner no fim deste módulo.** Os pipelines dos módulos 03 (CI/CD) e 04 (GenAIOps) dependem dele. Entre aulas, **desligue** a EC2 como mostra o **[passo 15 do Lab 03.2](../03-CICD/02-Validando-e-gerando-relatorios/README.md#passo-15)** (desligada, só o disco cobra, ~US$ 0,08/dia). O `terraform destroy` do runner é o **último passo da demo 04.2**, quando o ciclo de AWS da disciplina termina e o custo zera. O Trabalho Final sobe um runner próprio. A rede `fiap-lab` não é destruída em nenhum desses momentos.
 
 ## Próximo módulo
 

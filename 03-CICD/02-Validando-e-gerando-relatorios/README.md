@@ -60,7 +60,7 @@ Os blocos **💡 Clique para entender** trazem o aprofundamento; os blocos **⚠
 | [Parte 2](#parte-2---evoluindo-o-pipeline) | Evoluir o `.gitlab-ci.yml` para 4 stages | [4](#passo-4) · [5](#passo-5) | ~10 min |
 | [Parte 3](#parte-3---disparando-e-lendo-os-relatórios) | Disparar o pipeline e ler os relatórios | [6](#passo-6) · [7](#passo-7) · [8](#passo-8) · [9](#passo-9) | ~15 min |
 | [Parte 4](#parte-4---quebrando-uma-política-de-propósito) | Quebrar a política, ver o gate reprovar, consertar | [10](#passo-10) · [11](#passo-11) · [12](#passo-12) · [13](#passo-13) | ~15 min |
-| [Parte 5](#parte-5---limpeza) | Destruir a API e cuidar do runner | [14](#passo-14) · [15](#passo-15) | ~5 min |
+| [Parte 5](#parte-5---limpeza) | Destruir a API e desligar o runner | [14](#passo-14) · [15](#passo-15) | ~5 min |
 
 ## Contexto
 
@@ -655,7 +655,7 @@ git push origin master
 
 ### Resultado esperado desta parte
 
-A API do assistente terá sido destruída, e o runner estará desligado (entre aulas) ou destruído (ao terminar o módulo).
+A API do assistente terá sido destruída, e o runner estará **desligado** (não destruído): a Aula 5 ainda usa este runner e este `primeiro-projeto`.
 
 ---
 
@@ -684,11 +684,9 @@ Isso remove a Lambda, a API Gateway e a tabela DynamoDB. O código continua no G
 
 <a id="passo-15"></a>
 
-**15. Desligue ou destrua o runner**
+**15. Desligue o runner (não destrua ainda)**
 
-A EC2 do runner é o único item que custa parado (~US$ 0,50 por dia). Escolha um dos caminhos:
-
-**15.1. Entre uma aula e outra: desligue.** Desligada, a EC2 não cobra processamento (o disco segue cobrando centavos):
+A EC2 do runner é o único item que custa parado (~US$ 0,50 por dia ligada; ~US$ 0,08 por dia desligada, só o disco). **Entre uma aula e outra, desligue.** Não destrua: a **Aula 5** (`04-GenAIOps`) usa este mesmo runner e este mesmo `primeiro-projeto` para publicar o assistente com RAG e gates bloqueantes. O `terraform destroy` do runner fica para o **último passo da demo 04.2**, quando o ciclo de AWS da disciplina termina.
 
 ```bash
 RUNNER_ID=$(aws ec2 describe-instances --region us-east-1 \
@@ -698,30 +696,22 @@ echo "$RUNNER_ID"
 aws ec2 stop-instances --region us-east-1 --instance-ids $RUNNER_ID
 ```
 
-Para voltar a usar, troque `stop-instances` por `start-instances` no último comando e espere ~1 min até o runner aparecer **online** no GitLab.
-
-**15.2. Ao terminar o módulo 03: destrua.** O Trabalho Final **não** reaproveita este runner: ele sobe um runner novo, registrado no projeto `trabalho-final`, com o script da Parte 0 dele. Destruir aqui evita custo e evita que o runner antigo continue preso ao `primeiro-projeto`:
-
-```bash
-cd /workspaces/FIAP-AI-Devops-CICD/02-Ansible/01-provisionando-gitlab-runner/terraform-gitlab-runner
-BUCKET=$(aws s3 ls | awk '{print $3}' | grep '^base-config' | head -1)
-terraform init -input=false -reconfigure -backend-config="bucket=$BUCKET" >/dev/null
-terraform destroy -auto-approve
-```
-
-> Saída esperada (última linha):
+> Saída esperada (resumo):
 >
 > ```text
-> Destroy complete! Resources: 3 destroyed.
+> i-0...
+> { "StoppingInstances": [ { "CurrentState": { "Name": "stopping" }, "PreviousState": { "Name": "running" }, ... } ] }
 > ```
 
+Para voltar a usar na Aula 5, troque `stop-instances` por `start-instances` no último comando e espere ~1 min até o runner aparecer **online** no GitLab. O IP público muda a cada stop/start e isso **não** afeta o registro: o runner é quem procura o GitLab, não o contrário. A demo 04.1 traz um preflight que confere tudo isso por você.
+
 > [!CAUTION]
-> **Nunca destrua a rede `fiap-lab`** (`vpc-call` e `RT-call`): ela é compartilhada pelas demos seguintes e pelo Trabalho Final. Os comandos acima só removem a API e o runner.
+> **Nunca destrua a rede `fiap-lab`** (`vpc-call` e `RT-call`): ela é compartilhada pelas demos seguintes e pelo Trabalho Final. O passo 14 removeu só a API; o runner fica desligado até a Aula 5.
 
 ### Checkpoint
 
 - o `terraform destroy` da API terminou com `Destroy complete!`
-- o runner está desligado (15.1) ou destruído (15.2)
+- o runner está **desligado** (`stopping`/`stopped`), não destruído
 
 ---
 
@@ -735,13 +725,13 @@ Neste lab você:
 - avaliou o assistente publicado no stage `avaliacao`
 - viu o gate barrar uma política com o prazo errado e consertou com `git revert`
 
-**Mensagem para Helena e Diego:** nenhuma mudança na política ou no código chega à produção sem passar pelo golden set. A política com "30 dias" foi barrada antes do `apply`, e o histórico mostra quem mudou e quem consertou. O que ainda falta é o LLM gerativo e a avaliação com juiz, que chegam na Aula 5 sobre este mesmo pipeline.
+**Mensagem para Helena e Diego:** nenhuma mudança na política ou no código chega à produção sem passar pelo golden set. A política com "30 dias" foi barrada antes do `apply`, e o histórico mostra quem mudou e quem consertou. O que ainda falta é o passo seguinte da Aula 5, sobre este mesmo pipeline: RAG com corpus versionado, gates que bloqueiam o `deploy` de verdade, e a pergunta que o gate não responde: quem percebe que o assistente piorou **depois** de publicado?
 
 ---
 
 ## Próximo passo
 
-Prossiga para o **[Trabalho Final](../../Trabalho-final/README.md)**, onde você junta Terraform, Ansible e CI/CD num projeto entregável.
+Prossiga para **[04 — GenAIOps e RAG na prática](../../04-GenAIOps/README.md)** (Aula 5), sobre o mesmo `primeiro-projeto` e o mesmo runner, que você acabou de desligar. A demo 04.1 continua deste pipeline; a 04.2 fecha a disciplina e, só então, destrói o runner. O **[Trabalho Final](../../Trabalho-final/README.md)** vem depois, na Aula 6.
 
 ---
 
