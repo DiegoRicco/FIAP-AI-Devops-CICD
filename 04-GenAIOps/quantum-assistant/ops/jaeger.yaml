@@ -1,0 +1,38 @@
+# Jaeger v2 em memoria, com teto de traces: a demo gera poucos milhares, e o
+# padrao (100 000) poderia passar do mem_limit numa aula longa.
+service:
+  extensions: [jaeger_storage, jaeger_query, healthcheckv2]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [jaeger_storage_exporter]
+
+extensions:
+  healthcheckv2:
+    use_v2: true
+    http:
+      endpoint: 0.0.0.0:13133
+  jaeger_query:
+    storage:
+      traces: memstore
+    http:
+      endpoint: 0.0.0.0:16686
+  jaeger_storage:
+    backends:
+      memstore:
+        memory:
+          max_traces: 5000
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+
+processors:
+  batch:
+
+exporters:
+  jaeger_storage_exporter:
+    trace_storage: memstore

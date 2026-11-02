@@ -1,0 +1,63 @@
+# Tres fontes de dados ligadas entre si (correlacao de 3 vias):
+#   log (Loki)        -> trace (Jaeger) pelo campo trace_id da linha JSON
+#   trace (Jaeger)    -> logs (Loki) do mesmo trace_id
+#   metrica (Prometheus) -> trace (Jaeger) quando houver exemplar com trace_id
+apiVersion: 1
+datasources:
+  - name: Prometheus
+    uid: prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+    jsonData:
+      timeInterval: 5s
+      exemplarTraceIdDestinations:
+        - name: trace_id
+          datasourceUid: jaeger
+
+  - name: Loki
+    uid: loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    editable: false
+    jsonData:
+      maxLines: 1000
+      # O trace_id esta dentro da linha JSON; a regex o extrai e vira link no
+      # detalhe de cada log. Por que link RELATIVO para o dashboard, e nao o
+      # link interno do Grafana: o visitante anonimo e Viewer, e Viewer nao
+      # abre o Explore (o link interno cairia na tela de login). O dashboard
+      # "Investigacao · Incidente" tem um painel de trace (fonte Jaeger) que
+      # le a variavel trace_id. Link relativo funciona igual no Mac e no
+      # endereco encaminhado do Codespaces.
+      derivedFields:
+        - name: trace_id
+          matcherType: regex
+          # Pega o trace_id tanto na linha JSON crua quanto na linha formatada
+          # pelo dashboard de investigacao (trace_id=<32 hex>).
+          matcherRegex: '(?:"trace_id": ?"|trace_id=)([0-9a-f]{32})'
+          url: "/d/qc-investigacao?var-trace_id=$${__value.raw}&viewPanel=panel-50&from=now-30m&to=now"
+          urlDisplayLabel: "Ver este trace (Jaeger) no painel"
+        - name: trace_id_jaeger
+          matcherType: regex
+          matcherRegex: '(?:"trace_id": ?"|trace_id=)([0-9a-f]{32})'
+          url: "http://127.0.0.1:16686/trace/$${__value.raw}"
+          urlDisplayLabel: "Abrir na UI do Jaeger (porta 16686)"
+
+  - name: Jaeger
+    uid: jaeger
+    type: jaeger
+    access: proxy
+    url: http://jaeger:16686
+    editable: false
+    jsonData:
+      tracesToLogsV2:
+        datasourceUid: loki
+        spanStartTimeShift: "-2m"
+        spanEndTimeShift: "2m"
+        filterByTraceID: false
+        filterBySpanID: false
+        customQuery: true
+        query: '{service_name=~"quantum-.+"} |= "$${__trace.traceId}"'

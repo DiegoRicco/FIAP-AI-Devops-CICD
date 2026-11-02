@@ -73,4 +73,4 @@ O pipeline cria uma **API Gateway HTTP**, uma **Lambda** e uma tabela **DynamoDB
 
 ## Próximo passo
 
-Depois dos 2 labs deste módulo, prossiga para o **[Trabalho Final](../Trabalho-final/README.md)**, onde você junta Terraform, Ansible e CI/CD num projeto entregável.
+Depois dos 2 labs deste módulo, prossiga para **[04 — GenAIOps e RAG na prática](../04-GenAIOps/README.md)** (Aula 5), sobre o mesmo `primeiro-projeto` e o mesmo runner: a demo 04.1 leva o assistente ao RAG com corpus versionado, API de pedidos e gates que **bloqueiam** o deploy; a demo 04.2 opera esse assistente com OpenTelemetry, SLOs e alerta de qualidade, e fecha a disciplina. Entre as aulas, deixe o runner **desligado** (passo 15 do Lab 03.2), não destruído: o destroy só acontece no fim da 04.2. O **[Trabalho Final](../Trabalho-final/README.md)** vem depois, na Aula 6.

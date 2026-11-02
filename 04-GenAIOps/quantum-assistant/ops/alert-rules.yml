@@ -1,0 +1,110 @@
+# Regras do Prometheus da Demo 5.2.
+# Janela de 2 minutos e `for` curto: escolha DIDATICA para o alerta aparecer
+# durante a aula. Em producao, janelas de 30-60 min e n dimensionado pelo erro
+# aceitavel. Os limiares (0,90; n >= 20; 20%) sao configuracao de exercicio.
+#
+# Sobre "proxy sintetico": as taxas de qualidade vem de PROBES ROTULADOS
+# (perguntas com resposta conhecida), nao de trafego humano. Elas medem se os
+# contratos conhecidos continuam valendo, nao a qualidade de toda conversa real.
+#
+# Sem Alertmanager neste stack: o alerta aparece como FIRING em
+# http://localhost:9090/alerts e no arquivo do quality_monitor (local alert).
+# Nenhuma notificacao e enviada a pager, e-mail ou chat.
+groups:
+  - name: quantum-recording
+    rules:
+      # n (amostras) e taxa de aprovacao dos probes, por cenario/release/corpus.
+      # outcome="fallback" (API de pedidos fora + recusa honesta) fica fora: e sinal
+      # tecnico, medido por OrderApiDegraded, e nao pode derrubar o alerta de qualidade.
+      - record: qc:quality_probes:n_2m
+        expr: sum by (scenario, release_id, corpus_version) (increase(quality_probes_total{outcome=~"pass|fail"}[2m]))
+      - record: qc:synthetic_quality_pass_rate:2m
+        expr: |
+          sum by (scenario, release_id, corpus_version) (increase(quality_probes_total{outcome="pass"}[2m]))
+          / sum by (scenario, release_id, corpus_version) (increase(quality_probes_total{outcome=~"pass|fail"}[2m]))
+      - record: qc:source_is_current_rate:2m
+        expr: |
+          sum by (scenario, release_id, corpus_version) (increase(quality_source_current_total[2m]))
+          / sum by (scenario, release_id, corpus_version) (increase(quality_source_checked_total[2m]))
+      - record: qc:retrieval_hit_at_k:2m
+        expr: |
+          sum by (scenario, release_id, corpus_version) (increase(quality_retrieval_hits_total[2m]))
+          / sum by (scenario, release_id, corpus_version) (increase(quality_retrieval_probes_total[2m]))
+      - record: qc:retrieval_mrr:2m
+        expr: |
+          sum by (scenario, release_id, corpus_version) (increase(quality_retrieval_rr_sum_total[2m]))
+          / sum by (scenario, release_id, corpus_version) (increase(quality_retrieval_probes_total[2m]))
+      - record: qc:citation_presence_rate:2m
+        expr: |
+          sum by (scenario, release_id, corpus_version) (increase(quality_citation_present_total[2m]))
+          / sum by (scenario, release_id, corpus_version) (increase(quality_citation_required_total[2m]))
+      # Abstencao e falha de pedidos vem do RUNTIME (todas as requisicoes).
+      - record: qc:abstention_rate:2m
+        expr: |
+          sum by (release_id) (increase(answers_total{job="quantum-assistant", abstained="true"}[2m]))
+          / sum by (release_id) (increase(answers_total{job="quantum-assistant"}[2m]))
+      - record: qc:order_lookups:n_2m
+        expr: sum by (release_id) (increase(order_lookups_total{job="quantum-assistant"}[2m]))
+      - record: qc:transaction_lookup_failure_rate:2m
+        expr: |
+          sum by (release_id) (increase(order_lookups_total{job="quantum-assistant", outcome="unavailable"}[2m]))
+          / sum by (release_id) (increase(order_lookups_total{job="quantum-assistant"}[2m]))
+
+  - name: quantum-alerts
+    rules:
+      - alert: QualityProbeDegraded
+        # So dispara com amostra minima: 3 falhas em 5 probes nao sao evidencia.
+        expr: qc:synthetic_quality_pass_rate:2m < 0.90 and qc:quality_probes:n_2m >= 20
+        for: 30s
+        labels:
+          severity: warning
+          team: ai-quality
+          signal: quality
+        annotations:
+          summary: "Probes rotulados abaixo de 90% (proxy sintetico)"
+          description: "pass_rate={{ $value | printf \"%.2f\" }} no cenario {{ $labels.scenario }}, corpus {{ $labels.corpus_version }}, release {{ $labels.release_id }}. Ver runbook: ops/runbook.md#qualityprobedegraded"
+
+      - alert: StaleSourceServed
+        # Qualquer citacao de fonte obsoleta e critica: nao ha media que compense.
+        expr: sum by (scenario, release_id, corpus_version) (increase(quality_source_stale_total[2m])) > 0
+        labels:
+          severity: critical
+          team: ai-quality
+          signal: quality
+        annotations:
+          summary: "Assistente citou fonte nao vigente (obsoleta ou fora do corpus aprovado)"
+          description: "{{ $value | printf \"%.0f\" }} probe(s) com fonte nao vigente no corpus {{ $labels.corpus_version }} (release {{ $labels.release_id }}). Ver runbook: ops/runbook.md#stalesourceserved"
+
+      - alert: QualityAclViolation
+        expr: sum by (scenario, release_id, corpus_version) (increase(quality_acl_violations_total[2m])) > 0
+        labels:
+          severity: critical
+          team: ai-quality
+          signal: quality
+        annotations:
+          summary: "Probe de ACL/tenant violado"
+          description: "Documento de outro tenant ou interno foi servido. Ver runbook: ops/runbook.md#qualityaclviolation"
+
+      - alert: OrderApiDegraded
+        # Sinal TECNICO de dependencia: quem recebe e o SRE, nao o time de conteudo.
+        expr: qc:transaction_lookup_failure_rate:2m > 0.20 and qc:order_lookups:n_2m >= 10
+        for: 30s
+        labels:
+          severity: warning
+          team: sre
+          signal: technical
+        annotations:
+          summary: "API de pedidos falhando (5xx/timeout)"
+          description: "{{ $value | humanizePercentage }} das consultas de pedido sem resposta (release {{ $labels.release_id }}). O assistente recusa com order_api_unavailable. Ver runbook: ops/runbook.md#orderapidegraded"
+
+      - alert: QualityNoData
+        # Ausencia de probes NAO e sucesso: sem amostra, o painel verde e mudo.
+        expr: (sum(increase(quality_probes_total[5m])) < 1) or absent(quality_probes_total)
+        for: 1m
+        labels:
+          severity: info
+          team: ai-quality
+          signal: insufficient_data
+        annotations:
+          summary: "Sem probes de qualidade nos ultimos 5 minutos"
+          description: "insufficient_data: nenhum probe rotulado chegou. O sinal de qualidade nao pode ser avaliado. Ver runbook: ops/runbook.md#qualitynodata"

@@ -1,0 +1,16 @@
+# Intervalos curtos de proposito: na aula queremos ver a curva mudar em
+# segundos, nao em minutos. Em producao, 15-60 s seria o usual.
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+rule_files:
+  - /etc/prometheus/alert-rules.yml
+
+scrape_configs:
+  - job_name: otel-collector
+    # honor_labels: mantem job=<service.name> que o Collector atribui a cada
+    # servico (quantum-assistant, quantum-orders-api, quantum-quality-probe).
+    honor_labels: true
+    static_configs:
+      - targets: ["otel-collector:8889"]

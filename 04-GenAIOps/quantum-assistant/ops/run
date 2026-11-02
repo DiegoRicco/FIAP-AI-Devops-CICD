@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Roda um script da Demo 5.2 com o Python certo e a telemetria ligada.
+#
+#   ops/run simulator.py --seed 42 --scenario baseline --rate 2 --duration 25
+#   ops/run inject.py stale_policy
+#   ops/run restore.py
+#   ops/run quality_monitor.py --prometheus http://127.0.0.1:9090
+#
+# Por que existe: o python3 do terminal (no Codespaces, o ~/venv do Ansible) nao
+# tem OpenTelemetry. Sem este wrapper os probes rodariam, mas nao chegariam ao
+# Prometheus/Grafana. Aqui usamos o venv criado pelo bootstrap-demo52.sh e
+# apontamos a telemetria para o Collector local.
+set -euo pipefail
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VENV="${QC_VENV:-$HOME/.venvs/quantum-demo52}"
+if [ ! -x "$VENV/bin/python" ]; then
+  echo "ERRO: venv da Demo 5.2 nao encontrado em $VENV. Rode antes: bash ops/bootstrap-demo52.sh" >&2
+  exit 1
+fi
+[ $# -ge 1 ] || { sed -n '4,8p' "$0" >&2; exit 2; }
+script="$1"; shift
+case "$script" in
+  */*) ;;                       # caminho explicito: usa como veio
+  *) script="$HERE/$script" ;;  # nome curto: procura em ops/
+esac
+export OTEL_EXPORTER_OTLP_ENDPOINT="${OTEL_EXPORTER_OTLP_ENDPOINT:-http://127.0.0.1:4318}"
+export OTEL_METRIC_EXPORT_INTERVAL="${OTEL_METRIC_EXPORT_INTERVAL:-5000}"
+export PYTHONDONTWRITEBYTECODE=1
+exec "$VENV/bin/python" "$script" "$@"

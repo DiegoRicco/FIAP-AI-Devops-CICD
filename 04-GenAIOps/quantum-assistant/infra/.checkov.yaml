@@ -1,0 +1,28 @@
+# Excecoes ACEITAS do Checkov, uma por linha e cada uma com o motivo.
+# O job security-gate roda o Checkov como BLOQUEANTE com este arquivo:
+#   checkov -d infra --config-file infra/.checkov.yaml
+# Qualquer achado novo, fora desta lista, reprova o pipeline. Remover uma linha
+# daqui e o jeito de transformar a excecao em obrigacao de novo.
+framework:
+  - terraform
+skip-check:
+  # X-Ray e bloqueado no AWS Academy Learner Lab. O tracing da Demo 5.2 e local (OTel).
+  - CKV_AWS_50
+  # Concorrencia reservada: contas Academy podem ter limite total de 10, e reservar quebraria o apply.
+  - CKV_AWS_115
+  # DLQ so vale para invocacao assincrona; aqui o API Gateway invoca de forma sincrona.
+  - CKV_AWS_116
+  # Fora da VPC de proposito: a Lambda so fala com a propria API e o DynamoDB; VPC exigiria NAT (custo).
+  - CKV_AWS_117
+  # Chave KMS propria custa por mes e os dados sao ficticios; a tabela ja usa criptografia gerenciada.
+  - CKV_AWS_119
+  # Mesmo motivo para os logs: sem dado sensivel (nada de pergunta, token ou cliente no log).
+  - CKV_AWS_158
+  # Variaveis de ambiente so tem URL publica, nome de tabela e nome do ambiente; nenhum segredo.
+  - CKV_AWS_173
+  # Code signing exige AWS Signer; a integridade do pacote e provada pelo bundle_sha256 do manifesto.
+  - CKV_AWS_272
+  # API publica de laboratorio; quem autoriza o pedido e o servidor (token -> cliente). Em producao: JWT authorizer.
+  - CKV_AWS_309
+  # Retencao de 1 ano custaria sem motivo em laboratorio; 14 dias bastam para a aula.
+  - CKV_AWS_338

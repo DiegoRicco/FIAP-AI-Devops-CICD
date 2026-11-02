@@ -1,0 +1,89 @@
+# Collector: recebe OTLP do host e separa os sinais.
+#   traces   -> Jaeger (OTLP interno da rede do compose)
+#   metricas -> endpoint Prometheus :8889, que o Prometheus raspa
+#   logs     -> Loki (OTLP nativo do Loki 3)
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+
+  # Logs: o Collector LE os arquivos que o runtime ja escreve (ops/.runtime/*.log)
+  # e os resultados dos probes (ops/results/*.jsonl). Por que ler arquivo em vez
+  # de mandar log por OTLP: o assistente e o simulador nao mudam nada (o core
+  # continua stdlib), e se o Collector cair o log continua no disco para o
+  # aluno abrir com `tail`. O compose monta ops/ inteira, so leitura, em
+  # /var/log/quantum.
+  file_log/quantum:
+    include:
+      - /var/log/quantum/.runtime/assistant.log
+      - /var/log/quantum/.runtime/orders.log
+      - /var/log/quantum/results/*.jsonl
+    start_at: beginning
+    include_file_name: true
+    operators:
+      # Cada linha e um JSON; a linha de boas-vindas do servidor nao e, e passa
+      # como texto (on_error: send_quiet) em vez de travar a leitura.
+      - type: json_parser
+        on_error: send_quiet
+        timestamp:
+          parse_from: attributes.ts
+          layout_type: gotime
+          layout: "2006-01-02T15:04:05Z07:00"
+      # Nome do servico vira o rotulo service_name no Loki, que e o filtro
+      # principal no Grafana. Vem do NOME DO ARQUIVO para valer tambem para a
+      # linha que nao e JSON (a mensagem de boas-vindas do servidor).
+      - type: add
+        if: 'attributes["log.file.name"] == "assistant.log"'
+        field: resource["service.name"]
+        value: quantum-assistant
+      - type: add
+        if: 'attributes["log.file.name"] == "orders.log"'
+        field: resource["service.name"]
+        value: quantum-orders-api
+      - type: add
+        if: 'attributes["log.file.name"] matches "\\.jsonl$"'
+        field: resource["service.name"]
+        value: quantum-quality-probe
+      # O texto JSON original continua no corpo da linha; os campos parseados
+      # saem para nao duplicar tudo como metadado no Loki.
+      - type: remove
+        field: attributes
+
+processors:
+  # Protege a VM do aluno: se chegar dado demais, o Collector recusa em vez de
+  # crescer ate o mem_limit e ser morto pelo Docker.
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 200
+    spike_limit_mib: 50
+  batch:
+    timeout: 1s
+
+exporters:
+  otlp_grpc/jaeger:
+    endpoint: jaeger:4317
+    tls:
+      insecure: true
+  otlp_http/loki:
+    endpoint: http://loki:3100/otlp
+  prometheus:
+    endpoint: 0.0.0.0:8889
+    # Mantem os nomes como o codigo os declara (requests_total, request_latency_ms_bucket):
+    # sem isso o exporter acrescentaria a unidade ao nome (..._ms_milliseconds).
+    translation_strategy: UnderscoreEscapingWithoutSuffixes
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlp_grpc/jaeger]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [prometheus]
+    logs:
+      receivers: [file_log/quantum]
+      processors: [memory_limiter, batch]
+      exporters: [otlp_http/loki]
