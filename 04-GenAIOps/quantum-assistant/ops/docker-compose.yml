@@ -1,0 +1,67 @@
+# Stack de observabilidade local da Demo 5.2.
+# Por que o assistente NAO roda aqui dentro: ele roda no host (venv Python),
+# porque o aluno edita corpus/config e roda inject/restore no proprio terminal,
+# sem build de imagem. O host fala com o Collector por 127.0.0.1:4318, que
+# funciona igual no Mac (Docker Desktop) e no Codespaces (docker-in-docker).
+# Todas as portas so em 127.0.0.1: nada fica exposto na rede.
+# Versoes pinadas e verificadas em 2026-11-01 (sem :latest).
+name: quantum-demo52
+
+services:
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.164.0
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./otel-collector.yaml:/etc/otelcol/config.yaml:ro
+    ports:
+      - "127.0.0.1:4318:4318"   # OTLP/HTTP vindo do assistente, pedidos e probes
+    mem_limit: 256m
+    restart: unless-stopped
+
+  jaeger:
+    image: jaegertracing/jaeger:2.22.0
+    command: ["--config=/etc/jaeger/config.yaml"]
+    volumes:
+      - ./jaeger.yaml:/etc/jaeger/config.yaml:ro
+    ports:
+      - "127.0.0.1:16686:16686" # UI e API de consulta (/api/traces)
+    mem_limit: 256m
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v3.15.1
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=6h
+      - --web.enable-lifecycle
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./alert-rules.yml:/etc/prometheus/alert-rules.yml:ro
+    ports:
+      - "127.0.0.1:9090:9090"
+    mem_limit: 384m
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:13.2.5
+    environment:
+      # Anonimo SO LEITURA (Viewer) e so em localhost: o aluno abre sem senha,
+      # mas nao altera o dashboard provisionado.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Viewer"
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: "/var/lib/grafana/dashboards/quantum-demo52.json"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "127.0.0.1:3000:3000"
+    # Medido no devcontainer: pico de 277 MiB com o dashboard aberto; 512m da folga.
+    mem_limit: 512m
+    depends_on: [prometheus]
+    restart: unless-stopped

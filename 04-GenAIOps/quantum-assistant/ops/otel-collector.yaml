@@ -1,0 +1,40 @@
+# Collector: recebe OTLP do host e separa os sinais.
+#   traces   -> Jaeger (OTLP interno da rede do compose)
+#   metricas -> endpoint Prometheus :8889, que o Prometheus raspa
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  # Protege a VM do aluno: se chegar dado demais, o Collector recusa em vez de
+  # crescer ate o mem_limit e ser morto pelo Docker.
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 200
+    spike_limit_mib: 50
+  batch:
+    timeout: 1s
+
+exporters:
+  otlp_grpc/jaeger:
+    endpoint: jaeger:4317
+    tls:
+      insecure: true
+  prometheus:
+    endpoint: 0.0.0.0:8889
+    # Mantem os nomes como o codigo os declara (requests_total, request_latency_ms_bucket):
+    # sem isso o exporter acrescentaria a unidade ao nome (..._ms_milliseconds).
+    translation_strategy: UnderscoreEscapingWithoutSuffixes
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlp_grpc/jaeger]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [prometheus]
