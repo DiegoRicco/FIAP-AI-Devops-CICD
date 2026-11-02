@@ -48,7 +48,7 @@ Nesta demo você faz o assistente **evoluir em oito atos**, do palpite sem fonte
 
 ## O que você terá ao final
 
-O `primeiro-projeto` com a pasta `quantum-assistant/` e um pipeline de 10 stages que só promove o assistente quando o golden set passa **antes** e **depois** do deploy. **Helena vai querer ver o pipeline vermelho com a política antiga republicada, o `deploy` sem rodar, e depois o `live` voltando para a versão anterior em um comando.**
+O `primeiro-projeto` com a pasta `quantum-assistant/` e um pipeline de 10 stages (9 de release mais um `rollback` manual) que só promove o assistente quando o golden set passa **antes** e **depois** do deploy. **Helena vai querer ver o pipeline vermelho com a política antiga republicada, o `deploy` sem rodar, e depois o `live` voltando para a versão anterior em um comando.**
 
 Os blocos **💡 Clique para entender** trazem o aprofundamento; os blocos **⚠ Se der erro** só importam se o passo falhar.
 
@@ -61,7 +61,7 @@ Os blocos **💡 Clique para entender** trazem o aprofundamento; os blocos **⚠
 | [Parte 3](#parte-3---rag-com-fonte-e-api-de-pedidos) | 3 e 4 | RAG com citação e vigência; pedido vem da API, com autorização | [8](#passo-8) · [9](#passo-9) · [10](#passo-10) · [11](#passo-11) · [12](#passo-12) | ~20 min |
 | [Parte 4](#parte-4---o-pipeline-que-barra) | — | Ler o `.gitlab-ci.yml`, fazer o push e acompanhar o pipeline verde | [13](#passo-13) · [14](#passo-14) · [15](#passo-15) · [16](#passo-16) · [17](#passo-17) | ~25 min |
 | [Parte 5](#parte-5---gate-vermelho-e-revisão) | 5 e 6 | Política antiga republicada, gate reprova, `deploy` não roda; corrigir | [18](#passo-18) · [19](#passo-19) · [20](#passo-20) · [21](#passo-21) · [22](#passo-22) | ~20 min |
-| [Parte 6](#parte-6---release-rastreável-e-rollback) | 7 | Manifesto de release, `live` × `candidate`, rollback e volta | [23](#passo-23) · [24](#passo-24) · [25](#passo-25) · [26](#passo-26) | ~15 min |
+| [Parte 6](#parte-6---release-rastreável-e-rollback) | 7 | Registro de release no S3, `live` × `candidate`, rollback pelo job manual e repromoção | [23](#passo-23) · [24](#passo-24) · [25](#passo-25) · [26](#passo-26) | ~15 min |
 | [Parte 7](#parte-7---handoff-mini-desafio-e-limpeza-segura) | 8 | A pergunta que abre a 5.2; mini-desafio; `cleanup.sh --dry-run` | [27](#passo-27) · [28](#passo-28) · [29](#passo-29) | ~10 min |
 
 ## Contexto
@@ -73,7 +73,7 @@ Os blocos **💡 Clique para entender** trazem o aprofundamento; os blocos **⚠
 | **Pergunta que ele responde mal** | "O assistente vai responder bem a perguntas que ninguém previu?" e "ele continua bom **depois** de publicado, quando o corpus ou a API mudam sem commit?" A segunda é a Demo 5.2. |
 | **Quando acontece na vida real** | Todo time que já ouviu "mas o pipeline passou" depois de um incidente de conteúdo. |
 
-![Arquitetura da Demo 5.1: você, no Codespaces, faz git push no primeiro-projeto do GitLab; o pipeline roda no GitLab Runner (EC2 quantum-ai-gitlab-runner com LabRole) em 10 etapas: preflight, validate com security-gate, test com api-contract-gate, evaluate com retrieval-quality-gate e business-policy-gate sobre o golden set offline, package e plan, approve opcional, deploy da versão N+1 no alias candidate, postdeploy-synthetic-gate com smoke e golden contra /candidate, promote do alias live e evidence com o manifesto no S3; se um gate reprova, o pipeline para e o cliente continua no release anterior. Na AWS, a API Gateway qc-assistant expõe /assistant/ask para o alias live e /candidate/* para o candidate da Lambda qc-assistant-api; a Lambda qc-assistant-orders lê o pedido no DynamoDB; o rollback move o alias live de volta sem novo pipeline. Legenda: sem LLM, composer determinístico, pedidos e tokens fictícios.](img/arquitetura-release-rag.png)
+![Arquitetura da Demo 5.1: você, no Codespaces, faz git push no primeiro-projeto do GitLab; o pipeline roda no GitLab Runner (EC2 quantum-ai-gitlab-runner com LabRole) em 10 etapas: preflight, validate com security-gate, test com api-contract-gate, evaluate com retrieval-quality-gate e business-policy-gate sobre o golden set offline, package e plan, approve opcional, deploy da versão N+1 no alias candidate, postdeploy-synthetic-gate com smoke e golden contra /candidate, promote do alias live com o registro do release gravado no S3, e um job manual de rollback; se um gate reprova, o pipeline para e o cliente continua no release anterior. Na AWS, a API Gateway qc-assistant expõe /assistant/ask para o alias live e /candidate/* para o candidate da Lambda qc-assistant-api; a Lambda qc-assistant-orders lê o pedido no DynamoDB; o rollback move o alias live de volta sem novo pipeline. Legenda: sem LLM, composer determinístico, pedidos e tokens fictícios.](img/arquitetura-release-rag.png)
 
 O fluxo do pipeline, em forma de texto, para você voltar a ele a cada passo:
 
@@ -89,11 +89,11 @@ flowchart LR
         approve --> deploy["deploy<br/>apply → candidate"]
         deploy --> postdeploy["postdeploy<br/>smoke + golden em /candidate"]
         postdeploy --> promote["promote<br/>candidate → live"]
-        promote --> evidence["evidence<br/>manifesto no S3"]
+        promote --> rollback["rollback (manual)<br/>live → versão anterior"]
     end
     evaluate -. JUnit when: always .-> report[aba Tests]
     postdeploy -. JUnit .-> report
-    rollback["rollback (manual)<br/>live → versão anterior"] -.-> promote
+    promote -. registro do release .-> s3[S3 releases/]
 ```
 
 Se qualquer gate reprovar, nada à direita dele roda. O cliente continua recebendo a versão `live` que já estava publicada.
@@ -179,10 +179,10 @@ grep -n '^  - ' .gitlab-ci.yml | head -12
 >   - deploy
 >   - postdeploy
 >   - promote
->   - evidence
+>   - rollback
 > ```
 >
-> Os nomes podem diferir um pouco do arquivo final (o `grep -n` imprime o número da linha antes de cada um); o que importa é a **ordem**: tudo que testa vem antes de `package`, e `deploy` vem antes de `postdeploy` e `promote`.
+> O `grep -n` imprime o número da linha antes de cada um. Leia a **ordem**: tudo que testa vem antes de `package`, `deploy` vem antes de `postdeploy` e `promote`, e o último stage, `rollback`, é um job **manual** que fica à disposição em todo pipeline (você vai usá-lo na Parte 6).
 
 **Se falhar:** se o `grep` não listar nada, o `cp` não copiou (arquivo com ponto no nome fica oculto no `ls`; use `ls -a`).
 
@@ -743,21 +743,20 @@ code .gitlab-ci.yml
 
 **Esperado:** o arquivo abre no editor, com a lista `stages:` no topo e um bloco por job. Leia-o junto com a tabela:
 
-Os nomes dos jobs abaixo são os dos gates (`security-gate`, `api-contract-gate`, `retrieval-quality-gate`, `business-policy-gate`, `postdeploy-synthetic-gate`); se o arquivo que você abriu usar um nome ligeiramente diferente, vale o arquivo: o que importa é **em que stage** cada verificação acontece e **se ela barra**.
+Os nomes dos jobs são os que você verá no GitLab (`preflight`, `security-gate`, `api-contract-gate`, `retrieval-quality-gate`, `business-policy-gate`, `package`, `approve`, `deploy-candidate`, `postdeploy-synthetic-gate`, `promote-live`, `rollback`). O que importa é **em que stage** cada verificação acontece e **se ela barra**.
 
 | Stage | Job(s) | O que decide | Barra? |
 |---|---|---|---|
 | `preflight` | `preflight` | `scripts/preflight.sh`: credenciais, bucket, região, ferramentas do runner, o que já existe na conta. | Sim |
-| `validate` | `validate`, `security-gate`, `tf-test` | `terraform fmt -check`/`validate`/`tflint`; **Checkov bloqueante** com `infra/.checkov.yaml` (10 exceções, cada uma com o motivo escrito); `terraform test`. | **Sim** (Checkov agora barra) |
+| `validate` | `security-gate` | Um job só: `terraform fmt -check`/`validate`, `terraform test` (plan, sem criar nada), `tflint` e **Checkov bloqueante** com `infra/.checkov.yaml` (10 exceções, cada uma com o motivo escrito). | **Sim** (Checkov agora barra) |
 | `test` | `api-contract-gate` | `pytest tests/`: unitários do core e **contratos** (formato da resposta, API de pedidos, Lambda com o bundle). JUnit. | Sim |
 | `evaluate` | `retrieval-quality-gate`, `business-policy-gate` | `run_eval.py` **offline**, em duas partições de slices: busca (`politicas,entrega,faq,vigencia,multi_fonte`) e política/contrato (`pedidos,autorizacao,abstencao,seguranca,dependencia`). JUnit em `when: always`, **exit original**. | Sim: é o gate de IA |
 | `package` | `package`, `plan` | `build_bundle.py` gera `dist/bundle.zip` (core + corpus + prompts + config + adapter; **reprodutível**: dois builds, mesmo sha256) e `dist/manifest.json`; `terraform plan -out=planfile`. | Sim, se o plan falhar |
 | `approve` | `approve` | Manual, **só** se `REQUIRE_MANUAL_APPROVAL=true`. Por padrão, passa direto. | Opcional |
-| `deploy` | `deploy` | `terraform apply planfile`; a versão nova vai para o alias **`candidate`**. | Sim |
+| `deploy` | `deploy-candidate` | `terraform apply planfile`; a versão nova vai para o alias **`candidate`**; os endereços seguem para os próximos jobs. | Sim |
 | `postdeploy` | `postdeploy-synthetic-gate` | `smoke.py` contra `candidate_url`: confere `release_id` e as 6 versões do `/health` com o manifesto e roda o subconjunto do golden por HTTP. | **Sim: nada é promovido** |
-| `promote` | `promote` | Move o alias **`live`** para a versão do `candidate`. | — |
-| `evidence` | `evidence` | Publica `manifest.json` no S3 (`releases/`). | — |
-| (manual) | `rollback` | Move `live` para a versão anterior do manifesto. Só quando acionado. | — |
+| `promote` | `promote-live` | `promote.sh` confere o sha256 do bundle, move o alias **`live`**, grava o registro do release em `s3://.../quantum-assistant/releases/` e confere o `/health` do `live`. | Sim, se o `live` não responder o `release_id` esperado |
+| `rollback` | `rollback` | **Manual** (`needs: []`: o botão existe mesmo em pipeline vermelho). Move `live` para o release promovido anterior. Também roda sozinho num pipeline disparado com a variável `QC_ACTION=rollback`. | — |
 
 **Se falhar:** se o `code` não abrir o arquivo (`command not found`), abra pelo explorador de arquivos do Codespaces: `primeiro-projeto/.gitlab-ci.yml`. Se o conteúdo for o pipeline antigo do módulo 03 (stages `validate`, `plan`, `apply`, `avaliacao`), o passo 2 não copiou; refaça-o.
 
@@ -771,7 +770,7 @@ Três fatos que se confundem o tempo todo:
 2. **`artifacts: reports: junit` só desenha a aba Tests.** Um XML com 15 falhas e exit `0` dá job **verde** com 15 vermelhos na aba. Foi exatamente o Checkov do módulo 03: `checkov ... || true` força exit `0`. Isso é **report-only**: útil para ver, inútil para barrar.
 3. **`artifacts: when: always` publica o XML mesmo quando o job reprova.** Sem ele, o job vermelho não teria relatório, e é justamente quando você mais precisa dele.
 
-Então a receita de um **gate bloqueante com relatório** é: rodar a ferramenta **sem** `|| true`, gerar o XML e deixar o exit code passar. Quando a ferramenta sempre quer escrever o relatório antes de sair, o `run_eval.py` faz isso por dentro: grava JSON e JUnit **sempre**, e só então `sys.exit(0 ou 1)`.
+Então a receita de um **gate bloqueante com relatório** é: rodar a ferramenta **sem** `|| true`, gerar o XML e deixar o exit code passar. No `.gitlab-ci.yml` isso aparece como `set +e; comando; rc=$?; set -e; exit $rc`: desliga o "para no primeiro erro" só para capturar o código, e devolve esse código ao GitLab. Quando a ferramenta sempre quer escrever o relatório antes de sair, o `run_eval.py` faz isso por dentro: grava JSON e JUnit **sempre**, e só então `sys.exit(0 ou 1)`. Detalhe que custou um bug na construção deste lab: nos jobs com duas ferramentas, o fim é `if [ rc1 -ne 0 ] || [ rc2 -ne 0 ]; then exit 1; fi`, e não `[ ... ] && [ ... ]`, porque com `set -e` uma lista `&&` que falha no primeiro teste **não** derruba o script, e o job sairia verde.
 
 E o Checkov? Agora barra. Os achados que **aceitamos** no laboratório estão em `quantum-assistant/infra/.checkov.yaml`, **um por linha e cada um com o motivo**: X-Ray bloqueado no Academy (`CKV_AWS_50`), Lambda fora de VPC porque VPC exigiria NAT (`CKV_AWS_117`), sem chave KMS própria porque os dados são fictícios (`CKV_AWS_119`, `CKV_AWS_158`), API pública de laboratório com autorização no servidor (`CKV_AWS_309`), logs de 14 dias (`CKV_AWS_338`), e mais quatro do mesmo tipo. Com o arquivo, o Checkov passa 21 checks e sai com 0; **sem** ele, são 24 falhas e exit 1. Remover uma linha do arquivo é como transformar a exceção em obrigação de novo. A diferença entre "aceito e documentado" e "`|| true`" é a diferença entre decisão e descuido.
 
@@ -822,17 +821,17 @@ git push origin "$BRANCH"
 **Esperado:**
 
 > ```text
->    Hit@k=1.0 MRR=1.0 (n=...) | citacao=1.0 | abstencao=1.0 | fonte_vigente=1.0 | casos=1.0 (n=...)
+>    Hit@k=1.0 MRR=1.0 (n=14) | citacao=1.0 | abstencao=None | fonte_vigente=1.0 | casos=1.0 (n=14)
 >    ...
 > == VEREDITO: PASS
 > relatorio: reports/eval-retrieval.json | junit: reports/junit-retrieval.xml
 > Job succeeded
 > ```
 >
-> É o mesmo resumo que você leu no passo 11, agora impresso pelo runner. Os `n` são menores porque cada job do `evaluate` roda **uma partição** dos slices (busca num job, política no outro); juntos, somam os 28 casos. A última linha de qualquer job verde no GitLab é `Job succeeded`.
+> É o mesmo resumo que você leu no passo 11, agora impresso pelo runner. Os `n` são menores porque cada job do `evaluate` roda **uma partição** dos slices: `retrieval-quality-gate` cobre `politicas, entrega, faq, vigencia, multi_fonte` (14 casos) e `business-policy-gate` cobre `pedidos, autorizacao, abstencao, seguranca, dependencia` (os outros 14, mais o conjunto `adversarial`). `abstencao=None` no primeiro é esperado: nenhum caso dessa partição exige recusa. No pipeline de validação deste lab, o `evaluate` levou 4-5 s por job e o pipeline inteiro, do `preflight` ao `promote-live`, 144 s; o `deploy-candidate` (43 s) é o job mais longo.
 
-<!-- NOVA-IMAGEM: img/pipeline-verde-10-stages.png | capturar: página do pipeline com os 10 stages verdes, do preflight ao evidence | depois de salvar o arquivo, descomente a linha abaixo -->
-<!-- ![Pipeline verde com os 10 stages: preflight, validate, test, evaluate, package, approve, deploy, postdeploy, promote e evidence](img/pipeline-verde-10-stages.png) -->
+<!-- NOVA-IMAGEM: img/pipeline-verde-10-stages.png | capturar: página do pipeline com os 9 stages de release verdes, do preflight ao promote-live, e o job rollback manual no último stage | depois de salvar o arquivo, descomente a linha abaixo -->
+<!-- ![Pipeline verde: preflight, security-gate, api-contract-gate, retrieval-quality-gate e business-policy-gate, package, deploy-candidate, postdeploy-synthetic-gate e promote-live, com o job rollback manual no último stage](img/pipeline-verde-10-stages.png) -->
 
 **Se falhar:** job `stuck` = runner offline (volte ao ritual do dia). `checkov` vermelho = achado **novo** fora das exceções: leia a aba Tests, suíte `checkov`, e decida com o professor se é exceção legítima ou correção.
 
@@ -849,10 +848,12 @@ git push origin "$BRANCH"
 **Esperado:**
 
 > ```text
-> 45 tests   0 failures   0 errors   100% success rate
+> retrieval-quality-gate   26 tests   0 failures
+> business-policy-gate     ...        0 failures
+> api-contract-gate        64 tests   0 failures
 > ```
 
-São 45 porque cada um dos 28 casos vira um teste (classe `eval.<slice>`, nome = `case_id`, como `eval.vigencia / troca-politica-obsoleta`) e cada gate de métrica ou de slice vira outro (classe `eval.gates`, como `slice.vigencia`). Como o `evaluate` roda em **dois jobs** (busca e política), a aba Tests pode mostrar duas suítes com os casos divididos entre elas; a soma dos casos continua 28, e o topo da aba soma **todas** as suítes do pipeline (Checkov, pytest, eval), então o total lá em cima é maior que 45.
+No `run_eval.py` local são 45 porque cada um dos 28 casos vira um teste (classe `eval.<slice>`, nome = `case_id`, como `eval.vigencia / troca-politica-obsoleta`) e cada gate de métrica ou de slice vira outro (classe `eval.gates`, como `slice.vigencia`). No pipeline, o `evaluate` roda em **dois jobs**, então a aba Tests mostra suítes separadas (`retrieval-quality-gate` com 26 testes: 14 casos + gates; `business-policy-gate` com os outros 14 casos + gates + o conjunto adversarial), além das suítes do `security-gate` (tflint, checkov), do `api-contract-gate` (pytest, 64 testes) e do `postdeploy-synthetic-gate` (smoke, 8; pós-deploy, 31). O topo da aba soma **todas**; o que importa é **0 failures** em cada uma.
 
 <!-- NOVA-IMAGEM: img/aba-tests-evaluate.png | capturar: aba Tests aberta na suíte evaluate, lista de testes com os nomes dos casos por slice e as regras duras, todos verdes | depois de salvar o arquivo, descomente a linha abaixo -->
 <!-- ![Aba Tests do GitLab na suíte evaluate, com os casos do golden set agrupados por slice e as regras duras aprovadas](img/aba-tests-evaluate.png) -->
@@ -893,7 +894,7 @@ O corpo aceita `question` e, para pedidos, `order_id` e `auth_token` (ou o token
 > }
 > ```
 >
-> O `release_id` e os `...` variam por execução (dependem do seu commit); confira os campos, não os valores. Na validação deste lab na conta do Learner Lab, o `/health` respondeu em ~1 s na primeira chamada (Lambda fria) e ~0,45 s nas seguintes; o `release_id` tinha a forma `rel-<sha curto do commit>-<sufixo>`. O `environment` vem do **alias** que atendeu (`live` aqui; `candidate` em `/candidate/...`), não de uma variável fixa: a mesma versão da Lambda responde `live` ou `candidate` conforme a rota. A resposta é a **mesma** do passo 8 (mesmo core, mesmo corpus): o que mudou foi só onde ela roda.
+> O `release_id` e os `...` variam por execução (dependem do seu commit); confira os campos, não os valores. Na validação deste lab na conta do Learner Lab, o `/health` respondeu em ~1 s na primeira chamada (Lambda fria) e ~0,45 s nas seguintes; o `release_id` tem a forma `rel-<sha curto do commit>-<sufixo do conteúdo>` (ex.: `rel-ba5d685d-46ec99`): o sufixo é calculado do bundle, então dois commits com o **mesmo** conteúdo publicado têm o mesmo sufixo. Guarde essa observação para o passo 26. O `environment` vem do **alias** que atendeu (`live` aqui; `candidate` em `/candidate/...`), não de uma variável fixa: a mesma versão da Lambda responde `live` ou `candidate` conforme a rota. A resposta é a **mesma** do passo 8 (mesmo core, mesmo corpus): o que mudou foi só onde ela roda.
 
 O `release_id` do `/health` é o mesmo que aparece no log do job `promote`. Guarde-o: você vai compará-lo depois do rollback.
 
@@ -1057,22 +1058,37 @@ git push origin "$(git branch --show-current)"
 **Por quê:** a prova de que um gate funciona não é o job vermelho; é o job **`deploy` sem rodar**, e o cliente continuar recebendo a versão `live` anterior.
 **Execute:** abra o pipeline mais recente. Depois a aba **Tests**, suíte `evaluate`, e clique no teste `troca-politica-obsoleta`. É a pergunta `"O prazo de troca ainda é de 15 dias?"`: no baseline ela cita a v3 e responde 30 dias; com a regressão, cita a v2 e **confirma os 15 dias** ao cliente.
 
-**Esperado:** `preflight`, `validate` e `test` verdes; **`evaluate` vermelho**; `package`, `approve`, `deploy`, `postdeploy`, `promote` e `evidence` **cinza, "skipped"**. Na aba Tests:
+**Esperado:** `preflight`, `security-gate` e `api-contract-gate` verdes (64 passed: o **código** continua correto); **`retrieval-quality-gate` e `business-policy-gate` vermelhos** (`ERROR: Job failed: exit status 1`); `package`, `deploy-candidate`, `postdeploy-synthetic-gate` e `promote-live` **cinza, "skipped"**. O `rollback` aparece como manual, disponível. No pipeline de validação deste lab a reprovação levou 57 s. Abra o log do `retrieval-quality-gate`:
 
 > ```text
-> eval.vigencia  troca-politica-obsoleta   fonte_obsoleta: citou fora de vigencia/versao: ['politica-trocas@v2', 'politica-trocas@v2#prazo-para-troca']
-> eval.politicas troca-como-solicitar      fonte_obsoleta: citou fora de vigencia/versao: ['politica-trocas@v2', 'politica-trocas@v2#como-solicitar-a-troca']
-> eval.autorizacao acl-outro-tenant        fonte_obsoleta: ...
-> eval.gates     regras_duras              ...
-> 45 tests   7 failures
+>    Hit@k=1.0 MRR=0.9286 (n=14) | citacao=1.0 | abstencao=None | fonte_vigente=0.8571 | casos=0.8571 (n=14)
+>    REPROVADO metrica.source_is_current_rate: source_is_current_rate=0.8571 (minimo 1.0): citar politica obsoleta ou futura informa prazo errado ao cliente
+>    REPROVADO slice.vigencia: slice vigencia: case_pass_rate=0.5 (minimo 0.75)
+>    REGRA DURA fonte_obsoleta violada no caso troca-politica-obsoleta (vigencia): citou fora de vigencia/versao: ['politica-trocas@v2', 'politica-trocas@v2#prazo-para-troca']
+>    REGRA DURA fonte_obsoleta violada no caso troca-politica-obsoleta (vigencia): apareceu: ['15 dias']
+> == VEREDITO: FAIL
+> Uploading artifacts for failed job
+> quantum-assistant/reports/junit-retrieval.xml: found 1 matching artifact files and directories
+> ERROR: Job failed: exit status 1
+> ```
+>
+> Os números diferem um pouco do passo 19 porque este job avalia só a partição de busca (14 casos): a mesma regressão, vista por 14 em vez de 28. Repare nas duas linhas depois do `FAIL`: o JUnit foi **enviado** (`Uploading artifacts for failed job`) e só então o job reprovou. É o `when: always` em ação. O `business-policy-gate` reprova pela mesma regra no caso `acl-outro-tenant`. Na aba Tests:
+
+> ```text
+> retrieval-quality-gate   26 tests   6 failures
+>   eval.vigencia   troca-politica-obsoleta   fonte_obsoleta: citou fora de vigencia/versao: ['politica-trocas@v2', ...]
+>   eval.politicas  troca-como-solicitar      fonte_obsoleta: ...
+>   eval.gates      slice.vigencia / metrica.source_is_current_rate / regras_duras
+> business-policy-gate     ...        failures
+>   eval.autorizacao acl-outro-tenant         fonte_obsoleta: ...
 > ```
 
-A aba Tests mostra o nome do teste, a classe (o slice) e a mensagem da falha; a disposição exata na tela muda com a versão do GitLab, mas os três campos estão sempre lá. Leia o nome de trás para frente: `troca-politica-obsoleta` é o caso do golden set, `eval.vigencia` é o slice, e a mensagem diz **qual** regra dura e **qual** documento foi citado. Nada de porcentagem misteriosa.
+A aba Tests mostra o nome do teste, a classe (o slice) e a mensagem da falha (o JUnit baixado do artefato no pipeline de validação tinha `tests="26" failures="6"` na suíte de busca). Leia o nome de trás para frente: `troca-politica-obsoleta` é o caso do golden set, `eval.vigencia` é o slice, e a mensagem diz **qual** regra dura e **qual** documento foi citado. Nada de porcentagem misteriosa.
 
-<!-- NOVA-IMAGEM: img/pipeline-vermelho-evaluate.png | capturar: página do pipeline com evaluate vermelho e package, approve, deploy, postdeploy, promote e evidence em cinza (skipped) | depois de salvar o arquivo, descomente a linha abaixo -->
-<!-- ![Pipeline reprovado no stage evaluate; deploy, postdeploy e promote não executados](img/pipeline-vermelho-evaluate.png) -->
+<!-- NOVA-IMAGEM: img/pipeline-vermelho-evaluate.png | capturar: página do pipeline com retrieval-quality-gate e business-policy-gate vermelhos, api-contract-gate verde, e package, deploy-candidate, postdeploy-synthetic-gate e promote-live em cinza (skipped) | depois de salvar o arquivo, descomente a linha abaixo -->
+<!-- ![Pipeline reprovado no stage evaluate: retrieval-quality-gate e business-policy-gate vermelhos, api-contract-gate verde; package, deploy-candidate, postdeploy-synthetic-gate e promote-live não executados](img/pipeline-vermelho-evaluate.png) -->
 
-Confirme no Codespaces que o cliente não sentiu nada:
+Confirme no Codespaces que o cliente não sentiu nada (no pipeline de validação, os aliases ficaram `live=1 candidate=1` durante toda a falha: nada foi implantado):
 
 ```bash
 cd /home/vscode/environment/primeiro-projeto/quantum-assistant
@@ -1107,7 +1123,7 @@ ssh-add -k /home/vscode/.ssh/gitlab
 git push origin "$(git branch --show-current)"
 ```
 
-**Esperado:** a linha `relatorio: ...` e depois `exit code local: 0` (o `>/dev/null` cala o resumo, não a linha de progresso); no GitLab, o novo pipeline passa pelos 10 stages (espere o `promote` e o `evidence` ficarem verdes antes de seguir). Depois confira que o `live` mudou:
+**Esperado:** a linha `relatorio: ...` e depois `exit code local: 0` (o `>/dev/null` cala o resumo, não a linha de progresso); no GitLab, o novo pipeline passa por todos os stages de release (espere o `promote-live` ficar verde antes de seguir; na validação deste lab, 138 s). Depois confira que o `live` mudou:
 
 ```bash
 cd /home/vscode/environment/primeiro-projeto/quantum-assistant
@@ -1153,7 +1169,7 @@ LAST=$(aws s3 ls "s3://$BUCKET/quantum-assistant/releases/" | awk '{print $4}' |
 aws s3 cp "s3://$BUCKET/quantum-assistant/releases/$LAST" - | python3 -m json.tool
 ```
 
-**Esperado:** **dois** registros de promoção (um por pipeline que chegou ao `promote`: passos 14 e 22; o pipeline vermelho do passo 20 não deixou nenhum), mais um `live.json` que o `promote.sh` reescreve a cada promoção com o que está no ar. Cada registro se chama `<data-hora>-v<versão da Lambda>-<release_id>.json`; como o nome começa pela data, `sort | tail -1` pega o mais novo (o `live.json` fica fora do filtro por não começar com dígito).
+**Esperado:** **dois** registros de promoção (um por pipeline que chegou ao `promote-live`: passos 14 e 22; o pipeline vermelho do passo 20 não deixou nenhum), mais um `live.json` que o `promote.sh` reescreve a cada promoção com o que está no ar. Cada registro se chama `<data-hora>-v<versão da Lambda>-<release_id>.json`; como o nome começa pela data, `sort | tail -1` pega o mais novo (o `live.json` fica fora do filtro por não começar com dígito).
 
 > ```json
 > {
@@ -1174,11 +1190,11 @@ aws s3 cp "s3://$BUCKET/quantum-assistant/releases/$LAST" - | python3 -m json.to
 > }
 > ```
 >
-> Os valores exatos (`release_id`, `git_sha`, `bundle_sha256`, datas, números de versão) são **seus**: dependem do commit e do momento do pipeline. O que importa: as seis versões, o `bundle_sha256` (que o `promote.sh` conferiu contra o código publicado na AWS antes de mover o alias) e `previous_lambda_version`, que é o destino do rollback.
+> Os valores exatos (`release_id`, `git_sha`, `bundle_sha256`, datas, números de versão) são **seus**: dependem do commit e do momento do pipeline. No pipeline de validação, os dois registros se chamavam `2026-11-02T043541Z-v1-rel-ba5d685d-46ec99.json` e `2026-11-02T051559Z-v2-rel-faaddf02-0a0a02.json` (o segundo com `previous_lambda_version=1`), e `approved_by` era `politica-automatica`, porque `REQUIRE_MANUAL_APPROVAL` estava `false`. O que importa: as seis versões, o `bundle_sha256` (que o `promote.sh` conferiu contra o código publicado na AWS antes de mover o alias) e `previous_lambda_version`, que é o destino do rollback.
 
 Repare: o pipeline **vermelho** do passo 20 não tem registro no S3. Só release promovido deixa evidência.
 
-**Se falhar:** lista vazia = o job `evidence` não rodou (pipeline não chegou ao fim) ou o bucket é outro; confira o passo 3.
+**Se falhar:** lista vazia = o job `promote-live` não rodou (pipeline não chegou ao fim) ou o bucket é outro; confira o passo 3.
 
 ---
 
@@ -1211,7 +1227,7 @@ aws lambda list-versions-by-function --function-name qc-assistant-api --region u
 > 1  2  ...  N
 > ```
 >
-> `N` é o número da última versão publicada (depende de quantos `apply` a sua conta já fez; a AWS nunca reaproveita números). O que importa: depois do `promote` do passo 22, `candidate` e `live` apontam para a **mesma** versão, e as anteriores continuam listadas (é para elas que o rollback volta). Se você olhar **entre** o `deploy` e o `promote`, verá `candidate` uma versão à frente de `live` (na validação deste lab: `candidate=2 live=1` logo após o 2º `apply`): é o alias `candidate` recebendo a versão nova enquanto o cliente continua na anterior. No **primeiro** `apply` de uma conta, os dois nascem na versão 1.
+> `N` é o número da última versão publicada (depende de quantos `apply` a sua conta já fez; a AWS nunca reaproveita números). O que importa: depois do `promote` do passo 22, `candidate` e `live` apontam para a **mesma** versão, e as anteriores continuam listadas (é para elas que o rollback volta). Se você olhar **entre** o `deploy-candidate` e o `promote-live`, verá `candidate` uma versão à frente de `live`: é o alias `candidate` recebendo a versão nova enquanto o cliente continua na anterior. No **primeiro** `apply` de uma conta, os dois nascem na versão 1; no pipeline de validação deste lab a sequência foi `live=1 candidate=1` (passo 14) → inalterado durante o vermelho (passo 20) → `live=2 candidate=2` (passo 22).
 
 <!-- NOVA-IMAGEM: img/console-lambda-aliases.png | capturar: AWS Console, Lambda qc-assistant-api, aba Aliases com candidate e live apontando para a mesma versão, e a lista de versões anteriores | depois de salvar o arquivo, descomente a linha abaixo -->
 <!-- ![AWS Console: aliases candidate e live da Lambda qc-assistant-api e as versões publicadas](img/console-lambda-aliases.png) -->
@@ -1224,13 +1240,12 @@ aws lambda list-versions-by-function --function-name qc-assistant-api --region u
 
 **25. Faça o rollback e prove pelo `release_id`**
 
-**Onde:** Codespaces.
-**Por quê:** o rollback move o `live` para a versão **anterior registrada no manifesto**, sem pipeline e sem `apply`. Como o bundle carrega corpus, templates e config juntos, voltar a versão volta **o comportamento inteiro**, não só o código. **Preveja:** qual `release_id` o `/health` vai mostrar depois?
-**Execute:**
+**Onde:** GitLab UI (ou Codespaces).
+**Por quê:** o rollback move o `live` para o release **promovido anterior, registrado no S3**, sem novo `apply` e sem passar pelos gates (eles já passaram quando aquele release foi promovido). Como o bundle carrega corpus, templates e config juntos, voltar a versão volta **o comportamento inteiro**, não só o código. **Preveja:** qual `release_id` o `/health` vai mostrar depois?
+**Execute:** no GitLab, abra o pipeline do passo 22 e clique no botão **play** do job **`rollback`** (último stage; ele é manual e está disponível em todo pipeline, inclusive nos vermelhos). Alternativa sem clicar: **Build → Pipelines → Run pipeline**, com a variável `QC_ACTION` = `rollback`: esse pipeline roda **só** o job `rollback` (12 s na validação deste lab). Quando o job ficar verde, confira no Codespaces:
 
 ```bash
 cd /home/vscode/environment/primeiro-projeto/quantum-assistant
-bash scripts/rollback.sh
 API=$(terraform -chdir=infra output -raw assistant_url)
 curl -s "$API/health" | python3 -c 'import json,sys; print("live release_id:", json.load(sys.stdin)["release_id"])'
 CAND=$(terraform -chdir=infra output -raw candidate_url)
@@ -1239,17 +1254,36 @@ curl -s "$CAND/health" | python3 -c 'import json,sys; print("candidate release_i
 
 **Esperado:**
 
+> No log do job `rollback` (pipeline de validação deste lab):
+>
 > ```text
-> rollback: live: versao N -> versao N-1 ... (conjunto antes -> depois: corpus/indice/prompt)
+> rollback: live hoje: versao 2
+> rollback: volta para: versao 1 (registro 2026-11-02T043541Z-v1-rel-ba5d685d-46ec99.json)
+> rollback:   release_id: rel-faaddf02-0a0a02 -> rel-ba5d685d-46ec99
+> rollback:   git_sha: faaddf02... -> ba5d685d...
+> rollback:   corpus_version: 72532257bea3 -> 72532257bea3
+> rollback: live agora aponta para a versao 1
+> ```
+>
+> E no Codespaces:
+>
+> ```text
 > live release_id: <o release_id que você anotou no passo 17>
 > candidate release_id: <o release_id que você anotou no passo 22>
 > ```
 >
-> O texto exato das linhas `rollback:` varia (versões e hashes são seus); na validação deste lab ele imprimiu `volta para: versao 1` e, em seguida, `get-alias live` mostrou `"FunctionVersion": "1"`. O que importa é que o `live release_id` seja o do passo 17 e o `candidate release_id` continue o do passo 22. Rodar o rollback **de novo** agora dá exit `1` com `nao ha release anterior registrado para a versao 1`: o registro só tem o que foi promovido, e antes do primeiro release não há para onde voltar. O rollback também fica registrado no S3, em `quantum-assistant/rollbacks/`.
+> Os seus `release_id` e versões são outros; o que importa é que o `live release_id` seja o do passo 17 e o `candidate release_id` continue o do passo 22 (na validação: `live=1 candidate=2`). O log mostra o **conjunto** que voltou: `release_id`, `git_sha` e as versões de corpus, índice e prompt, antes → depois. Rodar o rollback **de novo** agora dá exit `1` com `nao ha release anterior registrado para a versao 1`: o registro só tem o que foi promovido, e antes do primeiro release não há para onde voltar. O rollback também fica registrado no S3, em `quantum-assistant/rollbacks/`.
+
+Quer fazer o mesmo pelo terminal, sem GitLab? É o mesmo script que o job executa:
+
+```bash
+cd /home/vscode/environment/primeiro-projeto/quantum-assistant
+bash scripts/rollback.sh
+```
 
 `live` voltou ao release do passo 17; `candidate` continua no mais novo. Nenhum pipeline rodou. É isso que Diego pediu. O script escolhe a versão anterior **pelo registro de releases no S3**, não por "versão atual menos 1": uma versão da Lambda pode ter sido uma candidata que reprovou no pós-deploy e nunca foi ao ar; o registro só tem o que passou pelos gates e foi promovido.
 
-**Se falhar:** `nenhum release registrado` = só houve um release promovido; o rollback precisa de pelo menos dois (passos 17 e 22).
+**Se falhar:** job `rollback` sem botão play = você está olhando um pipeline disparado com `QC_ACTION=rollback` (nele o job roda sozinho). `nao ha release anterior registrado` = só houve um release promovido; o rollback precisa de pelo menos dois (passos 17 e 22).
 
 <details>
 <summary><b>⚠ Se der erro: <code>informe --bucket (ou TF_STATE_BUCKET)</code></b></summary>
@@ -1273,27 +1307,36 @@ Troque `SEU-RM` pelo seu RM. A alternativa é exportar uma vez `export TF_STATE_
 
 **26. Promova de novo e deixe o `live` na versão corrigida**
 
-**Onde:** Codespaces.
-**Por quê:** o rollback foi um exercício; a versão corrigida é a que deve ficar no ar para a Demo 5.2. O `promote.sh` é o mesmo que o job `promote` executa.
+**Onde:** Codespaces, depois GitLab UI.
+**Por quê:** o rollback foi um exercício; a versão corrigida é a que deve ficar no ar para a Demo 5.2. Voltar para frente é um **release normal**: passa pelos gates de novo, publica uma versão nova e promove. Um commit vazio basta para disparar o pipeline, porque o conteúdo já está correto no repositório.
 **Execute:**
 
 ```bash
-cd /home/vscode/environment/primeiro-projeto/quantum-assistant
-bash scripts/promote.sh
-API=$(terraform -chdir=infra output -raw assistant_url)
-curl -s "$API/health" | python3 -c 'import json,sys; print("live release_id:", json.load(sys.stdin)["release_id"])'
+cd /home/vscode/environment/primeiro-projeto
+git commit --allow-empty -m "release: repromove a politica de trocas corrigida"
+eval $(ssh-agent -s)
+ssh-add -k /home/vscode/.ssh/gitlab
+git push origin "$(git branch --show-current)"
 ```
 
-**Esperado:** `live release_id` igual ao de `candidate` (o release do passo 22). O `promote.sh` imprime no terminal o registro JSON que gravou no S3 (na validação deste lab: `movendo live: versao 1 -> 2`, e o `/health` passou a devolver a versão 2); antes de mover o alias ele confere que o **sha256 do código da versão candidata na AWS** é o `bundle_sha256` do manifesto: a versão promovida tem que ser exatamente o pacote que o pipeline avaliou. Isso foi provado de propósito: com um manifesto de outra versão, o script saiu com exit `1` (`a versao candidata (2) nao e o bundle do manifesto`) e o `live` **não** se moveu.
+Espere o pipeline ficar verde até o `promote-live` (~2 min na validação deste lab). Depois, no Codespaces:
 
-**Se falhar:** `manifesto nao encontrado: .../dist/manifest.json` = o `promote.sh` procura `dist/manifest.json` na sua pasta, e esse arquivo foi gerado **no runner**, pelo job `package`. Gere-o localmente com `python3 release/build_bundle.py > /dev/null` (é reprodutível: mesmo commit, mesmo `bundle_sha256`) ou baixe o artefato do job `package` na UI do GitLab e aponte com `--manifest <caminho>`. `informe --bucket` = mesmo caso do passo 25: `bash scripts/promote.sh --bucket base-config-SEU-RM`.
+```bash
+cd /home/vscode/environment/primeiro-projeto/quantum-assistant
+API=$(terraform -chdir=infra output -raw assistant_url)
+curl -s "$API/health" | python3 -c 'import json,sys; d=json.load(sys.stdin); print("live release_id:", d["release_id"], "| versao da Lambda:", d.get("function_version"))'
+```
 
-O JSON impresso pelo `promote.sh` tem os mesmos campos do registro que você leu no passo 23 (os valores são os do seu release); confira que `lambda_version` é a versão que estava em `candidate` e que `previous_lambda_version` é a que acabou de sair do `live`.
+**Esperado:** um `release_id` **novo** (o commit mudou), numa versão **nova** da Lambda (na validação: `live=3 candidate=3`, `rel-3b570331-0a0a02`), mas com o **mesmo sufixo de conteúdo** do release do passo 22 (`0a0a02` nos dois): é o mesmo conjunto corrigido, só com outro `git_sha`. O registro `live.json` no S3 passa a ter `lambda_version=3, previous_lambda_version=1`. O job `promote-live` imprime o registro JSON que gravou no S3; antes de mover o alias, o `promote.sh` confere que o **sha256 do código da versão candidata na AWS** é o `bundle_sha256` do manifesto: a versão promovida tem que ser exatamente o pacote que o pipeline avaliou. Isso foi provado de propósito na validação deste lab: com um manifesto de outra versão, o script saiu com exit `1` (`a versao candidata (2) nao e o bundle do manifesto`) e o `live` **não** se moveu. Depois de mover, o job ainda chama o `/health` do `live` e reprova se o `release_id` não for o esperado.
+
+**Se falhar:** pipeline vermelho na repromoção = alguma coisa mudou no repositório desde o passo 22; leia o job vermelho como no passo 21. Se preferir promover **sem** pipeline (o `candidate` já está na versão certa), o mesmo script do job roda no Codespaces: `bash scripts/promote.sh` (gere antes o manifesto com `python3 release/build_bundle.py > /dev/null`, que é reprodutível: mesmo commit, mesmo `bundle_sha256`; se aparecer `informe --bucket`, use `--bucket base-config-SEU-RM`).
+
+O registro gravado tem os mesmos campos do que você leu no passo 23 (os valores são os do seu release); confira que `lambda_version` é a versão que estava em `candidate` e que `previous_lambda_version` é a que acabou de sair do `live` (na validação: `3` e `1`).
 
 ### Checkpoint
 
 - o manifesto no S3 tem as seis versões, `git_sha`, `bundle_sha256` e aprovador; o pipeline vermelho não deixou manifesto
-- `live` voltou ao `release_id` antigo com `rollback.sh`, sem pipeline, e depois voltou ao corrigido com `promote.sh`
+- `live` voltou ao `release_id` antigo pelo job `rollback` (botão ou `QC_ACTION=rollback`), sem `apply`, e depois voltou ao corrigido por um release normal (commit vazio → gates → `promote-live`)
 
 ---
 
@@ -1408,9 +1451,9 @@ Neste lab você:
 - transformou report-only em **gate bloqueante** com JUnit em `when: always` e exit preservado
 - publicou em **`candidate`**, testou o publicado e promoveu para **`live`**
 - provocou uma regressão **de conteúdo** (uma linha num documento, zero código), viu o `evaluate` reprovar e o **`deploy` não rodar**, corrigiu e viu o gate aprovar
-- leu o **manifesto de release** e fez **rollback por conjunto coerente** em um comando
+- leu o **registro de release** no S3 e fez **rollback por conjunto coerente** com um clique
 
-**Mensagem para Helena e Diego:** nenhuma mudança (código, política, template ou parâmetro) chega ao `live` sem passar pelo golden set antes **e** depois do deploy, e voltar atrás leva um comando. O que o pipeline **não** faz é olhar o assistente depois que ele está no ar. Esse é o assunto de amanhã.
+**Mensagem para Helena e Diego:** nenhuma mudança (código, política, template ou parâmetro) chega ao `live` sem passar pelo golden set antes **e** depois do deploy, e voltar atrás leva um clique (12 segundos na validação deste lab, contra ~2,5 min de um pipeline completo). O que o pipeline **não** faz é olhar o assistente depois que ele está no ar. Esse é o assunto de amanhã.
 
 ---
 

@@ -20,7 +20,7 @@ Além disso, o Learner Lab limita o que podemos usar: `LabRole` fixa, sem criar 
    - **`live`**: é o que a rota pública do cliente usa. Só muda no job `promote`, depois do `postdeploy` passar.
 3. A API Gateway HTTP `qc-assistant` expõe os dois caminhos: `POST /assistant/ask` e `GET /health` vão para `live`; `/candidate/assistant/ask` e `/candidate/health` vão para `candidate`.
 4. O alias `live` tem `lifecycle { ignore_changes = [function_version] }` no Terraform: **só `promote` e `rollback` movem o `live`**, nunca o `apply`. Isso impede que um `apply` qualquer troque a versão em produção por acidente.
-5. **Rollback** = apontar `live` para a versão anterior registrada no manifesto do release (`scripts/rollback.sh`). Não precisa de pipeline nem de novo `apply`.
+5. **Rollback** = apontar `live` para o release **promovido anterior**, registrado em `s3://<bucket>/quantum-assistant/releases/` (`scripts/rollback.sh`, executado pelo job manual `rollback` do pipeline, ou por um pipeline disparado com `QC_ACTION=rollback`). Não precisa de novo `apply` nem de passar pelos gates. Validado na conta do Learner Lab: `live` 2 → 1 em 12 s.
 6. O bundle da Lambda carrega **core + corpus + prompts + config + adapter** num zip só. Uma versão da Lambda é, portanto, um **conjunto coerente de artefatos**: voltar a versão volta código, políticas e templates juntos (ver ADR-002 para o porquê do conjunto).
 
 ## Alternativas consideradas
