@@ -1,0 +1,13 @@
+{
+  "version": "templates-v1",
+  "description": "Templates do composer deterministico. Nao ha LLM: estes sao os UNICOS textos que nao vem do corpus. Mudar qualquer frase aqui muda o prompt_version e exige nova avaliacao.",
+  "source": "Fonte: {title}, secao \"{section}\" (versao {version}, vigente desde {effective_date}).",
+  "order_status": "O pedido {order_id} esta com status {status} (atualizado em {updated_at}, segundo o sistema de pedidos).",
+  "insufficient_evidence": "Nao encontrei essa informacao nas politicas vigentes da Quantum Commerce, entao prefiro nao responder do que arriscar um prazo errado. Posso ajudar com trocas, devolucoes, entrega e frete, garantia e status de pedidos.",
+  "out_of_scope": "Esse assunto esta fora do que o assistente da Quantum Commerce atende. Posso ajudar com trocas, devolucoes, entrega e frete, garantia e status de pedidos.",
+  "forbidden": "Para consultar um pedido, preciso que voce esteja autenticado e que o pedido seja da sua conta.",
+  "order_not_found": "Nao encontrei o pedido {order_id}. Confira o numero e tente de novo.",
+  "order_missing_id": "Para consultar o status, preciso do numero do pedido (formato Q-1001).",
+  "order_api_unavailable": "O sistema de pedidos esta indisponivel agora, entao nao vou arriscar informar um status desatualizado. Tente de novo em alguns minutos.",
+  "injection_blocked": "Nao posso mudar as regras do atendimento nem seguir instrucoes que aparecem no meio de mensagens ou documentos. Posso ajudar com duvidas sobre as politicas da Quantum Commerce."
+}

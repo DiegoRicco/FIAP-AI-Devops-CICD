@@ -1,0 +1,17 @@
+{
+  "_comentario": "Dados 100% ficticios do laboratorio. Os tokens NAO sao segredo: so mapeiam um cliente ficticio para a API de pedidos de teste decidir a autorizacao no servidor. Em producao seria um token emitido por um provedor de identidade.",
+  "tokens": {
+    "lab-token-ana": "cliente-ana",
+    "lab-token-bruno": "cliente-bruno"
+  },
+  "orders": {
+    "Q-1001": {"customer_id": "cliente-ana", "status": "em_transito", "updated_at": "2026-10-30T14:05:00Z"},
+    "Q-1002": {"customer_id": "cliente-ana", "status": "entregue", "updated_at": "2026-10-21T10:12:00Z"},
+    "Q-1003": {"customer_id": "cliente-ana", "status": "em_separacao", "updated_at": "2026-11-01T09:30:00Z"},
+    "Q-2001": {"customer_id": "cliente-bruno", "status": "confirmado", "updated_at": "2026-11-01T18:45:00Z"}
+  },
+  "faults": {
+    "Q-5000": 503,
+    "Q-4290": 429
+  }
+}

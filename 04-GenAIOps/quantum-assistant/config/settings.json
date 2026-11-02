@@ -1,0 +1,31 @@
+{
+  "_comentario": "Parametros do assistente. Cada mudanca aqui muda o index_version e exige nova avaliacao. Os filtros existem para a aula poder desliga-los e ver o gate reprovar.",
+  "retrieval": {
+    "k": 3,
+    "bm25_k1": 1.5,
+    "bm25_b": 0.75,
+    "title_boost": 2,
+    "min_score": 2.0,
+    "min_matched_terms": 2
+  },
+  "filters": {
+    "require_active": true,
+    "respect_effective_date": true,
+    "enforce_tenant": true,
+    "enforce_access_level": true
+  },
+  "composer": {
+    "second_source_min_new_idf": 2.0,
+    "max_citations": 2
+  },
+  "as_of_date": null,
+  "orders": {
+    "backend": "memory",
+    "base_url": "http://127.0.0.1:8081",
+    "timeout_s": 2.0,
+    "retries": 2,
+    "backoff_s": 0.2
+  },
+  "environment": "local",
+  "release_id": "local-dev"
+}
