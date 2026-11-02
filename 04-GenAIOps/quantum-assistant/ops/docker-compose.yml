@@ -13,6 +13,8 @@ services:
     command: ["--config=/etc/otelcol/config.yaml"]
     volumes:
       - ./otel-collector.yaml:/etc/otelcol/config.yaml:ro
+      # Logs e resultados dos probes, SO LEITURA, para o receiver filelog.
+      - ./:/var/log/quantum:ro
     ports:
       - "127.0.0.1:4318:4318"   # OTLP/HTTP vindo do assistente, pedidos e probes
     mem_limit: 256m
@@ -42,6 +44,19 @@ services:
     mem_limit: 384m
     restart: unless-stopped
 
+  # Logs da demo: o Collector le ops/.runtime/*.log e ops/results/*.jsonl e
+  # envia para o Loki por OTLP; o Grafana consulta o Loki. Versao estavel pinada
+  # (3.7.9, 2026-10-20). Armazenamento so dentro do container, como os demais.
+  loki:
+    image: grafana/loki:3.7.9
+    command: ["-config.file=/etc/loki/config.yaml"]
+    volumes:
+      - ./loki.yaml:/etc/loki/config.yaml:ro
+    ports:
+      - "127.0.0.1:3100:3100"   # API de consulta (/loki/api/v1/query_range)
+    mem_limit: 256m
+    restart: unless-stopped
+
   grafana:
     image: grafana/grafana:13.2.5
     environment:
@@ -55,13 +70,16 @@ services:
       GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
       GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
       GF_NEWS_NEWS_FEED_ENABLED: "false"
-      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: "/var/lib/grafana/dashboards/quantum-demo52.json"
+      # A tela de abertura e a Visao do negocio: e por ela que a Helena (e o aluno
+      # que nao e de tecnologia) entra no assunto antes do detalhe tecnico.
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: "/var/lib/grafana/dashboards/negocio-atendimento.json"
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
     ports:
       - "127.0.0.1:3000:3000"
-    # Medido no devcontainer: pico de 277 MiB com o dashboard aberto; 512m da folga.
-    mem_limit: 512m
-    depends_on: [prometheus]
+    # Medido no devcontainer com os 3 dashboards e o Loki: 506 MiB de pico. 768m da
+    # folga para a turma abrir as telas sem o Grafana ser morto por falta de memoria.
+    mem_limit: 768m
+    depends_on: [prometheus, loki]
     restart: unless-stopped

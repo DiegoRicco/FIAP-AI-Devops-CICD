@@ -1,36 +1,122 @@
 {
   "uid": "quantum-demo52",
-  "title": "Quantum Commerce - Demo 5.2 - Tecnico x Qualidade",
-  "description": "Ambiente de demonstracao local (runtime Python no Codespaces/Mac). Nao e a Lambda publicada.",
+  "title": "Visão técnica · SRE",
+  "description": "Golden signals, qualidade dos probes e alertas do assistente. Ambiente local de demonstração (não é a Lambda publicada).",
   "tags": [
-    "quantum",
+    "quantum-assistente",
     "demo-5.2",
     "local-demo"
   ],
   "timezone": "browser",
   "editable": false,
-  "refresh": "5s",
+  "graphTooltip": 1,
+  "refresh": "10s",
+  "liveNow": false,
   "time": {
     "from": "now-15m",
     "to": "now"
   },
+  "timepicker": {
+    "refresh_intervals": [
+      "5s",
+      "10s",
+      "30s",
+      "1m"
+    ]
+  },
   "schemaVersion": 41,
   "version": 1,
+  "fiscalYearStartMonth": 0,
+  "links": [
+    {
+      "type": "dashboards",
+      "tags": [
+        "quantum-assistente"
+      ],
+      "asDropdown": false,
+      "includeVars": false,
+      "keepTime": true,
+      "title": "Outras visões",
+      "icon": "external link",
+      "targetBlank": false
+    }
+  ],
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      },
+      {
+        "name": "Alertas disparando",
+        "enable": true,
+        "iconColor": "#F04E5E",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "expr": "max by (alertname, severity) (ALERTS{alertstate=\"firing\", severity=~\"warning|critical\"}) unless max by (alertname, severity) (ALERTS{alertstate=\"firing\", severity=~\"warning|critical\"} offset 10s)",
+        "step": "10s",
+        "titleFormat": "Alerta acendeu: {{alertname}}",
+        "textFormat": "severidade {{severity}}",
+        "useValueForTime": false,
+        "hide": false
+      },
+      {
+        "name": "Corpus trocado (reload)",
+        "enable": true,
+        "iconColor": "#ED145B",
+        "datasource": {
+          "type": "loki",
+          "uid": "loki"
+        },
+        "expr": "{service_name=\"quantum-assistant\"} |= \"runtime.reload\" | json",
+        "instant": false,
+        "titleFormat": "Corpus trocado",
+        "textFormat": "corpus {{corpus_version}}",
+        "tagKeys": "",
+        "hide": false
+      },
+      {
+        "name": "Falha injetada na API de pedidos",
+        "enable": true,
+        "iconColor": "#E9A23B",
+        "datasource": {
+          "type": "loki",
+          "uid": "loki"
+        },
+        "expr": "{service_name=\"quantum-orders-api\"} |~ \"orders.faults_(updated|reset)\" | json",
+        "instant": false,
+        "titleFormat": "{{event}}",
+        "textFormat": "erro {{error_rate}} latencia {{latency_ms}} ms",
+        "tagKeys": "",
+        "hide": false
+      }
+    ]
+  },
   "templating": {
     "list": [
       {
         "name": "release",
-        "label": "release_id",
+        "label": "Release",
         "type": "query",
         "datasource": {
           "type": "prometheus",
           "uid": "prometheus"
         },
         "query": {
-          "query": "label_values(quality_probes_total, release_id)",
-          "refId": "release"
+          "query": "label_values(requests_total{job=\"quantum-assistant\"}, release_id)",
+          "refId": "r"
         },
-        "definition": "label_values(quality_probes_total, release_id)",
+        "definition": "label_values(requests_total{job=\"quantum-assistant\"}, release_id)",
         "includeAll": true,
         "allValue": ".*",
         "multi": true,
@@ -42,17 +128,17 @@
       },
       {
         "name": "corpus",
-        "label": "corpus_version",
+        "label": "Versão do corpus",
         "type": "query",
         "datasource": {
           "type": "prometheus",
           "uid": "prometheus"
         },
         "query": {
-          "query": "label_values(quality_probes_total{release_id=~\"$release\"}, corpus_version)",
-          "refId": "corpus"
+          "query": "label_values(quality_probes_total, corpus_version)",
+          "refId": "c"
         },
-        "definition": "label_values(quality_probes_total{release_id=~\"$release\"}, corpus_version)",
+        "definition": "label_values(quality_probes_total, corpus_version)",
         "includeAll": true,
         "allValue": ".*",
         "multi": true,
@@ -67,604 +153,18 @@
   "panels": [
     {
       "id": 1,
-      "type": "text",
-      "title": "",
-      "gridPos": {
-        "x": 0,
-        "y": 0,
-        "w": 12,
-        "h": 2
-      },
-      "options": {
-        "mode": "markdown",
-        "content": "### SINAL TECNICO (runtime `quantum-assistant`)\nTodas as requisicoes atendidas: disponibilidade, erro e latencia. **Verde aqui nao prova resposta correta.**"
-      }
-    },
-    {
-      "id": 2,
-      "type": "text",
-      "title": "",
-      "gridPos": {
-        "x": 12,
-        "y": 0,
-        "w": 12,
-        "h": 2
-      },
-      "options": {
-        "mode": "markdown",
-        "content": "### SINAL DE QUALIDADE (probes rotulados, *proxy sintetico*)\nPerguntas com resposta conhecida enviadas pelo simulador. Nao e trafego humano."
-      }
-    },
-    {
-      "id": 3,
-      "type": "timeseries",
-      "title": "Requisicoes por segundo (por rota)",
-      "description": "rate(requests_total) do runtime local, janela 1m.",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "gridPos": {
-        "x": 0,
-        "y": 2,
-        "w": 12,
-        "h": 7
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "sum by (route) (rate(requests_total{job=\"quantum-assistant\", release_id=~\"$release\"}[1m]))",
-          "legendFormat": "{{route}}",
-          "refId": "A",
-          "range": true
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 8,
-            "spanNulls": true,
-            "showPoints": "never"
-          },
-          "unit": "reqps",
-          "min": 0
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
-      }
-    },
-    {
-      "id": 4,
-      "type": "timeseries",
-      "title": "Pass rate dos probes (synthetic_quality_pass_rate, janela 2m)",
-      "description": "Probes que passaram todos os criterios / probes executados. Linha tracejada: 0,90 (limiar do alerta QualityProbeDegraded, exige n >= 20).",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "gridPos": {
-        "x": 12,
-        "y": 2,
-        "w": 12,
-        "h": 7
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "qc:synthetic_quality_pass_rate:2m{release_id=~\"$release\", corpus_version=~\"$corpus\"}",
-          "legendFormat": "{{scenario}} corpus={{corpus_version}}",
-          "refId": "A",
-          "range": true
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 8,
-            "spanNulls": true,
-            "showPoints": "never",
-            "thresholdsStyle": {
-              "mode": "dashed"
-            }
-          },
-          "unit": "percentunit",
-          "min": 0,
-          "max": 1,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "red",
-                "value": null
-              },
-              {
-                "color": "orange",
-                "value": 0.9
-              },
-              {
-                "color": "green",
-                "value": 0.95
-              }
-            ]
-          },
-          "color": {
-            "mode": "palette-classic"
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
-      }
-    },
-    {
-      "id": 5,
-      "type": "timeseries",
-      "title": "Erros 5xx (fracao das requisicoes)",
-      "description": "Respostas HTTP 5xx do runtime / todas as respostas, janela 1m.",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "gridPos": {
-        "x": 0,
-        "y": 9,
-        "w": 12,
-        "h": 7
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "sum(rate(requests_total{job=\"quantum-assistant\", status_code=~\"5..\", release_id=~\"$release\"}[1m])) / sum(rate(requests_total{job=\"quantum-assistant\", release_id=~\"$release\"}[1m]))",
-          "legendFormat": "5xx",
-          "refId": "A",
-          "range": true
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 8,
-            "spanNulls": true,
-            "showPoints": "never"
-          },
-          "unit": "percentunit",
-          "min": 0
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
-      }
-    },
-    {
-      "id": 6,
-      "type": "timeseries",
-      "title": "Fonte vigente (source_is_current_rate, janela 2m)",
-      "description": "Probes cuja fonte citada esta ativa e no prazo / probes com fonte verificavel. Qualquer fonte obsoleta dispara StaleSourceServed (critical).",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "gridPos": {
-        "x": 12,
-        "y": 9,
-        "w": 12,
-        "h": 7
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "qc:source_is_current_rate:2m{release_id=~\"$release\", corpus_version=~\"$corpus\"}",
-          "legendFormat": "{{scenario}} corpus={{corpus_version}}",
-          "refId": "A",
-          "range": true
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 8,
-            "spanNulls": true,
-            "showPoints": "never",
-            "thresholdsStyle": {
-              "mode": "dashed"
-            }
-          },
-          "unit": "percentunit",
-          "min": 0,
-          "max": 1,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "red",
-                "value": null
-              },
-              {
-                "color": "orange",
-                "value": 0.9
-              },
-              {
-                "color": "green",
-                "value": 0.95
-              }
-            ]
-          },
-          "color": {
-            "mode": "palette-classic"
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
-      }
-    },
-    {
-      "id": 7,
-      "type": "timeseries",
-      "title": "Latencia p50 / p95 (ms)",
-      "description": "histogram_quantile sobre request_latency_ms, janela 1m.",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "gridPos": {
-        "x": 0,
-        "y": 16,
-        "w": 12,
-        "h": 7
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "histogram_quantile(0.50, sum by (le) (rate(request_latency_ms_bucket{job=\"quantum-assistant\", release_id=~\"$release\"}[1m])))",
-          "legendFormat": "p50",
-          "refId": "A",
-          "range": true
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(request_latency_ms_bucket{job=\"quantum-assistant\", release_id=~\"$release\"}[1m])))",
-          "legendFormat": "p95",
-          "refId": "B",
-          "range": true
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 8,
-            "spanNulls": true,
-            "showPoints": "never"
-          },
-          "unit": "ms",
-          "min": 0
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
-      }
-    },
-    {
-      "id": 8,
-      "type": "timeseries",
-      "title": "Retrieval Hit@k e MRR dos probes (janela 2m)",
-      "description": "Hit@k: probes com documento esperado no top-k. MRR: media de 1/posicao do primeiro relevante. So probes com documento esperado entram no denominador.",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "gridPos": {
-        "x": 12,
-        "y": 16,
-        "w": 12,
-        "h": 7
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "qc:retrieval_hit_at_k:2m{release_id=~\"$release\", corpus_version=~\"$corpus\"}",
-          "legendFormat": "hit@k {{scenario}}",
-          "refId": "A",
-          "range": true
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "qc:retrieval_mrr:2m{release_id=~\"$release\", corpus_version=~\"$corpus\"}",
-          "legendFormat": "mrr {{scenario}}",
-          "refId": "B",
-          "range": true
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 8,
-            "spanNulls": true,
-            "showPoints": "never"
-          },
-          "unit": "percentunit",
-          "min": 0,
-          "max": 1
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
-      }
-    },
-    {
-      "id": 9,
-      "type": "timeseries",
-      "title": "Falha da API de pedidos (transaction_lookup_failure_rate, janela 2m)",
-      "description": "Consultas de pedido que terminaram em order_api_unavailable (5xx/timeout apos retry) / consultas de pedido. Alerta OrderApiDegraded acima de 20% com n >= 10.",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "gridPos": {
-        "x": 0,
-        "y": 23,
-        "w": 12,
-        "h": 7
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "qc:transaction_lookup_failure_rate:2m{release_id=~\"$release\"}",
-          "legendFormat": "falha pedidos",
-          "refId": "A",
-          "range": true
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "sum by (outcome) (rate(order_lookups_total{job=\"quantum-assistant\", release_id=~\"$release\"}[1m]))",
-          "legendFormat": "{{outcome}} /s",
-          "refId": "B",
-          "range": true
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 8,
-            "spanNulls": true,
-            "showPoints": "never"
-          },
-          "min": 0
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
-      }
-    },
-    {
-      "id": 10,
-      "type": "timeseries",
-      "title": "Abstencao e citacao (janela 2m)",
-      "description": "Abstencao: respostas que recusaram (runtime, todas as requisicoes). Citacao: probes que exigem citacao e a receberam.",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "gridPos": {
-        "x": 12,
-        "y": 23,
-        "w": 12,
-        "h": 7
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "qc:abstention_rate:2m{release_id=~\"$release\"}",
-          "legendFormat": "abstencao (runtime)",
-          "refId": "A",
-          "range": true
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "qc:citation_presence_rate:2m{release_id=~\"$release\", corpus_version=~\"$corpus\"}",
-          "legendFormat": "citacao {{scenario}}",
-          "refId": "B",
-          "range": true
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 8,
-            "spanNulls": true,
-            "showPoints": "never"
-          },
-          "unit": "percentunit",
-          "min": 0,
-          "max": 1
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
-      }
-    },
-    {
-      "id": 11,
-      "type": "timeseries",
-      "title": "Amostras de probes na janela (n, 2m)",
-      "description": "n que sustenta as taxas acima. Abaixo de 20, o alerta de qualidade nao dispara: insufficient_data.",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "gridPos": {
-        "x": 12,
-        "y": 30,
-        "w": 12,
-        "h": 7
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "qc:quality_probes:n_2m{release_id=~\"$release\", corpus_version=~\"$corpus\"}",
-          "legendFormat": "n {{scenario}}",
-          "refId": "A",
-          "range": true
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 8,
-            "spanNulls": true,
-            "showPoints": "never"
-          },
-          "min": 0
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
-      }
-    },
-    {
-      "id": 12,
       "type": "stat",
-      "title": "Alertas FIRING no Prometheus",
-      "description": "Serie ALERTS do Prometheus. Sem Alertmanager: nenhum aviso e enviado para fora (local alert).",
+      "title": "Tráfego",
+      "description": "Requisições por segundo no assistente (último minuto). Golden signal: taxa.",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 4,
+        "h": 5
+      },
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
-      },
-      "gridPos": {
-        "x": 0,
-        "y": 30,
-        "w": 12,
-        "h": 7
       },
       "targets": [
         {
@@ -672,26 +172,32 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (alertname, severity) (ALERTS{alertstate=\"firing\"})",
-          "legendFormat": "{{alertname}} ({{severity}})",
+          "expr": "sum(rate(requests_total{job=\"quantum-assistant\", release_id=~\"$release\"}[1m]))",
           "refId": "A",
-          "range": true
+          "legendFormat": "req/s",
+          "range": true,
+          "instant": false
         }
       ],
       "fieldConfig": {
         "defaults": {
+          "unit": "reqps",
+          "noValue": "0 req/s",
+          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "red",
+                "color": "#F1EFEC",
                 "value": null
               }
             ]
           },
           "color": {
-            "mode": "thresholds"
-          }
+            "mode": "fixed",
+            "fixedColor": "#F1EFEC"
+          },
+          "decimals": 2
         },
         "overrides": []
       },
@@ -703,9 +209,1207 @@
           "fields": "",
           "values": false
         },
-        "colorMode": "background",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "textMode": "value",
+        "wideLayout": true,
+        "showPercentChange": false,
+        "orientation": "auto"
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Erros 5xx",
+      "description": "Fração das requisições do último minuto que terminaram em erro do servidor. Golden signal: erros.",
+      "gridPos": {
+        "x": 4,
+        "y": 0,
+        "w": 4,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "(sum(rate(requests_total{job=\"quantum-assistant\", release_id=~\"$release\", status_code=~\"5..\"}[1m])) or vector(0)) / sum(rate(requests_total{job=\"quantum-assistant\", release_id=~\"$release\"}[1m]))",
+          "refId": "A",
+          "legendFormat": "5xx",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "noValue": "Sem amostras",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#3DBE8B",
+                "value": null
+              },
+              {
+                "color": "#E9A23B",
+                "value": 0.01
+              },
+              {
+                "color": "#F04E5E",
+                "value": 0.05
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "textMode": "value",
+        "wideLayout": true,
+        "showPercentChange": false,
+        "orientation": "auto"
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Latência p95",
+      "description": "95% das requisições do último minuto terminaram abaixo deste tempo. Golden signal: latência.",
+      "gridPos": {
+        "x": 8,
+        "y": 0,
+        "w": 4,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(request_latency_ms_bucket{job=\"quantum-assistant\", release_id=~\"$release\"}[1m])))",
+          "refId": "A",
+          "legendFormat": "p95",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "noValue": "Sem amostras",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#3DBE8B",
+                "value": null
+              },
+              {
+                "color": "#E9A23B",
+                "value": 500
+              },
+              {
+                "color": "#F04E5E",
+                "value": 2000
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "textMode": "value",
+        "wideLayout": true,
+        "showPercentChange": false,
+        "orientation": "auto"
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Probes corretos",
+      "description": "Pass rate dos probes rotulados na janela de 2 minutos, pior cenário em andamento (proxy sintético). Abaixo de 90% com n ≥ 20 dispara QualityProbeDegraded.",
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 4,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "min(qc:synthetic_quality_pass_rate:2m{release_id=~\"$release\", corpus_version=~\"$corpus\"})",
+          "refId": "A",
+          "legendFormat": "pass rate",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "noValue": "Sem amostras",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#F04E5E",
+                "value": null
+              },
+              {
+                "color": "#E9A23B",
+                "value": 0.9
+              },
+              {
+                "color": "#3DBE8B",
+                "value": 0.99
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "textMode": "value",
+        "wideLayout": true,
+        "showPercentChange": false,
+        "orientation": "auto"
+      }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Amostras na janela (n)",
+      "description": "Quantos probes sustentam o pass rate da janela de 2 minutos. Com menos de 20, o alerta de qualidade não dispara: pouca amostra não é evidência.",
+      "gridPos": {
+        "x": 16,
+        "y": 0,
+        "w": 4,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(qc:quality_probes:n_2m{release_id=~\"$release\", corpus_version=~\"$corpus\"})",
+          "refId": "A",
+          "legendFormat": "n",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "0",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#E9A23B",
+                "value": null
+              },
+              {
+                "color": "#F1EFEC",
+                "value": 20
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "textMode": "value",
+        "wideLayout": true,
+        "showPercentChange": false,
+        "orientation": "auto"
+      }
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Alertas disparando",
+      "description": "Regras do Prometheus em FIRING agora (sem Alertmanager: nada é enviado para fora).",
+      "gridPos": {
+        "x": 20,
+        "y": 0,
+        "w": 4,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "count(ALERTS{alertstate=\"firing\", severity=~\"warning|critical\"}) or vector(0)",
+          "refId": "A",
+          "legendFormat": "firing",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "0",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#3DBE8B",
+                "value": null
+              },
+              {
+                "color": "#F04E5E",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
         "graphMode": "none",
-        "textMode": "value_and_name"
+        "justifyMode": "center",
+        "textMode": "value",
+        "wideLayout": true,
+        "showPercentChange": false,
+        "orientation": "auto"
+      }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Latência do assistente (p50, p95, p99)",
+      "description": "Percentis da latência HTTP no último minuto. Quando a API de pedidos fica lenta, o p95/p99 sobe por causa dos retries.",
+      "gridPos": {
+        "x": 0,
+        "y": 5,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.5, sum by (le) (rate(request_latency_ms_bucket{job=\"quantum-assistant\", release_id=~\"$release\"}[1m])))",
+          "refId": "A",
+          "legendFormat": "p50",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(request_latency_ms_bucket{job=\"quantum-assistant\", release_id=~\"$release\"}[1m])))",
+          "refId": "B",
+          "legendFormat": "p95",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(request_latency_ms_bucket{job=\"quantum-assistant\", release_id=~\"$release\"}[1m])))",
+          "refId": "C",
+          "legendFormat": "p99",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "showPoints": "never",
+            "spanNulls": 30000,
+            "lineInterpolation": "smooth",
+            "axisBorderShow": false,
+            "axisSoftMin": 0,
+            "thresholdsStyle": {
+              "mode": "off"
+            },
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#3DBE8B",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p50"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#B4B1AD"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p95"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#5BC8D9"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p99"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#FF5C8D"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Requisições por rota e erros 5xx",
+      "description": "Taxa de requisições por rota (área) e taxa de 5xx (linha vermelha). Golden signals de tráfego e erros juntos.",
+      "gridPos": {
+        "x": 12,
+        "y": 5,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (route) (rate(requests_total{job=\"quantum-assistant\", release_id=~\"$release\"}[1m]))",
+          "refId": "A",
+          "legendFormat": "{{route}}",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(rate(requests_total{job=\"quantum-assistant\", release_id=~\"$release\", status_code=~\"5..\"}[1m])) or vector(0)",
+          "refId": "B",
+          "legendFormat": "5xx",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "gradientMode": "none",
+            "showPoints": "never",
+            "spanNulls": 30000,
+            "lineInterpolation": "smooth",
+            "axisBorderShow": false,
+            "axisSoftMin": 0,
+            "thresholdsStyle": {
+              "mode": "off"
+            },
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#3DBE8B",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "policy"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#FF5C8D"
+                }
+              },
+              {
+                "id": "displayName",
+                "value": "políticas"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "order_status"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#5BC8D9"
+                }
+              },
+              {
+                "id": "displayName",
+                "value": "status de pedido"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "faq"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#B4B1AD"
+                }
+              },
+              {
+                "id": "displayName",
+                "value": "faq"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "unsupported"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#8E8B87"
+                }
+              },
+              {
+                "id": "displayName",
+                "value": "fora do escopo"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "5xx"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "erros 5xx"
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 1
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    6,
+                    4
+                  ]
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "thresholds"
+                }
+              },
+              {
+                "id": "custom.gradientMode",
+                "value": "scheme"
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "#8E8B87",
+                      "value": null
+                    },
+                    {
+                      "color": "#F04E5E",
+                      "value": 0.001
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Qualidade da recuperação e da citação (probes, janela 2m)",
+      "description": "Hit@k: o documento certo apareceu entre os k recuperados. MRR: quão no topo ele veio. Citação: a resposta citou fonte quando devia. Fonte vigente: a fonte citada vale hoje. Hit@k pode ficar em 100% enquanto a fonte vigente cai: recuperar o certo não garante citar o certo.",
+      "gridPos": {
+        "x": 0,
+        "y": 13,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "min(qc:retrieval_hit_at_k:2m{release_id=~\"$release\", corpus_version=~\"$corpus\"})",
+          "refId": "A",
+          "legendFormat": "Hit@k",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "min(qc:retrieval_mrr:2m{release_id=~\"$release\", corpus_version=~\"$corpus\"})",
+          "refId": "B",
+          "legendFormat": "MRR",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "min(qc:citation_presence_rate:2m{release_id=~\"$release\", corpus_version=~\"$corpus\"})",
+          "refId": "C",
+          "legendFormat": "Citação presente",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "min(qc:source_is_current_rate:2m{release_id=~\"$release\", corpus_version=~\"$corpus\"})",
+          "refId": "D",
+          "legendFormat": "Fonte vigente",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "showPoints": "never",
+            "spanNulls": 30000,
+            "lineInterpolation": "smooth",
+            "axisBorderShow": false,
+            "axisSoftMin": 0,
+            "thresholdsStyle": {
+              "mode": "off"
+            },
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#3DBE8B",
+                "value": null
+              }
+            ]
+          },
+          "min": 0.5,
+          "max": 1.02
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Hit@k"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#B4B1AD"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "MRR"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#5BC8D9"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Citação presente"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#8E8B87"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Fonte vigente"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#FF5C8D"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 3
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Dependência: API de pedidos",
+      "description": "Resultado das consultas do assistente à API de pedidos, por segundo. 'Indisponível' (5xx ou timeout) acima de 20% com n ≥ 10 dispara OrderApiDegraded, que é alerta do SRE, não de conteúdo.",
+      "gridPos": {
+        "x": 12,
+        "y": 13,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (outcome) (rate(order_lookups_total{job=\"quantum-assistant\", release_id=~\"$release\"}[1m]))",
+          "refId": "A",
+          "legendFormat": "{{outcome}}",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 40,
+            "gradientMode": "none",
+            "showPoints": "never",
+            "spanNulls": 30000,
+            "lineInterpolation": "smooth",
+            "axisBorderShow": false,
+            "axisSoftMin": 0,
+            "thresholdsStyle": {
+              "mode": "off"
+            },
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#3DBE8B",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "ok"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#3DBE8B"
+                }
+              },
+              {
+                "id": "displayName",
+                "value": "respondeu"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "unavailable"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#F04E5E"
+                }
+              },
+              {
+                "id": "displayName",
+                "value": "indisponível (5xx/timeout)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "not_found"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#8E8B87"
+                }
+              },
+              {
+                "id": "displayName",
+                "value": "pedido não existe"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "forbidden"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#E9A23B"
+                }
+              },
+              {
+                "id": "displayName",
+                "value": "pedido de outro cliente"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 11,
+      "type": "table",
+      "title": "Alertas em FIRING agora",
+      "description": "Cada linha é uma regra de ops/alert-rules.yml disparando. O runbook de cada alerta está em ops/runbook.md.",
+      "gridPos": {
+        "x": 0,
+        "y": 21,
+        "w": 14,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by (alertname, severity, signal, team, corpus_version) (ALERTS{alertstate=\"firing\"})",
+          "refId": "A",
+          "legendFormat": "__auto",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Value": true
+            },
+            "renameByName": {
+              "alertname": "Alerta",
+              "severity": "Severidade",
+              "signal": "Sinal",
+              "team": "Time",
+              "corpus_version": "Corpus"
+            },
+            "indexByName": {
+              "alertname": 0,
+              "severity": 1,
+              "signal": 2,
+              "team": 3,
+              "corpus_version": 4
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "Nenhum alerta disparando.",
+          "custom": {
+            "align": "left",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Severidade"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "critical": {
+                        "text": "crítico",
+                        "color": "#F04E5E",
+                        "index": 0
+                      },
+                      "warning": {
+                        "text": "atenção",
+                        "color": "#E9A23B",
+                        "index": 1
+                      },
+                      "info": {
+                        "text": "informativo",
+                        "color": "#B4B1AD",
+                        "index": 2
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      }
+    },
+    {
+      "id": 12,
+      "type": "text",
+      "title": "O que olhar primeiro",
+      "gridPos": {
+        "x": 14,
+        "y": 21,
+        "w": 10,
+        "h": 8
+      },
+      "transparent": false,
+      "options": {
+        "mode": "markdown",
+        "content": "1. **Alertas disparando.** Zero é o normal. Se houver, a tabela ao lado diz qual e de que time.\n2. **Erros 5xx e latência p95.** Se estão bons e os **probes corretos** caíram, o problema é de conteúdo (corpus, filtro, índice), não de servidor.\n3. **Amostras (n).** Abaixo de 20, não conclua nada: o alerta de qualidade espera amostra mínima.\n4. **Dependência.** Faixa vermelha em *API de pedidos* com probes corretos estáveis = incidente técnico, e o assistente está recusando com honestidade.\n\nPara achar a requisição que errou e abrir o trace, use **Investigação · Incidente**.",
+        "code": {
+          "language": "plaintext",
+          "showLineNumbers": false,
+          "showMiniMap": false
+        }
       }
     }
   ]

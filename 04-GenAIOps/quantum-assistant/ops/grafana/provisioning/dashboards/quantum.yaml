@@ -1,7 +1,9 @@
 apiVersion: 1
 providers:
+  # Os 3 dashboards da Demo 5.2 (negocio, tecnico e investigacao) ficam numa
+  # pasta so, para o aluno achar tudo em Dashboards > Quantum Commerce · Assistente.
   - name: quantum
-    folder: Quantum Commerce
+    folder: "Quantum Commerce · Assistente"
     type: file
     disableDeletion: true
     allowUiUpdates: false

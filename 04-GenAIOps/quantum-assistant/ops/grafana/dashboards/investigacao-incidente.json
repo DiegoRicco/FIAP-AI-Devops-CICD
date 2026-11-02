@@ -1,0 +1,987 @@
+{
+  "uid": "qc-investigacao",
+  "title": "Investigação · Incidente",
+  "description": "Do alerta ao log e do log ao trace: qual versão atendeu, quando mudou e qual requisição errou.",
+  "tags": [
+    "quantum-assistente",
+    "demo-5.2"
+  ],
+  "timezone": "browser",
+  "editable": false,
+  "graphTooltip": 1,
+  "refresh": "10s",
+  "liveNow": false,
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": [
+      "5s",
+      "10s",
+      "30s",
+      "1m"
+    ]
+  },
+  "schemaVersion": 41,
+  "version": 1,
+  "fiscalYearStartMonth": 0,
+  "links": [
+    {
+      "type": "dashboards",
+      "tags": [
+        "quantum-assistente"
+      ],
+      "asDropdown": false,
+      "includeVars": false,
+      "keepTime": true,
+      "title": "Outras visões",
+      "icon": "external link",
+      "targetBlank": false
+    }
+  ],
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      },
+      {
+        "name": "Alertas disparando",
+        "enable": true,
+        "iconColor": "#F04E5E",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "expr": "max by (alertname, severity) (ALERTS{alertstate=\"firing\", severity=~\"warning|critical\"}) unless max by (alertname, severity) (ALERTS{alertstate=\"firing\", severity=~\"warning|critical\"} offset 10s)",
+        "step": "10s",
+        "titleFormat": "Alerta acendeu: {{alertname}}",
+        "textFormat": "severidade {{severity}}",
+        "useValueForTime": false,
+        "hide": false
+      },
+      {
+        "name": "Corpus trocado (reload)",
+        "enable": true,
+        "iconColor": "#ED145B",
+        "datasource": {
+          "type": "loki",
+          "uid": "loki"
+        },
+        "expr": "{service_name=\"quantum-assistant\"} |= \"runtime.reload\" | json",
+        "instant": false,
+        "titleFormat": "Corpus trocado",
+        "textFormat": "corpus {{corpus_version}}",
+        "tagKeys": "",
+        "hide": false
+      },
+      {
+        "name": "Falha injetada na API de pedidos",
+        "enable": true,
+        "iconColor": "#E9A23B",
+        "datasource": {
+          "type": "loki",
+          "uid": "loki"
+        },
+        "expr": "{service_name=\"quantum-orders-api\"} |~ \"orders.faults_(updated|reset)\" | json",
+        "instant": false,
+        "titleFormat": "{{event}}",
+        "textFormat": "erro {{error_rate}} latencia {{latency_ms}} ms",
+        "tagKeys": "",
+        "hide": false
+      }
+    ]
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "release",
+        "label": "Release",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "query": {
+          "query": "label_values(answers_total, release_id)",
+          "refId": "r"
+        },
+        "definition": "label_values(answers_total, release_id)",
+        "includeAll": true,
+        "allValue": ".*",
+        "multi": false,
+        "refresh": 2,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        }
+      },
+      {
+        "name": "corpus",
+        "label": "Versão do corpus",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "query": {
+          "query": "label_values(answers_total, corpus_version)",
+          "refId": "c"
+        },
+        "definition": "label_values(answers_total, corpus_version)",
+        "includeAll": true,
+        "allValue": ".*",
+        "multi": false,
+        "refresh": 2,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        }
+      },
+      {
+        "name": "scenario",
+        "label": "Cenário",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "query": {
+          "query": "label_values(quality_probes_total, scenario)",
+          "refId": "s"
+        },
+        "definition": "label_values(quality_probes_total, scenario)",
+        "includeAll": true,
+        "allValue": ".*",
+        "multi": false,
+        "refresh": 2,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        }
+      },
+      {
+        "name": "busca",
+        "label": "Buscar no log (caso, motivo)",
+        "type": "textbox",
+        "query": "",
+        "current": {
+          "text": "",
+          "value": ""
+        }
+      },
+      {
+        "name": "trace_id",
+        "label": "trace_id",
+        "type": "textbox",
+        "query": "",
+        "current": {
+          "text": "",
+          "value": ""
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "text",
+      "title": "Como investigar",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 8,
+        "h": 9
+      },
+      "transparent": false,
+      "options": {
+        "mode": "markdown",
+        "content": "1. Escolha o **cenário** e a **versão do corpus** no topo. A tabela ao lado mostra quais versões atenderam no período.\n2. Na **linha do tempo**, veja quando o alerta acendeu. As marcas magenta são trocas de corpus; as âmbar, falhas injetadas na API de pedidos.\n3. Nos **logs**, procure `probe fail`. Clique na linha e depois em **Ver este trace (Jaeger) no painel**, ao lado do `trace_id`.\n4. O trace abre em tela cheia (ou na faixa *Trace da requisição escolhida*, abaixo dos logs). O span `rag.filter_documents` mostra o que foi bloqueado (ou deixou de ser).",
+        "code": {
+          "language": "plaintext",
+          "showLineNumbers": false,
+          "showMiniMap": false
+        }
+      }
+    },
+    {
+      "id": 2,
+      "type": "table",
+      "title": "Versões que atenderam no período",
+      "description": "Cada combinação de release e corpus que respondeu perguntas no intervalo escolhido. Um corpus novo no meio do período, com o mesmo release, é a pista de que o conteúdo mudou sem deploy de código.",
+      "gridPos": {
+        "x": 8,
+        "y": 0,
+        "w": 16,
+        "h": 9
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (release_id, corpus_version, scenario) (increase(answers_total{job=\"quantum-assistant\", release_id=~\"$release\", corpus_version=~\"$corpus\"}[$__range])) > 0",
+          "refId": "A",
+          "legendFormat": "__auto",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (release_id, corpus_version, scenario) (increase(quality_probes_total{outcome=\"fail\", release_id=~\"$release\", corpus_version=~\"$corpus\"}[$__range]))",
+          "refId": "B",
+          "legendFormat": "__auto",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "renameByName": {
+              "release_id": "Release",
+              "corpus_version": "Versão do corpus",
+              "scenario": "Cenário",
+              "Value #A": "Perguntas",
+              "Value #B": "Probes que erraram"
+            },
+            "indexByName": {
+              "release_id": 0,
+              "corpus_version": 1,
+              "scenario": 2,
+              "Value #A": 3,
+              "Value #B": 4
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "sort": [
+              {
+                "field": "Probes que erraram",
+                "desc": true
+              }
+            ]
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "unit": "none",
+          "noValue": "0",
+          "custom": {
+            "align": "left",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Probes que erraram"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "#B4B1AD",
+                      "value": null
+                    },
+                    {
+                      "color": "#F04E5E",
+                      "value": 1
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "thresholds"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Versão do corpus"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#5BC8D9"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": "state-timeline",
+      "title": "Linha do tempo do incidente",
+      "description": "Cada faixa é um alerta do Prometheus: colorida enquanto está disparando. As marcas verticais são eventos lidos dos logs (troca de corpus e falha injetada).",
+      "gridPos": {
+        "x": 0,
+        "y": 9,
+        "w": 24,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by (alertname) (ALERTS{alertstate=\"firing\", alertname!=\"QualityNoData\"})",
+          "refId": "A",
+          "legendFormat": "{{alertname}}",
+          "range": true,
+          "instant": false,
+          "interval": "10s"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#F04E5E"
+          },
+          "custom": {
+            "fillOpacity": 80,
+            "lineWidth": 0
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "1": {
+                  "text": "disparando",
+                  "index": 0
+                }
+              }
+            }
+          ],
+          "noValue": "Nenhum alerta no período"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "OrderApiDegraded"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#E9A23B"
+                }
+              },
+              {
+                "id": "displayName",
+                "value": "API de pedidos degradada"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "QualityProbeDegraded"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#E9A23B"
+                }
+              },
+              {
+                "id": "displayName",
+                "value": "Probes abaixo de 90%"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "StaleSourceServed"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#F04E5E"
+                }
+              },
+              {
+                "id": "displayName",
+                "value": "Fonte obsoleta servida"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "QualityAclViolation"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#F04E5E"
+                }
+              },
+              {
+                "id": "displayName",
+                "value": "Violação de ACL"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showValue": "never",
+        "rowHeight": 0.7,
+        "mergeValues": true,
+        "legend": {
+          "showLegend": false,
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 4,
+      "type": "logs",
+      "title": "Logs do assistente, da API de pedidos e dos probes",
+      "description": "Logs JSON lidos pelo OTel Collector de ops/.runtime/*.log e ops/results/*.jsonl e guardados no Loki. Clique numa linha e use 'Ver este trace (Jaeger) no painel'.",
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 24,
+        "h": 14
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "expr": "{service_name=~\"quantum-assistant|quantum-orders-api|quantum-quality-probe\"} |= \"$busca\" | json | __error__=\"\" | drop severity, detected_level | label_format level=`{{ if eq .outcome \"fail\" }}error{{ else if eq .status_code \"503\" \"504\" }}warning{{ else }}info{{ end }}` | release_id=~\"$release\" | corpus_version=~\"$corpus\" | label_format scenario_id=`{{ or .scenario_id \"none\" }}` | scenario_id=~\"$scenario|none\" | line_format `{{ if .event }}{{ .event }}{{ else }}probe {{ .outcome }}{{ end }}{{ with .case_id }}  caso={{ . }}{{ end }}{{ with .route }}  rota={{ . }}{{ end }}{{ with .reason }}  motivo={{ . }}{{ end }}{{ with .abstain_reason }}  recusa={{ . }}{{ end }}{{ with .status_code }}  http={{ . }}{{ end }}{{ with .http_status }}  http={{ . }}{{ end }}{{ with .latency_ms }}  {{ . }} ms{{ end }}{{ with .corpus_version }}  corpus={{ . }}{{ end }}{{ with .scenario_id }}  cenario={{ . }}{{ end }}{{ with .trace_id }}  trace_id={{ . }}{{ end }}`",
+          "refId": "A",
+          "queryType": "range",
+          "editorMode": "code",
+          "maxLines": 500
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "showLabels": false,
+        "showCommonLabels": false,
+        "wrapLogMessage": true,
+        "prettifyLogMessage": false,
+        "enableLogDetails": true,
+        "enableInfiniteScrolling": false,
+        "dedupStrategy": "none",
+        "sortOrder": "Descending"
+      }
+    },
+    {
+      "id": 49,
+      "type": "row",
+      "collapsed": true,
+      "gridPos": {
+        "x": 0,
+        "y": 30,
+        "w": 24,
+        "h": 1
+      },
+      "title": "Trace da requisição escolhida: clique num trace_id nos logs acima (ou cole no campo trace_id) e abra esta faixa",
+      "panels": [
+        {
+          "id": 50,
+          "type": "traces",
+          "title": "Trace da requisição escolhida",
+          "description": "Cada etapa da requisição (rota, recuperação, filtro de documentos, composição, consulta de pedido) com o tempo de cada uma.",
+          "gridPos": {
+            "x": 0,
+            "y": 31,
+            "w": 24,
+            "h": 14
+          },
+          "datasource": {
+            "type": "jaeger",
+            "uid": "jaeger"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "jaeger",
+                "uid": "jaeger"
+              },
+              "query": "$trace_id",
+              "refId": "A"
+            }
+          ],
+          "options": {}
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Probes que erraram, por motivo",
+      "description": "Quantos probes erraram por minuto, separados pelo motivo. Mostra o começo e o fim do incidente.",
+      "gridPos": {
+        "x": 0,
+        "y": 31,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (reason) (increase(quality_probes_total{outcome=\"fail\", scenario=~\"$scenario\", corpus_version=~\"$corpus\"}[1m])) > 0",
+          "refId": "A",
+          "legendFormat": "{{reason}}",
+          "range": true,
+          "instant": false,
+          "interval": "15s"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 2,
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "showPoints": "never",
+            "spanNulls": 30000,
+            "lineInterpolation": "linear",
+            "axisBorderShow": false,
+            "axisSoftMin": 0,
+            "thresholdsStyle": {
+              "mode": "off"
+            },
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#3DBE8B",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "fonte_obsoleta"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#F04E5E"
+                }
+              },
+              {
+                "id": "displayName",
+                "value": "Citou uma política obsoleta"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "fonte_fora_do_corpus_aprovado"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#E9A23B"
+                }
+              },
+              {
+                "id": "displayName",
+                "value": "Citou documento fora do corpus aprovado"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "acl_tenant"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#F04E5E"
+                }
+              },
+              {
+                "id": "displayName",
+                "value": "Mostrou documento de outro tenant ou interno"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "citacao"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#E9A23B"
+                }
+              },
+              {
+                "id": "displayName",
+                "value": "Respondeu sem citar a fonte"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "campos_esperados"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#E9A23B"
+                }
+              },
+              {
+                "id": "displayName",
+                "value": "Faltou informação esperada na resposta"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "contrato_pedido"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#E9A23B"
+                }
+              },
+              {
+                "id": "displayName",
+                "value": "Status de pedido diferente da API"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "contrato_resposta"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#E9A23B"
+                }
+              },
+              {
+                "id": "displayName",
+                "value": "Resposta fora do formato combinado"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "extra_must_not_contain"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#E9A23B"
+                }
+              },
+              {
+                "id": "displayName",
+                "value": "Resposta trouxe texto proibido"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "recusa"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#E9A23B"
+                }
+              },
+              {
+                "id": "displayName",
+                "value": "Deveria ter recusado e respondeu"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "dependency_unavailable"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#E9A23B"
+                }
+              },
+              {
+                "id": "displayName",
+                "value": "API de pedidos fora (recusa honesta)"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Volume de logs por serviço",
+      "description": "Linhas de log por minuto no Loki. Se um serviço some daqui, ele parou de escrever log (ou o Collector parou de ler).",
+      "gridPos": {
+        "x": 12,
+        "y": 31,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "expr": "sum by (service_name) (count_over_time({service_name=~\"quantum-.+\"}[1m]))",
+          "refId": "A",
+          "queryType": "range",
+          "legendFormat": "{{service_name}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "lineInterpolation": "smooth",
+            "spanNulls": 60000
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "quantum-assistant"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#FF5C8D"
+                }
+              },
+              {
+                "id": "displayName",
+                "value": "assistente"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "quantum-orders-api"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#5BC8D9"
+                }
+              },
+              {
+                "id": "displayName",
+                "value": "API de pedidos"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "quantum-quality-probe"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#B4B1AD"
+                }
+              },
+              {
+                "id": "displayName",
+                "value": "probes"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    }
+  ]
+}
