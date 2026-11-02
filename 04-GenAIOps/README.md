@@ -34,10 +34,10 @@ A Demo 5.1 responde a primeira metade; a Demo 5.2, a segunda. Juntas, fecham o a
 |---|---|---|
 | **O que o assistente faz** | Busca a seção mais parecida nas políticas e devolve o trecho com a fonte. | O mesmo, mas **só entre documentos vigentes, do tenant certo e com permissão**; pergunta de pedido vai para a **API de pedidos** com autorização no servidor; texto de documento é tratado como **dado**, nunca como instrução. |
 | **O que o pipeline testa** | Golden set (hit@3, MRR, trechos obrigatórios, recusa, injeção, PII, citação). Checkov com `\|\| true`. | Golden set com **slices** e **regras duras** (ACL, fonte obsoleta, recusa obrigatória, contrato de pedido, injeção) que reprovam **independentemente da média**. Checkov **bloqueante**, com exceções documentadas. |
-| **Como publica** | `terraform apply` troca a Lambda, e o cliente já recebe a nova versão. | `apply` publica uma **versão numerada** no alias `candidate`; smoke e golden rodam contra ela; só então **`promote-live`** move o alias `live` e grava o registro do release no S3. **Rollback** é um job manual (botão play, ou pipeline com `QC_ACTION=rollback`) que move o alias de volta em ~12 s ([ADR-001](adr/ADR-001-caminho-de-deploy-e-alias.md)). |
+| **Como publica** | `terraform apply` troca a Lambda, e o cliente já recebe a nova versão. | `apply` publica uma **versão numerada** no alias `candidate`; smoke e golden rodam contra ela; só então **`promote-live`** move o alias `live` e grava o registro do release no S3. **Rollback** é um job manual (botão play, ou pipeline com `QC_ACTION=rollback`) que move o alias de volta em ~12 s. |
 | **O que é versionado** | Código e políticas, juntos no zip. | Seis versões por resposta: `application`, `prompt`, `corpus`, `index`, `eval_set`, `model` (= `none`), e um **manifesto de release** com Git SHA, `bundle_sha256` e aprovador. |
 | **Depois do deploy** | Um stage `avaliacao` roda uma vez e acaba. | **Operação contínua**: traces OpenTelemetry por etapa, métricas de qualidade em janela, probes com gabarito, alerta, runbook e postmortem (Demo 5.2). |
-| **LLM** | Não há. | Continua não havendo no caminho da turma, e a resposta diz isso (`mode = deterministic`, `model_version = none`). Veja por quê em [ADR-002](adr/ADR-002-sem-llm-composer-deterministico.md). |
+| **LLM** | Não há. | Continua não havendo no caminho da turma, e a resposta diz isso (`mode = deterministic`, `model_version = none`). |
 
 O que **não** muda: Terraform, GitLab, o runner do módulo 02 e o repositório `primeiro-projeto`. Nada é reconstruído do zero; o módulo evolui o que você já tem.
 
@@ -142,7 +142,7 @@ Os três scripts, a tabela de diagnósticos e as mensagens de erro comuns estão
 
 ![Arquitetura da Demo 5.1: um git push no primeiro-projeto dispara o pipeline no runner (EC2 com LabRole); o pipeline valida, testa, avalia o golden set, empacota e aplica; a Lambda qc-assistant-api é publicada no alias candidate, passa por smoke e avaliação pós-deploy e só então é promovida ao alias live, que a API Gateway expõe ao cliente, com o registro do release gravado no S3; o assistente busca nas políticas versionadas e consulta o status do pedido na API de pedidos (Lambda + DynamoDB); o rollback é um job manual que move o alias live de volta.](01-Release-RAG-Quality-Gates/img/arquitetura-release-rag.png)
 
-Capacidades, não logotipos: `cliente → API → roteamento de intenção → (busca em documentos | API de pedidos) → composer determinístico (sem LLM) → citações e recusas → avaliador → telemetria`. A Demo 5.2 adiciona, à esquerda desse fluxo, o runtime local instrumentado com OpenTelemetry e o stack Collector → Jaeger + Prometheus + Grafana ([ADR-003](adr/ADR-003-telemetria-local-demo-vs-lambda.md)).
+Capacidades, não logotipos: `cliente → API → roteamento de intenção → (busca em documentos | API de pedidos) → composer determinístico (sem LLM) → citações e recusas → avaliador → telemetria`. A Demo 5.2 adiciona, à esquerda desse fluxo, o runtime local instrumentado com OpenTelemetry e o stack Collector → Jaeger + Prometheus + Grafana.
 
 | Componente | Onde roda | Papel |
 |---|---|---|
@@ -173,9 +173,9 @@ Os recursos novos usam o prefixo **`qc-assistant-`** e a key de state **`quantum
 ## Decisões pedagógicas
 
 - **Por que o mesmo `primeiro-projeto` e o mesmo runner?** Porque o módulo é sobre evoluir um sistema que já está em produção, não sobre começar outro. O `quantum-assistant/` entra como subpasta; os arquivos do módulo 03 continuam na raiz e não são reaplicados.
-- **Por que sem LLM, de novo?** Bedrock bloqueado no Learner Lab e, mais importante, **determinismo**: a mesma regressão reprova pelo mesmo motivo em todas as máquinas da turma. Quando um LLM entrar, ele troca o composer; gates, release e telemetria continuam ([ADR-002](adr/ADR-002-sem-llm-composer-deterministico.md)).
-- **Por que aliases em vez de `apply` direto?** Para o aluno **ver** a diferença entre "subiu" e "entrou em produção", e para o rollback levar um minuto ([ADR-001](adr/ADR-001-caminho-de-deploy-e-alias.md)).
-- **Por que o OpenTelemetry roda no Codespaces e não na Lambda?** X-Ray e afins bloqueados; exportar OTLP da Lambda exigiria um Collector exposto na internet. O runtime local usa **o mesmo core e o mesmo release**: o que você observa é o que publicou. Isso é dito como limite em todo print ([ADR-003](adr/ADR-003-telemetria-local-demo-vs-lambda.md)).
+- **Por que sem LLM, de novo?** Bedrock bloqueado no Learner Lab e, mais importante, **determinismo**: a mesma regressão reprova pelo mesmo motivo em todas as máquinas da turma. Quando um LLM entrar, ele troca o composer; gates, release e telemetria continuam.
+- **Por que aliases em vez de `apply` direto?** Para o aluno **ver** a diferença entre "subiu" e "entrou em produção", e para o rollback levar um minuto.
+- **Por que o OpenTelemetry roda no Codespaces e não na Lambda?** X-Ray e afins bloqueados; exportar OTLP da Lambda exigiria um Collector exposto na internet. O runtime local usa **o mesmo core e o mesmo release**: o que você observa é o que publicou. Isso é dito como limite em todo print.
 - **Por que métricas "modestas"?** Hit@k mede busca, não resposta. Sem LLM não há `faithfulness` nem `hallucination rate` reais, e não fingimos que há. Toda métrica de probe é rotulada *proxy sintético*.
 
 ## Fundamentação
@@ -189,4 +189,4 @@ Os recursos novos usam o prefixo **`qc-assistant-`** e a key de state **`quantum
 
 ## Próximo passo
 
-Comece pela **[Demo 5.1](01-Release-RAG-Quality-Gates/README.md)**. Ao terminar, a pergunta que ela deixa aberta ("e se piorar depois, sem commit?") é a abertura da **[Demo 5.2](02-Operacao-Observabilidade-Qualidade-Continua/README.md)**. O **[guia do professor](guia-professor/demo-5.1.md)** traz a sequência dramática, a falha planejada e a alternativa sem cloud.
+Comece pela **[Demo 5.1](01-Release-RAG-Quality-Gates/README.md)**. Ao terminar, a pergunta que ela deixa aberta ("e se piorar depois, sem commit?") é a abertura da **[Demo 5.2](02-Operacao-Observabilidade-Qualidade-Continua/README.md)**.

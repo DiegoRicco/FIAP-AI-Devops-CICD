@@ -922,7 +922,7 @@ Acontece quando a Lambda de pedidos está **fria** (primeira chamada depois de m
 - **`postdeploy`**: `scripts/smoke.py` chama `GET /candidate/health`, confere que o `release_id` devolvido é o do `manifest.json` deste pipeline (senão a API Gateway poderia estar apontando para outra versão), e roda `run_eval.py --target http --url .../candidate` com um subconjunto do golden. Exit ≠ 0 aqui **impede o `promote`**.
 - **`promote`**: `scripts/promote.sh` lê a versão do alias `candidate` (`GetAlias`) e aponta o `live` para ela (`UpdateAlias`), usando o output `function_name` para saber em qual Lambda. Registra a versão anterior do `live` no manifesto, que é o que o rollback usa. Cada alias tem a **própria permissão** de invocação para o API Gateway (`aws_lambda_permission` por alias), porque a API chama o ARN qualificado `função:alias`, não a função solta.
 
-📚 Documentação oficial: [Lambda function versions](https://docs.aws.amazon.com/lambda/latest/dg/configuration-versions.html) e [Lambda aliases](https://docs.aws.amazon.com/lambda/latest/dg/configuration-aliases.html), para `PublishVersion`/`UpdateAlias`; [Terraform: meta-argumento `lifecycle`](https://developer.hashicorp.com/terraform/language/meta-arguments/lifecycle), para o `ignore_changes` que impede o `apply` de mover o `live`. Decisão registrada em [ADR-001](../adr/ADR-001-caminho-de-deploy-e-alias.md).
+📚 Documentação oficial: [Lambda function versions](https://docs.aws.amazon.com/lambda/latest/dg/configuration-versions.html) e [Lambda aliases](https://docs.aws.amazon.com/lambda/latest/dg/configuration-aliases.html), para `PublishVersion`/`UpdateAlias`; [Terraform: meta-argumento `lifecycle`](https://developer.hashicorp.com/terraform/language/meta-arguments/lifecycle), para o `ignore_changes` que impede o `apply` de mover o `live`.
 
 </blockquote>
 </details>
@@ -1362,7 +1362,7 @@ Você terá a pergunta que abre a Demo 5.2, terá feito (ou lido) o mini-desafio
 >
 > Diego: *— "Hoje, a cliente do Instagram. Amanhã, a Demo 5.2."*
 
-As respostas são discutidas em sala; quem estuda sozinho encontra o gabarito no [guia do professor](../guia-professor/demo-5.1.md#perguntas-r1-r3-respostas-esperadas).
+As respostas são discutidas em sala.
 
 **Pergunta R1.** O `postdeploy` rodou o golden set contra o `/candidate` e passou. Cite **duas** coisas que podem mudar no dia seguinte e fazer a mesma pergunta receber resposta errada, **sem** nenhum commit.
 
@@ -1399,7 +1399,7 @@ python3 evals/run_eval.py --set golden_v1 --target local --out reports/eval-dev.
 git checkout -- corpus/devolucoes.md
 ```
 
-**Esperado:** os dois experimentos terminam com `git checkout`, então o projeto volta ao estado correto. Nos dois o veredito é `FAIL` com exit `1`, mas por motivos diferentes, e **nenhum dos dois viola regra dura**: compare com o passo 19. O gabarito com os números está no [guia do professor](../guia-professor/demo-5.1.md#mini-desafio-gabarito).
+**Esperado:** os dois experimentos terminam com `git checkout`, então o projeto volta ao estado correto. Nos dois o veredito é `FAIL` com exit `1`, mas por motivos diferentes, e **nenhum dos dois viola regra dura**: compare com o passo 19.
 
 **Se falhar:** se o `sed` não alterou nada, confira com `grep -n '"k"' config/settings.json` (a chave fica dentro de `retrieval`) e `ls corpus`.
 

@@ -206,8 +206,7 @@ Cada lab assume que os anteriores foram concluídos. Em especial:
 │   ├── 01-Release-RAG-Quality-Gates/           # 04.1 RAG, golden set, gates bloqueantes e release
 │   ├── 02-Operacao-Observabilidade-Qualidade-Continua/  # 04.2 OTel, SLOs, incidente e postmortem
 │   ├── quantum-assistant/                      # código do assistente (mesmo core nas duas demos)
-│   ├── shared/runner/                          # preflight e recuperação do runner entre aulas
-│   └── guia-professor/                         # roteiros de condução das demos
+│   └── shared/runner/                          # preflight e recuperação do runner entre aulas
 ├── Trabalho-final/                             # Aula 6: Trabalho Final
 └── README.md
 ```

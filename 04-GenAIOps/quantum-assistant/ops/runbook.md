@@ -1,6 +1,6 @@
 # Runbook — Quantum Commerce AI Customer Assistant (Demo 5.2, ambiente `local-demo`)
 
-> **Escopo:** runtime local da Demo 5.2 (`adapters/http_server.py` na porta 8080, `adapters/orders_service.py` na 8081, stack `ops/docker-compose.yml`). Não é a Lambda publicada na 5.1: lá a investigação usa CloudWatch Logs filtrando por `release_id` (ver ADR-003).
+> **Escopo:** runtime local da Demo 5.2 (`adapters/http_server.py` na porta 8080, `adapters/orders_service.py` na 8081, stack `ops/docker-compose.yml`). Não é a Lambda publicada na 5.1: lá a investigação usa CloudWatch Logs filtrando por `release_id`.
 > **Comandos:** rode os scripts de `ops/` pelo wrapper `ops/run` (usa o venv do bootstrap e liga a telemetria). Sem ele, o script avisa `telemetria DESLIGADA` e os probes não chegam ao Grafana.
 > **Sinais de qualidade são proxy sintético:** vêm de probes rotulados (`ops/simulator.py`), não de tráfego humano.
 

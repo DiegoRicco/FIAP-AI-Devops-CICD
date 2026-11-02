@@ -1,7 +1,7 @@
 """Runtime HTTP local da Demo 5.2 (porta 8080): o MESMO core.Assistant da Lambda.
 
 Por que um servidor local: a Lambda do Learner Lab nao exporta OpenTelemetry
-(X-Ray bloqueado, ver ADR-003). Aqui o assistente roda no Codespaces/Mac com o
+(X-Ray bloqueado no Learner Lab). Aqui o assistente roda no Codespaces/Mac com o
 mesmo codigo, o mesmo corpus e as mesmas versoes, e o trace e real.
 
 Endpoints:
