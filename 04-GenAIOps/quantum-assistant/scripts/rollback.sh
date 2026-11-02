@@ -9,7 +9,8 @@
 # prompts + config do bundle. Voltar a versao volta o CONJUNTO, e o script
 # mostra quais versoes de corpus/indice/prompt voltaram.
 #
-# Uso: scripts/rollback.sh --bucket base-config-SEU-RM [--function qc-assistant-api] [--dry-run]
+# Uso: scripts/rollback.sh [--bucket base-config-SEU-RM] [--function qc-assistant-api] [--dry-run]
+# Sem --bucket (nem TF_STATE_BUCKET), usa o bucket base-config-* da conta.
 set -euo pipefail
 
 FUNCTION="qc-assistant-api"
@@ -29,7 +30,13 @@ while [ $# -gt 0 ]; do
     *) log "opcao desconhecida: $1"; exit 2 ;;
   esac
 done
-[ -n "$BUCKET" ] || { log "informe --bucket (ou TF_STATE_BUCKET)"; exit 2; }
+# Sem --bucket nem TF_STATE_BUCKET: descobre o base-config-* da conta, o mesmo
+# padrao do resto do curso (um bucket de state por aluno).
+if [ -z "$BUCKET" ]; then
+  BUCKET=$(aws s3 ls | awk '{print $3}' | grep '^base-config' | head -1 || true)
+  [ -n "$BUCKET" ] && log "bucket descoberto na conta: $BUCKET"
+fi
+[ -n "$BUCKET" ] || { log "nenhum bucket base-config- encontrado: informe --bucket (ou TF_STATE_BUCKET)"; exit 2; }
 
 CURRENT=$(aws lambda get-alias --function-name "$FUNCTION" --name live --query FunctionVersion --output text)
 WORK=$(mktemp -d)

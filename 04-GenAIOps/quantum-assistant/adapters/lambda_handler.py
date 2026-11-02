@@ -174,12 +174,23 @@ def handler(event, context):
 
 
 # ------------------------------------------------------------------ pedidos
+# Tabela criada no carregamento do modulo, e nao dentro do handler. Medido na
+# AWS: com o import do boto3 dentro do handler, a 1a consulta levava ~2,8 s e
+# estourava o timeout de 2 s do cliente do assistente (retry abria mais um
+# container frio). No nivel do modulo, import e cliente rodam na fase INIT da
+# Lambda, uma vez por container, e as consultas seguintes so fazem o get_item.
+# So na funcao de pedidos (que tem QC_ORDERS_TABLE): a funcao do assistente e
+# os testes nao precisam de boto3 e nao pagam esse custo.
+if os.environ.get("QC_ORDERS_TABLE"):
+    import boto3  # ja vem no runtime python3.12 da Lambda
+
+    _orders_table = boto3.resource("dynamodb").Table(os.environ["QC_ORDERS_TABLE"])
+
+
 def get_orders_table():
     """Tabela DynamoDB dos pedidos. Nos testes, um objeto falso substitui esta."""
-    global _orders_table
     if _orders_table is None:
-        import boto3  # ja vem no runtime python3.12 da Lambda
-        _orders_table = boto3.resource("dynamodb").Table(os.environ["QC_ORDERS_TABLE"])
+        raise RuntimeError("QC_ORDERS_TABLE nao definido: este handler so roda na Lambda de pedidos")
     return _orders_table
 
 

@@ -75,8 +75,11 @@ resource "aws_lambda_function" "orders" {
   runtime       = "python3.12"
   handler       = "adapters.lambda_handler.orders_handler"
   timeout       = 5
-  # 256 MB e nao 128: o cold start com boto3 fica abaixo do timeout de 2 s que o
-  # assistente usa para chamar pedidos (config/settings.json).
+  # Cold start medido na AWS (256 MB, boto3 importado dentro do handler): a 1a
+  # consulta levava 2,75 a 2,8 s, acima do timeout de 2 s que o assistente usa
+  # para chamar pedidos (config/settings.json), e so respondia no retry. Por isso
+  # o boto3 e a tabela sao criados no carregamento do modulo (fase INIT; ver
+  # adapters/lambda_handler.py). Mais CPU (memoria maior) tambem encurta o INIT.
   memory_size = 256
 
   filename         = var.bundle_path
