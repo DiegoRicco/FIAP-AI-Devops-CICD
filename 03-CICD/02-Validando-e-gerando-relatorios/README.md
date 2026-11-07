@@ -1,12 +1,5 @@
 # 03.2 - Quality gates de IA: testando o comportamento do assistente no pipeline
 
-<!--
-CONVENÇÃO DE PRINTS DESTE README (nota para o professor, não aparece renderizada)
-- TROCAR-IMAGEM: print antigo ainda visível; sobrescreva o arquivo com o mesmo nome e apague o comentário.
-- NOVA-IMAGEM: print que ainda não existe; salve o PNG no caminho indicado e descomente a linha de imagem logo abaixo.
-- CONFIRMAR-SAIDA: saída esperada a preencher com o resultado do teste real.
--->
-
 > **Terça-feira, 9h. No dia seguinte ao primeiro pipeline.**
 > **Diego Tavares**, AI SRE sênior, passa na sua mesa com o café na mão:
 >
@@ -463,13 +456,13 @@ A chave não está carregada neste terminal. Rode de novo `eval $(ssh-agent -s)`
 
 No **GitLab**, abra **Build → Pipelines** e clique no pipeline mais recente. O `validate` mostra cinco jobs lado a lado; depois vêm `plan`, `apply` e `avaliacao`. Espere todos ficarem verdes.
 
-<!-- TROCAR-IMAGEM: img/gitlab-1.png | motivo: fluxo antigo (pipeline "pipeline com validação" com 3 stages) | capturar: lista de Pipelines com o pipeline "quality gates de IA no pipeline" rodando e 4 círculos de stage -->
+
 ![Lista de pipelines do GitLab com o pipeline em execução](img/gitlab-1.png)
 
-<!-- NOVA-IMAGEM: img/pipeline-verde-4-stages.png | capturar: página do pipeline verde com os stages validate (fmt-validate, tflint, checkov, tf-test, pytest), plan, apply e avaliacao, todos com check verde | depois de salvar o arquivo, descomente a linha abaixo -->
-<!-- ![Pipeline verde com os 4 stages: validate com cinco jobs em paralelo, plan, apply e avaliacao](img/pipeline-verde-4-stages.png) -->
 
-<!-- TROCAR-IMAGEM: img/gitlab-2.png | motivo: fluxo antigo (validate com lambda-lint, 3 stages, Tests 21) | capturar: aba Pipeline do pipeline verde, com a aba Tests destacada mostrando o total de testes -->
+![Pipeline verde com os 4 stages: validate com cinco jobs em paralelo, plan, apply e avaliacao](img/pipeline-verde-4-stages.png)
+
+
 ![Página do pipeline com os stages concluídos e a aba Tests destacada](img/gitlab-2.png)
 
 ---
@@ -490,15 +483,11 @@ São 90 testes porque cada item do golden set vira um teste próprio para cada g
 
 O topo da aba Tests soma **todas** as suítes. No pipeline de teste deste lab ele mostrou `135 tests, 12 failures` com o pipeline verde: as 12 falhas são todas da suíte do `checkov` (próximo parágrafo). Pipeline verde com falhas na aba Tests é o sinal de um job que **reporta sem barrar**.
 
-<!-- TROCAR-IMAGEM: img/gitlab-3.png | motivo: fluxo antigo (só suítes checkov e tflint) | capturar: aba Tests com as suítes checkov, tflint, pytest e avaliacao -->
-![Aba Tests do pipeline com o resumo das suítes](img/gitlab-3.png)
-
-<!-- NOVA-IMAGEM: img/aba-tests-junit-pytest.png | capturar: aba Tests aberta na suíte pytest, com a lista de testes do golden set (hit@3, MRR, recusa, injecao, PII, citacao) todos verdes | depois de salvar o arquivo, descomente a linha abaixo -->
-<!-- ![Aba Tests do GitLab na suíte pytest, com os testes do golden set aprovados: hit@3, MRR, recusa fora do escopo, prompt injection, PII e citação de fonte](img/aba-tests-junit-pytest.png) -->
+![Aba Tests do GitLab na suíte pytest, com os testes do golden set aprovados: hit@3, MRR, recusa fora do escopo, prompt injection, PII e citação de fonte](img/aba-tests-junit-pytest.png)
 
 Volte e abra a suíte do **checkov**. Ela tem 12 falhas, e isso é esperado: são os achados de segurança que o pipeline **reporta sem barrar**, como rotas sem autorização, API sem log de acesso, tabela sem chave KMS própria, Lambda fora de VPC e sem X-Ray. É o material que você levaria para uma revisão de segurança, gerado a cada push.
 
-<!-- TROCAR-IMAGEM: img/gitlab-4.png | motivo: fluxo antigo (recursos scooters em apigw.tf e dynamodb.tf) | capturar: suíte checkov com os achados dos recursos do primeiro-projeto atual (rotas /pedidos e /assistente/perguntas) -->
+
 ![Suíte do Checkov na aba Tests com a lista de políticas avaliadas e os achados](img/gitlab-4.png)
 
 ---
@@ -507,13 +496,14 @@ Volte e abra a suíte do **checkov**. Ela tem 12 falhas, e isso é esperado: sã
 
 **9. Leia o log da avaliação pós-deploy**
 
-No pipeline, clique no job do stage **`avaliacao`**. O log mostra o golden set rodando contra o endpoint publicado e a latência medida.
+No pipeline, clique no job do stage **`avaliacao`**. O log mostra os 23 testes pós-deploy (o golden set contra o endpoint publicado e o limite de latência p95) passando.
 
 > Saída esperada (linhas que importam):
 >
-> <!-- CONFIRMAR-SAIDA: últimas linhas do log do job avaliacao no pipeline real (resumo do pytest -m posdeploy e o p95 medido) -->
 > ```text
-> N passed
+> collected 113 items / 90 deselected / 23 selected
+> tests/test_avaliacao_posdeploy.py .......................                [100%]
+> ====================== 23 passed, 90 deselected in 2.93s =======================
 > ```
 
 O teste offline e o pós-deploy usam **as mesmas perguntas**. Se o offline passa e o pós-deploy reprova, o problema não está no assistente: está no que foi publicado (pacote errado, rota quebrada, latência alta). Essa separação diz em que lugar procurar.
@@ -586,7 +576,6 @@ Abra a aba **Tests**, suíte do **pytest**, e clique no teste que reprovou.
 
 > Saída esperada (o teste que reprova e a mensagem):
 >
-> <!-- CONFIRMAR-SAIDA: nome do teste e mensagem vieram do pytest offline com a quebra aplicada; conferir no log do job pytest do pipeline real -->
 > ```text
 > FAILED tests/test_avaliacao_offline.py::test_politica_responde_com_trecho_obrigatorio[devolucao-arrependimento]
 > AssertionError: resposta sem ['7 dias']: Nas compras feitas pelo site ou pelo aplicativo, você pode desistir da compra em até 30 dias corridos após o recebimento, ... Fonte: devolucoes.md (Direito de arrependimento).
@@ -595,8 +584,7 @@ Abra a aba **Tests**, suíte do **pytest**, e clique no teste que reprovou.
 
 Leia o nome do teste de trás para frente: `[devolucao-arrependimento]` é a pergunta do golden set que você viu no passo 2, e `test_politica_responde_com_trecho_obrigatorio` é o gate de trechos obrigatórios. A mensagem mostra a resposta que o assistente **daria** ao cliente, com fonte e tudo, dizendo 30 dias.
 
-<!-- NOVA-IMAGEM: img/pipeline-vermelho-gate.png | capturar: página do pipeline com o job pytest vermelho no validate e os stages plan, apply e avaliacao cinza (não executados) | depois de salvar o arquivo, descomente a linha abaixo -->
-<!-- ![Pipeline reprovado no stage validate: job pytest vermelho, e os stages plan, apply e avaliacao sem executar](img/pipeline-vermelho-gate.png) -->
+![Pipeline reprovado no stage validate: job pytest vermelho, e os stages plan, apply e avaliacao sem executar](img/pipeline-vermelho-gate.png)
 
 Repare no que **não** reprovou. hit@3 e MRR continuam verdes: o assistente achou a seção certa (`Direito de arrependimento`). O que mudou foi **o que a seção diz**. Métrica de busca sozinha deixaria esse erro passar; o trecho obrigatório do golden set é o que pega.
 
@@ -673,9 +661,8 @@ terraform destroy -auto-approve
 
 > Saída esperada (última linha):
 >
-> <!-- CONFIRMAR-SAIDA: número real de recursos destruídos -->
 > ```text
-> Destroy complete! Resources: N destroyed.
+> Destroy complete! Resources: 10 destroyed.
 > ```
 
 Isso remove a Lambda, a API Gateway e a tabela DynamoDB. O código continua no GitLab: o próximo push publica tudo de novo. Repetir o comando com tudo já destruído só imprime `Resources: 0 destroyed.`
