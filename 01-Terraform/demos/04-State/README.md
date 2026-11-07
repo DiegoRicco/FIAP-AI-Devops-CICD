@@ -31,7 +31,7 @@ Nunca usou Terraform, um terminal ou Git? Tudo bem: cada passo diz o que fazer, 
 > aws ec2 describe-vpcs --filters "Name=tag:Name,Values=fiap-lab" --query "Vpcs[0].VpcId" --output text
 > ```
 >
-> Se imprimir um `vpc-...`, a rede existe; se vier `None`, suba o [Lab 01.2](../02-Modules/README.md) antes.
+> Se imprimir um `vpc-...`, a rede existe; se vier `None`, a rede não existe nesta conta (por exemplo, depois de um reset do AWS Academy). Você não precisa refazer o [Lab 01.2](../02-Modules/README.md): no terminal do Codespaces, rode `bash /workspaces/FIAP-AI-Devops-CICD/01-Terraform/scripts/recriar-rede.sh`. Em cerca de 1 minuto ele recria a rede, e a última linha é `REDE_OK vpc-0abc... 6`. Depois, rode a validação de novo.
 >
 > **O que você vai fazer:** ligar o versionamento do bucket, configurar o backend S3 com locking nativo, ver o estado nascer no bucket, apagar a cópia local e provar que o `init` recupera o estado do S3, simular você e o Diego rodando `apply` ao mesmo tempo e ver o **lock** bloquear o segundo, fazer **cirurgia de estado** (`state list/show/mv/rm`) e explorar **versionamento** e a questão dos **segredos em texto claro**. **Tempo estimado: ~50 min** (execução pura ~10 min + tempo para ler, copiar e observar).
 
@@ -269,10 +269,27 @@ terraform apply -auto-approve
 > ```
 
 <details>
-<summary><b>⚠ Se der erro: <code>no matching EC2 VPC found</code> ou <code>Invalid index</code> em <code>eligible_subnet_ids</code></b></summary>
+<summary><b>⚠ Se der erro de rede: <code>no matching EC2 VPC found</code> (ou <code>Invalid index</code> em <code>eligible_subnet_ids</code>)</b></summary>
 <blockquote>
 
-A VPC `fiap-lab` da demo 01.2 não existe nesta conta ou não tem subnets públicas. Rode o comando de validação dos pré-requisitos; se vier `None`, suba a rede pelo [Lab 01.2](../02-Modules/README.md) e rode este passo de novo. Não crie rede nesta pasta.
+- **`no matching EC2 VPC found`**: não há VPC `fiap-lab` nesta conta.
+- **`Invalid index`** com `local.eligible_subnet_ids is empty list of string`: a VPC existe, mas não tem subnets públicas.
+
+A rede `fiap-lab` (VPC, subnets públicas e route table), criada no [Lab 01.2](../02-Modules/README.md), não existe nesta conta ou está incompleta, por exemplo porque o lab do AWS Academy foi resetado. Você não precisa refazer o Lab 01.2: um script sobe a mesma rede com o mesmo Terraform, criando só o que estiver faltando.
+
+**Onde:** terminal do Codespaces.
+
+```bash
+bash /workspaces/FIAP-AI-Devops-CICD/01-Terraform/scripts/recriar-rede.sh
+```
+
+> Saída esperada (leva cerca de 1 minuto quando precisa recriar e menos de 20 s quando a rede já existe; o id muda):
+>
+> ```text
+> REDE_OK vpc-0abc... 6
+> ```
+
+Depois, rode de novo o `terraform apply -auto-approve` deste passo e continue daqui. Não crie rede nesta pasta. Se o script disser que existem duas VPCs `fiap-lab` (erro `multiple EC2 VPCs matched`), não apague nada: chame o professor.
 
 </blockquote>
 </details>

@@ -32,7 +32,7 @@ Nunca usou Ansible ou um terminal? Tudo bem: cada passo diz o que fazer, onde ro
 > aws ec2 describe-vpcs --region us-east-1 --filters "Name=tag:Name,Values=fiap-lab" --query "Vpcs[0].VpcId" --output text
 > ```
 >
-> Saída esperada: o número da sua conta (12 dígitos) e um `vpc-...`. Se a segunda linha vier `None`, a rede não existe: volte ao [Lab 01.2](../../01-Terraform/demos/02-Modules/README.md) e suba a VPC antes de seguir.
+> Saída esperada: o número da sua conta (12 dígitos) e um `vpc-...`. Se a segunda linha vier `None`, a rede não existe nesta conta (por exemplo, depois de um reset do AWS Academy). Você não precisa refazer o [Lab 01.2](../../01-Terraform/demos/02-Modules/README.md): no terminal do Codespaces, rode `bash /workspaces/FIAP-AI-Devops-CICD/01-Terraform/scripts/recriar-rede.sh`. Em cerca de 1 minuto ele recria a rede, e a última linha é `REDE_OK vpc-0abc... 6`. Depois, rode a validação de novo.
 
 ## O que você vai fazer
 
@@ -681,6 +681,34 @@ terraform plan
 
 Os 3 recursos são a EC2 `quantum-ai-gitlab-runner` (`aws_instance.runner`), o Security Group `quantum-ai-gitlab-runner` e o `terraform_data.bootstrap`. Nada da rede `fiap-lab` aparece no plano: ela é só lida.
 
+<details>
+<summary><b>⚠ Se der erro de rede: <code>no matching EC2 VPC found</code> (ou <code>Invalid index</code>)</b></summary>
+<blockquote>
+
+O runner é uma EC2 que nasce dentro da rede `fiap-lab`: o Terraform desta pasta só lê a VPC e as subnets públicas por tag, e o bootstrap via SSM precisa da rota para a internet.
+
+- **`no matching EC2 VPC found`** (em `securitygroup.tf line 4`): não há VPC `fiap-lab` nesta conta.
+- **`Invalid index`** (em `instance.tf line 41`, `local.eligible_subnet_ids is empty list of string`): a VPC existe, mas não tem subnets públicas.
+
+A rede `fiap-lab` (VPC, subnets públicas e route table), criada no [Lab 01.2](../../01-Terraform/demos/02-Modules/README.md), não existe nesta conta ou está incompleta, por exemplo porque o lab do AWS Academy foi resetado. Você não precisa refazer o Lab 01.2: um script sobe a mesma rede com o mesmo Terraform, criando só o que estiver faltando.
+
+**Onde:** terminal do Codespaces.
+
+```bash
+bash /workspaces/FIAP-AI-Devops-CICD/01-Terraform/scripts/recriar-rede.sh
+```
+
+> Saída esperada (leva cerca de 1 minuto quando precisa recriar e menos de 20 s quando a rede já existe; o id muda):
+>
+> ```text
+> REDE_OK vpc-0abc... 6
+> ```
+
+Depois, rode de novo o `terraform plan` deste passo e continue daqui. Se o script disser que existem duas VPCs `fiap-lab` (erro `multiple EC2 VPCs matched`), não apague nada: chame o professor.
+
+</blockquote>
+</details>
+
 ---
 
 <a id="passo-21"></a>
@@ -740,6 +768,34 @@ terraform output -raw instance_id; echo
 > ```
 
 ![](img/gitlab-11.png)
+
+<details>
+<summary><b>⚠ Se der erro de rede: <code>ERRO: a instancia i-... nao ficou online no SSM a tempo</code> (ou <code>no matching EC2 VPC found</code>)</b></summary>
+<blockquote>
+
+O runner é uma EC2 que nasce dentro da rede `fiap-lab`: o Terraform desta pasta só lê a VPC e as subnets públicas por tag, e o bootstrap via SSM precisa da rota para a internet.
+
+- **`ERRO: a instancia i-... nao ficou online no SSM a tempo`** (no apply do passo 21): a VPC e as subnets existem, mas falta a rota para a internet; sem ela, a EC2 não fala com o SSM.
+- **`no matching EC2 VPC found`** ou **`Invalid index`**: os mesmos erros do [passo 20](#passo-20), se você pulou o `plan`.
+
+A rede `fiap-lab` (VPC, subnets públicas e route table), criada no [Lab 01.2](../../01-Terraform/demos/02-Modules/README.md), não existe nesta conta ou está incompleta, por exemplo porque o lab do AWS Academy foi resetado. Você não precisa refazer o Lab 01.2: um script sobe a mesma rede com o mesmo Terraform, criando só o que estiver faltando.
+
+**Onde:** terminal do Codespaces.
+
+```bash
+bash /workspaces/FIAP-AI-Devops-CICD/01-Terraform/scripts/recriar-rede.sh
+```
+
+> Saída esperada (leva cerca de 1 minuto quando precisa recriar e menos de 20 s quando a rede já existe; o id muda):
+>
+> ```text
+> REDE_OK vpc-0abc... 6
+> ```
+
+Depois, rode de novo o `terraform apply -auto-approve` do [passo 21](#passo-21): ele retoma de onde parou e não duplica a EC2. Se o script disser que existem duas VPCs `fiap-lab` (erro `multiple EC2 VPCs matched`), não apague nada: chame o professor.
+
+</blockquote>
+</details>
 
 ### Checkpoint
 

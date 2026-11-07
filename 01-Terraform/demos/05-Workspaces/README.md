@@ -27,7 +27,7 @@ Nunca usou Terraform ou um terminal? Tudo bem: cada passo diz o que fazer, onde 
 > aws s3 ls | awk '/base-config-/{print $3}'
 > ```
 >
-> Saída esperada: três linhas, nesta ordem: o número da sua conta (12 dígitos), um `vpc-...` e o nome do seu bucket `base-config-...`. Se você tiver mais de um bucket `base-config-`, aparece uma linha por bucket, e o passo 2 usa o primeiro em ordem alfabética. Se a segunda linha vier `None`, a rede não existe: volte ao [Lab 01.2](../02-Modules/README.md) e suba a VPC. Se não aparecer nenhum bucket, refaça a criação do bucket no [setup inicial do ambiente](../../../00-create-codespaces/README.md).
+> Saída esperada: três linhas, nesta ordem: o número da sua conta (12 dígitos), um `vpc-...` e o nome do seu bucket `base-config-...`. Se você tiver mais de um bucket `base-config-`, aparece uma linha por bucket, e o passo 2 usa o primeiro em ordem alfabética. Se a segunda linha vier `None`, a rede não existe nesta conta (por exemplo, depois de um reset do AWS Academy). Você não precisa refazer o [Lab 01.2](../02-Modules/README.md): no terminal do Codespaces, rode `bash /workspaces/FIAP-AI-Devops-CICD/01-Terraform/scripts/recriar-rede.sh`. Em cerca de 1 minuto ele recria a rede, e a última linha é `REDE_OK vpc-0abc... 6`. Depois, rode a validação de novo. Se não aparecer nenhum bucket, refaça a criação do bucket no [setup inicial do ambiente](../../../00-create-codespaces/README.md).
 >
 > **O que você vai fazer:** criar os workspaces `dev` e `prod`, aplicar o mesmo código em cada um, ver que cada ambiente ganha **a sua própria EC2, de tamanho diferente**, e o seu próprio estado no S3, validar com `terraform test` e, no fim, destruir as EC2 e apagar os workspaces. **Tempo estimado: ~35 min** (execução pura ~8 min + tempo para ler, copiar e observar).
 
@@ -386,10 +386,27 @@ terraform output instance_type
 > ```
 
 <details>
-<summary><b>⚠ Se der erro: <code>no matching EC2 VPC found</code> ou <code>Invalid index</code></b></summary>
+<summary><b>⚠ Se der erro de rede: <code>no matching EC2 VPC found</code> (ou <code>Invalid index</code>)</b></summary>
 <blockquote>
 
-O Terraform não encontrou a VPC `fiap-lab` ou nenhuma subnet pública dentro dela. Rode `aws ec2 describe-vpcs --region us-east-1 --filters "Name=tag:Name,Values=fiap-lab" --query "Vpcs[0].VpcId" --output text`. Se vier `None`, a rede do Lab 01.2 não existe nesta conta: suba a VPC voltando ao [Lab 01.2](../02-Modules/README.md) e rode este passo de novo. Não crie uma VPC nesta pasta.
+- **`no matching EC2 VPC found`** em `module.servidor.data.aws_vpc.vpc`: não há VPC `fiap-lab` nesta conta.
+- **`Invalid index`** (em `modules/file/main.tf`): a VPC existe, mas não tem subnets públicas.
+
+A rede `fiap-lab` (VPC, subnets públicas e route table), criada no [Lab 01.2](../02-Modules/README.md), não existe nesta conta ou está incompleta, por exemplo porque o lab do AWS Academy foi resetado. Você não precisa refazer o Lab 01.2: um script sobe a mesma rede com o mesmo Terraform, criando só o que estiver faltando.
+
+**Onde:** terminal do Codespaces.
+
+```bash
+bash /workspaces/FIAP-AI-Devops-CICD/01-Terraform/scripts/recriar-rede.sh
+```
+
+> Saída esperada (leva cerca de 1 minuto quando precisa recriar e menos de 20 s quando a rede já existe; o id muda):
+>
+> ```text
+> REDE_OK vpc-0abc... 6
+> ```
+
+Depois, rode de novo o `terraform apply -auto-approve` deste passo (ainda no workspace `dev`) e continue daqui. Não crie uma VPC nesta pasta. Se o script disser que existem duas VPCs `fiap-lab` (erro `multiple EC2 VPCs matched`), não apague nada: chame o professor.
 
 </blockquote>
 </details>

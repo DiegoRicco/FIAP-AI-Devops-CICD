@@ -112,7 +112,7 @@ aws apigatewayv2 get-apis --max-results 1 >/dev/null 2>&1 && pass "API Gateway a
 aws dynamodb list-tables --max-items 1 >/dev/null 2>&1 && pass "DynamoDB acessivel" || fail "DynamoDB" "inacessivel nesta sessao"
 # A Lambda nao usa VPC, mas o runner vive na fiap-lab: sem ela, nao ha pipeline.
 VPC=$(aws ec2 describe-vpcs --filters Name=tag:Name,Values=fiap-lab --query 'Vpcs[0].VpcId' --output text 2>/dev/null || echo "")
-if [ -n "$VPC" ] && [ "$VPC" != "None" ]; then pass "rede fiap-lab existe"; else fail "rede fiap-lab nao encontrada" "a VPC do modulo 01 foi destruida: refaca a Demo 02 do modulo 01"; fi
+if [ -n "$VPC" ] && [ "$VPC" != "None" ]; then pass "rede fiap-lab existe"; else fail "rede fiap-lab nao encontrada" "a rede do modulo 01 sumiu (lab resetado): rode bash /workspaces/FIAP-AI-Devops-CICD/01-Terraform/scripts/recriar-rede.sh"; fi
 
 # ------------------------------------------------- o que ja existe (so leitura)
 if LIVE=$(aws lambda get-alias --function-name qc-assistant-api --name live --query FunctionVersion --output text 2>/dev/null); then

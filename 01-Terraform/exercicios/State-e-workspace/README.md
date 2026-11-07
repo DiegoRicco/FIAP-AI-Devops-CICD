@@ -36,7 +36,7 @@ Este é um **desafio**, não uma demo: o README diz **o que** construir e **como
 > aws s3 ls | awk '/base-config-/{print $3}'
 > ```
 >
-> Saída esperada: três linhas, nesta ordem: o número da conta (12 dígitos), um `vpc-...` e o nome do seu bucket `base-config-...`. Se a segunda linha vier `None`, suba a rede pela [Demo 01.2](../../demos/02-Modules/README.md) antes de continuar.
+> Saída esperada: três linhas, nesta ordem: o número da conta (12 dígitos), um `vpc-...` e o nome do seu bucket `base-config-...`. Se a segunda linha vier `None`, a rede não existe nesta conta (por exemplo, depois de um reset do AWS Academy). Você não precisa refazer o [Lab 01.2](../../demos/02-Modules/README.md): no terminal do Codespaces, rode `bash /workspaces/FIAP-AI-Devops-CICD/01-Terraform/scripts/recriar-rede.sh`. Em cerca de 1 minuto ele recria a rede, e a última linha é `REDE_OK vpc-0abc... 6`. Depois, rode a validação de novo.
 >
 > **Tempo estimado: 30–35 min** (execução pura ~8 min; o resto é escrever o HCL, ler a documentação e conferir as provas).
 
@@ -165,7 +165,7 @@ Para ver como as três peças se juntam, leia o `instance.tf` da [Demo 01.4](../
 <blockquote>
 
 - `Unsupported: Your requested instance type (t3.micro) is not supported in your requested Availability Zone (us-east-1e)`: a subnet escolhida está na AZ errada. Falta cruzar a lista de subnets com as AZs ofertadas.
-- `no matching EC2 VPC found`: a VPC `fiap-lab` não existe nesta conta ou região. Rode o segundo comando da validação inicial.
+- `no matching EC2 VPC found`: a VPC `fiap-lab` não existe nesta conta ou região. Rode o segundo comando da validação inicial; se vier `None`, veja o bloco **⚠ Se der erro de rede** do [passo 5](#passo-5).
 - Para ver em quais AZs a `t3.micro` é ofertada (a `us-east-1e` não pode aparecer):
 
 ```bash
@@ -391,9 +391,36 @@ terraform apply -auto-approve
 
 O `-auto-approve` pula a pergunta `Enter a value:`. Você já conferiu o plano no bloco anterior. O `apply` das duas EC2 leva por volta de 20 s (varia por execução).
 
----
+<details>
+<summary><b>⚠ Se der erro de rede: <code>no matching EC2 VPC found</code> (ou <code>Invalid index</code>, <code>Call to function "element" failed</code>, <code>no matching EC2 Subnet found</code>)</b></summary>
+<blockquote>
 
-<a id="passo-6"></a>
+O texto exato depende do código que você escreveu:
+
+- **`no matching EC2 VPC found`**: não há VPC `fiap-lab` nesta conta.
+- **`Invalid index`** (se você usou `[0]`) ou **`Call to function "element" failed: cannot use element function with an empty list`** (se você usou `element()`): a lista de subnets públicas veio vazia.
+- **`no matching EC2 Subnet found`** (se você usou `data "aws_subnet"`, no singular): nenhuma subnet pública casou com o filtro.
+
+Antes de culpar o seu código, confira a rede com o segundo comando da validação inicial. Se vier `None`, a causa é a rede:
+
+A rede `fiap-lab` (VPC, subnets públicas e route table), criada no [Lab 01.2](../../demos/02-Modules/README.md), não existe nesta conta ou está incompleta, por exemplo porque o lab do AWS Academy foi resetado. Você não precisa refazer o Lab 01.2: um script sobe a mesma rede com o mesmo Terraform, criando só o que estiver faltando.
+
+**Onde:** terminal do Codespaces.
+
+```bash
+bash /workspaces/FIAP-AI-Devops-CICD/01-Terraform/scripts/recriar-rede.sh
+```
+
+> Saída esperada (leva cerca de 1 minuto quando precisa recriar e menos de 20 s quando a rede já existe; o id muda):
+>
+> ```text
+> REDE_OK vpc-0abc... 6
+> ```
+
+Depois, rode de novo o `terraform plan` e o `terraform apply -auto-approve` deste passo. Se a rede existe e o erro continua, a causa é o seu filtro: veja a [Pista 3](#pistas). Se o script disser que existem duas VPCs `fiap-lab` (erro `multiple EC2 VPCs matched`), não apague nada: chame o professor.
+
+</blockquote>
+</details>
 
 **6. Crie o workspace `prod` e aplique o mesmo código**
 

@@ -107,6 +107,35 @@ bash /workspaces/FIAP-AI-Devops-CICD/04-GenAIOps/shared/runner/runner-recover.sh
 ```
 
 <details>
+<summary><b>⚠ Se der erro de rede: <code>no matching EC2 VPC found</code> (ou <code>Invalid index</code>, <code>nao ficou online no SSM</code>) no <code>runner-recover.sh</code></b></summary>
+<blockquote>
+
+Só acontece no diagnóstico `recreate`: o `runner-recover.sh` recria a EC2 do runner com o Terraform do Módulo 02, e o runner nasce dentro da rede `fiap-lab`. Os erros saem no meio da saída do script:
+
+- **`no matching EC2 VPC found`**: não há VPC `fiap-lab` nesta conta.
+- **`Invalid index`** em `eligible_subnet_ids`: a VPC existe, mas não tem subnets públicas.
+- **`ERRO: a instancia i-... nao ficou online no SSM a tempo`**: falta a rota para a internet.
+
+A rede `fiap-lab` (VPC, subnets públicas e route table), criada no [Lab 01.2](../01-Terraform/demos/02-Modules/README.md), não existe nesta conta ou está incompleta, por exemplo porque o lab do AWS Academy foi resetado. Você não precisa refazer o Lab 01.2: um script sobe a mesma rede com o mesmo Terraform, criando só o que estiver faltando.
+
+**Onde:** terminal do Codespaces.
+
+```bash
+bash /workspaces/FIAP-AI-Devops-CICD/01-Terraform/scripts/recriar-rede.sh
+```
+
+> Saída esperada (leva cerca de 1 minuto quando precisa recriar e menos de 20 s quando a rede já existe; o id muda):
+>
+> ```text
+> REDE_OK vpc-0abc... 6
+> ```
+
+Depois, rode de novo `bash /workspaces/FIAP-AI-Devops-CICD/04-GenAIOps/shared/runner/runner-recover.sh --apply` e continue o ritual daqui. Se o script disser que existem duas VPCs `fiap-lab` (erro `multiple EC2 VPCs matched`), não apague nada: chame o professor.
+
+</blockquote>
+</details>
+
+<details>
 <summary><b>💡 Clique para entender: reboot, stop/start, terminate, Codespaces parado e sessão do Academy expirada não são a mesma coisa</b></summary>
 <blockquote>
 

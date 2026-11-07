@@ -108,13 +108,28 @@ aws ec2 describe-route-tables --filters "Name=vpc-id,Values=$VPC_ID" \
 São três provas: a VPC existe (`vpc-...`), ela tem subnets públicas (em `us-east-1`, normalmente 6, uma por zona) e há rota para a internet (`igw-...`). Sem a rota, as máquinas sobem mas não falam com o SSM, e o provisionamento falha.
 
 <details>
-<summary><b>⚠ Se der erro: aparece <code>VPC: None</code>, <code>0</code> ou nenhuma linha <code>igw-...</code></b></summary>
+<summary><b>⚠ Se der erro de rede: aparece <code>VPC: None</code>, <code>0</code> ou nenhuma linha <code>igw-...</code></b></summary>
 <blockquote>
 
-- **`VPC: None`**: a rede não foi criada nesta conta (ou o Learner Lab foi reiniciado e a conta mudou). Volte ao [Lab 01.2](../02-Modules/README.md) e rode o `vpc-call`.
-- **VPC existe, mas `0` subnets**: o `vpc-call` não terminou. Rode o `apply` dele de novo.
-- **VPC existe, mas sem `igw-...`**: falta o `RT-call` (as rotas). Volte ao Lab 01.2 e rode o `apply` do `RT-call`.
-- **`Unable to locate credentials`** ou **`ExpiredToken`**: as credenciais do Academy expiraram. Refaça o [Preparando Credenciais](../../../00-create-codespaces/Inicio-de-aula.md).
+- **`VPC: None`**: não há VPC `fiap-lab` nesta conta.
+- **VPC existe, mas `0` subnets**: a criação da rede ficou pela metade.
+- **VPC existe, mas sem `igw-...`**: faltam as rotas para a internet (o `RT-call`).
+
+A rede `fiap-lab` (VPC, subnets públicas e route table), criada no [Lab 01.2](../02-Modules/README.md), não existe nesta conta ou está incompleta, por exemplo porque o lab do AWS Academy foi resetado. Você não precisa refazer o Lab 01.2: um script sobe a mesma rede com o mesmo Terraform, criando só o que estiver faltando.
+
+**Onde:** terminal do Codespaces.
+
+```bash
+bash /workspaces/FIAP-AI-Devops-CICD/01-Terraform/scripts/recriar-rede.sh
+```
+
+> Saída esperada (leva cerca de 1 minuto quando precisa recriar e menos de 20 s quando a rede já existe; o id muda):
+>
+> ```text
+> REDE_OK vpc-0abc... 6
+> ```
+
+Depois, rode de novo a checagem deste passo: as três linhas devem aparecer. Se aparecer `Unable to locate credentials` ou `ExpiredToken` (na checagem ou no script), as credenciais do Academy expiraram: refaça o [Preparando Credenciais](../../../00-create-codespaces/Inicio-de-aula.md) e rode de novo. Se o script disser que existem duas VPCs `fiap-lab` (erro `multiple EC2 VPCs matched`), não apague nada: chame o professor.
 
 </blockquote>
 </details>
@@ -213,10 +228,35 @@ terraform plan
 São 10 recursos: 4 que existem uma vez só (ALB, listener, target group, security group) e 3 que aparecem duas vezes por causa do `count = 2` (a EC2, o provisionamento dela e o registro dela no target group).
 
 <details>
-<summary><b>⚠ Se der erro: <code>no matching EC2 VPC found</code> ou <code>Unsupported instance type</code></b></summary>
+<summary><b>⚠ Se der erro de rede: <code>no matching EC2 VPC found</code> (ou <code>Call to function "element" failed</code>)</b></summary>
 <blockquote>
 
-- **`no matching EC2 VPC found`**: o Terraform não achou a VPC com a tag `Name=fiap-lab`. Volte ao [passo 1](#passo-1).
+- **`no matching EC2 VPC found`**: o Terraform não achou a VPC com a tag `Name=fiap-lab`.
+- **`Call to function "element" failed: cannot use element function with an empty list`**: a VPC existe, mas não tem subnets públicas (`Tier=Public`).
+
+A rede `fiap-lab` (VPC, subnets públicas e route table), criada no [Lab 01.2](../02-Modules/README.md), não existe nesta conta ou está incompleta, por exemplo porque o lab do AWS Academy foi resetado. Você não precisa refazer o Lab 01.2: um script sobe a mesma rede com o mesmo Terraform, criando só o que estiver faltando.
+
+**Onde:** terminal do Codespaces.
+
+```bash
+bash /workspaces/FIAP-AI-Devops-CICD/01-Terraform/scripts/recriar-rede.sh
+```
+
+> Saída esperada (leva cerca de 1 minuto quando precisa recriar e menos de 20 s quando a rede já existe; o id muda):
+>
+> ```text
+> REDE_OK vpc-0abc... 6
+> ```
+
+Depois, rode de novo o `terraform plan` deste passo e continue daqui. Se o script disser que existem duas VPCs `fiap-lab` (erro `multiple EC2 VPCs matched`), não apague nada: chame o professor.
+
+</blockquote>
+</details>
+
+<details>
+<summary><b>⚠ Se der erro: <code>Unsupported instance type</code></b></summary>
+<blockquote>
+
 - **`Unsupported instance type`**: não deve acontecer, porque a demo descobre sozinha quais zonas oferecem `t3.micro` (a `us-east-1e` não oferece). Se aparecer, confira se você mudou o `instance_type` no `variables.tf`.
 
 </blockquote>
@@ -421,11 +461,38 @@ No teste real, o `apply` levou cerca de 2 min 35 s. Antes de cada bloco de log a
 <summary><b>⚠ Se der erro: <code>ERRO: a instancia ... nao ficou online no SSM a tempo</code> ou <code>Status=Failed</code></b></summary>
 <blockquote>
 
-- **Não ficou online no SSM**: a máquina subiu, mas não conseguiu falar com o serviço SSM em 5 minutos. A causa quase sempre é rede sem rota para a internet: refaça o [passo 1](#passo-1) e confira a linha `igw-...`.
+- **Não ficou online no SSM**: a máquina subiu, mas não conseguiu falar com o serviço SSM em 5 minutos. A causa quase sempre é rede sem rota para a internet: veja o bloco **⚠ Se der erro de rede** logo abaixo.
 - **`Status=Failed`** com uma mensagem logo abaixo: o `script.sh` falhou dentro da máquina, e a mensagem é o erro dele. Rode o `apply` de novo: o Terraform só refaz o que falhou, sem recriar o que deu certo.
 - **`AccessDeniedException`** ao chamar o SSM: as credenciais expiraram no meio do `apply`. Atualize as credenciais e rode o `apply` de novo.
 
 Pode rodar `terraform apply -auto-approve` quantas vezes precisar: ele retoma de onde parou e não duplica nada.
+
+</blockquote>
+</details>
+
+<details>
+<summary><b>⚠ Se der erro de rede: <code>no matching EC2 VPC found</code> (ou <code>At least two subnets in two different Availability Zones must be specified</code>, ou <code>nao ficou online no SSM</code>)</b></summary>
+<blockquote>
+
+- **`ERRO: a instancia i-... nao ficou online no SSM a tempo`**: a VPC e as subnets existem, mas falta a rota para a internet; sem ela, a máquina não fala com o SSM.
+- **`At least two subnets in two different Availability Zones must be specified`** (ao criar o ALB `quantum-ai-alb`): o ALB precisa de subnets públicas em pelo menos duas zonas, e a rede não tem.
+- **`no matching EC2 VPC found`** ou **`Call to function "element" failed`**: os mesmos erros do [passo 4](#passo-4), se você pulou o `plan`.
+
+A rede `fiap-lab` (VPC, subnets públicas e route table), criada no [Lab 01.2](../02-Modules/README.md), não existe nesta conta ou está incompleta, por exemplo porque o lab do AWS Academy foi resetado. Você não precisa refazer o Lab 01.2: um script sobe a mesma rede com o mesmo Terraform, criando só o que estiver faltando.
+
+**Onde:** terminal do Codespaces.
+
+```bash
+bash /workspaces/FIAP-AI-Devops-CICD/01-Terraform/scripts/recriar-rede.sh
+```
+
+> Saída esperada (leva cerca de 1 minuto quando precisa recriar e menos de 20 s quando a rede já existe; o id muda):
+>
+> ```text
+> REDE_OK vpc-0abc... 6
+> ```
+
+Depois, rode de novo `terraform apply -auto-approve` deste passo: ele retoma de onde parou e não duplica nada. Se o script terminar com `REDE_OK vpc-0abc... 1` (uma subnet só) e o erro do ALB voltar, chame o professor. Se o script disser que existem duas VPCs `fiap-lab` (erro `multiple EC2 VPCs matched`), não apague nada: chame o professor.
 
 </blockquote>
 </details>

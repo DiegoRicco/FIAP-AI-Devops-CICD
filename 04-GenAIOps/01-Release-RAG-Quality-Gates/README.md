@@ -244,6 +244,31 @@ bash scripts/preflight.sh
 
 **Se falhar:** cada `=fail` vem com uma linha `->` no terminal dizendo o que fazer. `troque base-config-SEU-RM...` = o passo 3 não rodou ou não encontrou o bucket; `ExpiredToken` = credenciais (passo A do ritual); bucket inexistente = refaça o setup inicial do módulo 01.
 
+<details>
+<summary><b>⚠ Se der erro de rede: <code>[FAIL] rede fiap-lab nao encontrada</code></b></summary>
+<blockquote>
+
+A Lambda do assistente não usa VPC, mas o runner do GitLab que roda o pipeline vive na rede `fiap-lab`: sem ela, não há pipeline. O próprio preflight já indica o script abaixo.
+
+A rede `fiap-lab` (VPC, subnets públicas e route table), criada no [Lab 01.2](../../01-Terraform/demos/02-Modules/README.md), não existe nesta conta ou está incompleta, por exemplo porque o lab do AWS Academy foi resetado. Você não precisa refazer o Lab 01.2: um script sobe a mesma rede com o mesmo Terraform, criando só o que estiver faltando.
+
+**Onde:** terminal do Codespaces.
+
+```bash
+bash /workspaces/FIAP-AI-Devops-CICD/01-Terraform/scripts/recriar-rede.sh
+```
+
+> Saída esperada (leva cerca de 1 minuto quando precisa recriar e menos de 20 s quando a rede já existe; o id muda):
+>
+> ```text
+> REDE_OK vpc-0abc... 6
+> ```
+
+Depois, rode de novo o `bash scripts/preflight.sh` deste passo. Se o runner também tinha sumido, refaça o [ritual do dia](../README.md#ritual-do-dia-credenciais--runner--demo) (passos B e C) antes de seguir. Se o script disser que existem duas VPCs `fiap-lab` (erro `multiple EC2 VPCs matched`), não apague nada: chame o professor.
+
+</blockquote>
+</details>
+
 ### Checkpoint
 
 - `quantum-assistant/` está dentro do `primeiro-projeto` e o `.gitlab-ci.yml` da raiz é o novo
