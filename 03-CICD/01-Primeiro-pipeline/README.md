@@ -1,12 +1,5 @@
 # 03.1 - Primeiro pipeline: publicando o Assistente de Políticas
 
-<!--
-CONVENÇÃO DE PRINTS DESTE README (nota para o professor, não aparece renderizada)
-- TROCAR-IMAGEM: print antigo ainda visível; sobrescreva o arquivo com o mesmo nome e apague o comentário.
-- NOVA-IMAGEM: print que ainda não existe; salve o PNG no caminho indicado e descomente a linha de imagem logo abaixo.
-- CONFIRMAR-SAIDA: saída esperada a preencher com o resultado do teste real.
--->
-
 > **Segunda-feira, 10h. Aula 4 na Quantum Commerce.**
 > Você é AI DevOps Engineer na **Quantum Commerce**. O runner que você provisionou com Ansible está online desde a semana passada. **Helena Marques**, Head de Engenharia de IA e Entrega Contínua, chega com uma reclamação do Procon impressa: um cliente ouviu do atendimento que tinha 30 dias para devolver um fone, quando a política diz 7.
 >
@@ -484,7 +477,6 @@ O pipeline terá terminado verde nos três stages, e você terá feito três per
 
 No **GitLab**, a lista mostra o pipeline em execução, com um círculo por stage. Espere os três ficarem verdes (leva poucos minutos).
 
-<!-- TROCAR-IMAGEM: img/gitlab-2.png | motivo: fluxo antigo (projeto primeiro-projeto-test, só 2 stages) | capturar: lista de Pipelines do primeiro-projeto com o pipeline "primeiro pipeline do assistente de politicas" rodando e 3 círculos de stage -->
 ![Lista de pipelines do GitLab com o pipeline em execução e o número do pipeline sublinhado](img/gitlab-2.png)
 
 ---
@@ -495,7 +487,6 @@ No **GitLab**, a lista mostra o pipeline em execução, com um círculo por stag
 
 Clique no **número do pipeline** (`#...`) para ver os stages, e clique em cada job para ler o log.
 
-<!-- TROCAR-IMAGEM: img/gitlab-3.png | motivo: fluxo antigo (só os stages plan e apply) | capturar: página do pipeline verde com os 3 stages plan, apply e smoke -->
 ![Página do pipeline com status passed e os jobs dos stages concluídos](img/gitlab-3.png)
 
 O que procurar em cada log:
@@ -634,8 +625,8 @@ curl -s -X POST "$ASSISTENTE_URL" \
 
 Leia três campos. `resposta` traz o prazo de **7 dias** e termina com a fonte. `fontes` lista as 3 seções mais parecidas com a pergunta, da maior nota (`score`) para a menor; a primeira é a usada na resposta, e é o que o jurídico vai querer ver. `versao_politicas` é uma impressão digital das seis políticas publicadas: se alguém mudar uma vírgula num `.md`, esse valor muda no próximo deploy.
 
-<!-- NOVA-IMAGEM: img/curl-assistente-fonte.png | capturar: terminal do Codespaces com o curl do passo 11 e o JSON formatado pelo jq, mostrando "7 dias" na resposta e a fonte devolucoes.md / Direito de arrependimento | depois de salvar o arquivo, descomente a linha abaixo -->
-<!-- ![Terminal com o curl da pergunta sobre devolução e a resposta JSON citando devolucoes.md, seção Direito de arrependimento, com o prazo de 7 dias](img/curl-assistente-fonte.png) -->
+
+![Terminal com o curl da pergunta sobre devolução e a resposta JSON citando devolucoes.md, seção Direito de arrependimento, com o prazo de 7 dias](img/curl-assistente-fonte.png)
 
 <details>
 <summary><b>⚠ Se der erro: <code>{"message":"Not Found"}</code> ou <code>jq: command not found</code></b></summary>
@@ -718,7 +709,6 @@ curl -s -X POST "$ASSISTENTE_URL" \
 
 O campo `pedido` veio do DynamoDB, e a resposta explica o que `em_transito` significa a partir da política `status-do-pedido.md`. O `score` vem `null` porque aqui não houve busca: o assistente foi direto na seção com o nome do status. Separar as duas coisas é a decisão de arquitetura do Projeto 2: **dado transacional vem do sistema de origem; RAG fica para o conhecimento documental**. Rodar o bloco de novo só regrava o mesmo status.
 
-<!-- TROCAR-IMAGEM: img/curl-api-respondendo.png | motivo: fluxo antigo (rota /scooters, VORTEX-SP-001) | capturar: terminal com o PUT em /pedidos/QC-1001 e a pergunta com pedido_id, mostrando o campo "pedido" com status em_transito -->
 ![Terminal com as chamadas à API e as respostas em JSON](img/curl-api-respondendo.png)
 
 ### Checkpoint
