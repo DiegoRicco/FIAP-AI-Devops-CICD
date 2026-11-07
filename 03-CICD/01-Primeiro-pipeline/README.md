@@ -495,13 +495,28 @@ O que procurar em cada log:
 - **`apply`**: os recursos sendo criados, e no fim os outputs `api_base_url` e `assistente_url`.
 - **`smoke`**: a pergunta feita ao assistente publicado e a resposta com a fonte.
 
-> Saída esperada (linhas que importam):
+> Saída esperada (linhas que importam; o id da API muda a cada aluno):
 >
-> <!-- CONFIRMAR-SAIDA: linha "Plan: N to add" do job plan, linha "Apply complete! Resources: N added" do apply e as últimas linhas do log do smoke, no pipeline real -->
 > ```text
-> Plan: N to add, 0 to change, 0 to destroy.
-> Apply complete! Resources: N added, 0 changed, 0 destroyed.
+> # job plan
+> Plan: 10 to add, 0 to change, 0 to destroy.
+>
+> # job apply
+> Apply complete! Resources: 10 added, 0 changed, 0 destroyed.
+> Outputs:
+> api_base_url = "https://xxxxxxxxxx.execute-api.us-east-1.amazonaws.com"
+> assistente_url = "https://xxxxxxxxxx.execute-api.us-east-1.amazonaws.com/assistente/perguntas"
+> pedidos_table = "quantum-ai-pedidos"
+>
+> # job smoke (trecho)
+> "resposta": "Você tem até 30 dias corridos, contados a partir da data de recebimento, para trocar qualquer produto de moda (roupas, calçados e acessórios) ou eletrônico. ... Fonte: trocas.md (Prazo para troca).",
+> "documento": "trocas.md",
+> "secao": "Prazo para troca",
+> $ jq -e '.fontes | length > 0' resposta.json
+> true
 > ```
+>
+> Os 10 recursos são a API, a integração, as 4 rotas, o stage, a tabela DynamoDB, a Lambda e a permissão da API para chamar a Lambda. O `true` no fim do `smoke` é o teste: a resposta trouxe pelo menos uma fonte.
 
 <details>
 <summary><b>⚠ Se der erro: o job <code>plan</code> falha no <code>terraform init</code> com erro de backend S3</b></summary>
