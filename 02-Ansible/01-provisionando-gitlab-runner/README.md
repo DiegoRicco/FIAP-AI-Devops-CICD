@@ -299,7 +299,7 @@ ssh-keygen -t rsa -b 2048 -C "gitlab key" -f /home/vscode/.ssh/gitlab
 
 **5.2.** Pressione **Enter duas vezes** para indicar que não quer senha para a chave.
 
-<!-- TROCAR-IMAGEM: img/gitlab-1.png | motivo: prompt mostra o caminho antigo /workspaces/FIAP-Platform-Engineering | capturar: saída do ssh-keygen no Codespaces em /workspaces/FIAP-AI-Devops-CICD/02-Ansible/01-provisionando-gitlab-runner -->
+
 ![](img/gitlab-1.png)
 
 **5.3.** Abra a parte **pública** da chave no editor do Codespaces e copie todo o conteúdo para a área de transferência do seu computador:
@@ -308,7 +308,6 @@ ssh-keygen -t rsa -b 2048 -C "gitlab key" -f /home/vscode/.ssh/gitlab
 code /home/vscode/.ssh/gitlab.pub
 ```
 
-<!-- TROCAR-IMAGEM: img/gitlab-1.1.png | motivo: terminal mostra o caminho antigo FIAP-Platform-Engineering | capturar: gitlab.pub aberto no editor do Codespaces do repositório FIAP-AI-Devops-CICD -->
 ![](img/gitlab-1.1.png)
 
 **5.4.** Acesse a página de chaves SSH do seu GitLab: [Chaves SSH do GitLab](https://gitlab.com/-/user_settings/ssh_keys) e clique em **"Add new key"**.
@@ -363,9 +362,6 @@ Ao final desta etapa, você terá um projeto `primeiro-projeto` no GitLab com o 
 
 **6.** No **console web do GitLab**, crie um novo projeto. Acesse [Novo projeto](https://gitlab.com/projects/new) e clique em **Create blank project**.
 
-<!-- NOVA-IMAGEM: img/gitlab-3.0.png | capturar: página https://gitlab.com/projects/new com o cartão "Create blank project" destacado | depois de salvar o arquivo, descomente a linha abaixo -->
-<!-- ![Página Novo projeto do GitLab com o cartão Create blank project destacado](img/gitlab-3.0.png) -->
-
 ---
 
 <a id="passo-7"></a>
@@ -374,7 +370,6 @@ Ao final desta etapa, você terá um projeto `primeiro-projeto` no GitLab com o 
 
 ![](img/gitlab-3.1.png)
 
-<!-- TROCAR-IMAGEM: img/gitlab-3.png | motivo: mostra "Initialize repository with a README" MARCADO, o contrário do que o passo 7 pede; mantida sem referência até a troca | capturar: não precisa, a img/gitlab-3.1.png já mostra o estado certo -->
 
 ---
 
@@ -451,7 +446,7 @@ git branch -M master
 git push -uf origin master
 ```
 
-<!-- TROCAR-IMAGEM: img/gitlab-4.png | motivo: fluxo antigo (prompt voclabs, só sqs.tf e state.tf, push sem -f) | capturar: git commit + git push -uf origin master do primeiro-projeto atual no Codespaces -->
+
 ![](img/gitlab-4.png)
 
 ![](img/gitlab-5.png)
@@ -744,7 +739,6 @@ terraform output -raw instance_id; echo
 > i-0abc123def4567890
 > ```
 
-<!-- TROCAR-IMAGEM: img/gitlab-11.png | motivo: prompt mostra o caminho antigo FIAP-Platform-Engineering | capturar: terraform output -raw instance_id no repositório FIAP-AI-Devops-CICD -->
 ![](img/gitlab-11.png)
 
 ### Checkpoint
@@ -799,7 +793,6 @@ ansible_aws_ssm_region=us-east-1
 ansible_become=true
 ```
 
-<!-- TROCAR-IMAGEM: img/gitlab-12.png | motivo: prompt mostra o caminho antigo FIAP-Platform-Engineering | capturar: o mesmo bloco do passo 24 rodado no repositório FIAP-AI-Devops-CICD, com o cat hosts preenchido -->
 ![](img/gitlab-12.png)
 
 <details>
@@ -846,7 +839,7 @@ O que importa é `failed=0` e `unreachable=0`. O `changed=16` diz que o Ansible 
 > [!NOTE]
 > Logo no começo do registro, o playbook executa a task **"Ler o token do runner do SSM Parameter Store"**. Se você não gravou o token (passo 16), o playbook **para** com uma mensagem clara dizendo exatamente qual comando rodar — é o comportamento esperado (falhar cedo, não registrar um runner quebrado).
 
-<!-- TROCAR-IMAGEM: img/gitlab-14.png | motivo: caminho antigo FIAP-Platform-Engineering, nome gitlab-runner-fleet-001 e recap antigo (ok=35 changed=18) | capturar: fim do ansible-playbook com gitlab_runner_name=quantum-ai-gitlab-runner e o recap ok=30 changed=16 failed=0 -->
+
 ![](img/gitlab-14.png)
 
 <details>
@@ -885,7 +878,6 @@ O Ansible não conseguiu chegar na EC2 via SSM. Verifique, na ordem:
 
 **26.** Volte à mesma página do GitLab onde você pegou o token (**Settings → CI/CD → Runners**, aba **Assigned project runners**). Agora há um runner **Online**, com as tags `shell` e `terraform`.
 
-<!-- TROCAR-IMAGEM: img/gitlab-13.png | motivo: dono aparece como primeiro-projeto-test, não primeiro-projeto | capturar: aba Assigned project runners do primeiro-projeto com o runner Online e as tags shell, terraform -->
 ![](img/gitlab-13.png)
 
 <details>
