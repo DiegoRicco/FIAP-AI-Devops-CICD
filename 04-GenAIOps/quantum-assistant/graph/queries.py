@@ -104,7 +104,7 @@ RETURN {_EDGE_MAP} AS edge, startNode(r) {{.*, text: null, embedding: null, syno
 }
 
 
-def run(session, query, **params):
+def run(session, query, timeout=QUERY_TIMEOUT_S, **params):
     """Executa uma consulta do catalogo acima com timeout de transacao."""
-    result = session.run(Query(query["cypher"], timeout=QUERY_TIMEOUT_S), **params)
+    result = session.run(Query(query["cypher"], timeout=timeout), **params)
     return [r.data() for r in result]

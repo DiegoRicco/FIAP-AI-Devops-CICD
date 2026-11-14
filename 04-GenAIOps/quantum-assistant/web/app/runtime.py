@@ -215,6 +215,13 @@ class Runtime:
                     self.bootstrap_info = self.engine.bootstrap(timeout_s=self.bootstrap_timeout_s)
                 except Exception as err:  # noqa: BLE001
                     self.last_error = f"{type(err).__name__}: {str(err)[:160]}"
+            elif checks.get("neo4j") and checks.get("warmed_up") is False and hasattr(self.engine, "warm_up"):
+                # Neo4j voltou com o grafo (restart do processo): so falta aquecer.
+                try:
+                    log("warm_up.retry", reason="neo4j_reconectou")
+                    self.engine.warm_up()
+                except Exception as err:  # noqa: BLE001
+                    self.last_error = f"{type(err).__name__}: {str(err)[:160]}"
             self._stop.wait(self.supervise_interval_s)
 
     # ------------------------------------------------------------- prontidao

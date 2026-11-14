@@ -59,6 +59,6 @@ def wait_online(session, timeout_s=60.0):
         time.sleep(0.5)
 
 
-def query(session, embedding, k):
-    result = session.run(Query(KNN, timeout=QUERY_TIMEOUT_S), index=INDEX_NAME, k=int(k), embedding=embedding)
+def query(session, embedding, k, timeout=QUERY_TIMEOUT_S):
+    result = session.run(Query(KNN, timeout=timeout), index=INDEX_NAME, k=int(k), embedding=embedding)
     return [r.data() for r in result]

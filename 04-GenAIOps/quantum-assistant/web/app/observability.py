@@ -75,13 +75,20 @@ def record_stage_latencies(body):
     """O engine devolve latency_ms por estrategia; viram qc_stage_duration_seconds."""
     if "stage" not in _inst or not isinstance(body, dict):
         return
-    stage_names = {"embed": "vector.embed", "db": "db.query", "filter": "policy.version.filter",
-                   "compose": "compose.deterministic"}
+    stage_names = {"link": "entity.link", "traverse": "graph.traverse", "embed": "vector.embed",
+                   "query": "vector.query", "filter": "policy.version.filter",
+                   "compose": "compose.deterministic", "db": "db.query"}
+    orders_seen = False
     for strat in (body.get("strategies") or {}).values():
         lat = (strat or {}).get("latency_ms") or {}
         for key, stage in stage_names.items():
             if isinstance(lat.get(key), (int, float)):
                 record_stage(stage, lat[key] / 1000.0)
+        # A chamada a API de pedidos acontece UMA vez por requisicao, mesmo que
+        # a resposta seja repetida em cada estrategia: registra uma vez so.
+        if not orders_seen and isinstance(lat.get("orders"), (int, float)):
+            record_stage("orders.lookup", lat["orders"] / 1000.0)
+            orders_seen = True
 
 
 @contextmanager
@@ -94,10 +101,21 @@ def stage(name, **attributes):
 
 def note_route(request, route):
     """Guarda a rota decidida para o log da requisicao. O span intent.route e
-    emitido pelo engine (lab/engine.py), que e quem decide a rota: abrir outro
-    aqui duplicaria a etapa no trace."""
+    aberto aqui no web (intent_route abaixo), em volta da chamada ao engine;
+    o engine so aplica a regra, sem abrir outro span."""
     if route:
         request.state.intent_route = route
+
+
+@contextmanager
+def intent_route(**attributes):
+    """Span intent.route + latencia da etapa. Envolve a chamada ao engine, que e
+    onde a rota (knowledge, order_status, unsupported) e decidida; o atributo
+    qc.route e preenchido depois, com a rota que o engine devolveu."""
+    started = time.monotonic()
+    with telemetry.span("intent.route", **attributes) as sp:
+        yield sp
+    record_stage("intent.route", time.monotonic() - started)
 
 
 def _safe(value):

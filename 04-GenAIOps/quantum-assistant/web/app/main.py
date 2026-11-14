@@ -185,6 +185,17 @@ def create_app(runtime=None, path_prefix=None, start_runtime=True):
             log("engine.error", request_id=rid, route=request.url.path, error=type(err).__name__)
             return None, _err(500, "internal_error", type(err).__name__, rid)
 
+    def _route_attrs(request, strategy):
+        # Atributos do contrato; nada da pergunta, do token ou do cliente.
+        v = runtime.versions()
+        attrs = {"qc.release_id": v.get("release_id"), "qc.environment": os.environ.get("QC_ENVIRONMENT", "local"),
+                 "qc.graph_version": v.get("graph_version"), "qc.graph_seed_version": v.get("graph_seed_version"),
+                 "qc.corpus_version": v.get("corpus_version"), "qc.vector_index_version": v.get("vector_index_version"),
+                 "qc.embedding_model_id": v.get("embedding_model_id"), "qc.strategy": strategy,
+                 "qc.scenario_id": getattr(request.state, "scenario_id", None),
+                 "qc.case_id": getattr(request.state, "case_id", None)}
+        return {k: val for k, val in attrs.items() if val is not None}
+
     # ------------------------------------------------------------ rotas
     @app.get("/health")
     async def health():
@@ -232,11 +243,13 @@ def create_app(runtime=None, path_prefix=None, start_runtime=True):
         with obs.stage("auth.tenant", **{"qc.tenant": body.tenant.value, "qc.user_role": body.user_role.value}):
             pass
         request.state.strategy = ",".join(strategies)
-        out, err = await call_engine(
-            request, runtime.engine.compare if runtime.engine else None, body.question, body.as_of_date,
-            tenant=body.tenant.value, user_role=body.user_role.value, strategies=strategies,
-            order_id=body.order_id, auth_token=body.auth_token or _bearer(request), request_id=rid,
-            scenario_id=request.state.scenario_id, case_id=request.state.case_id)
+        with obs.intent_route(**_route_attrs(request, ",".join(strategies))) as sp:
+            out, err = await call_engine(
+                request, runtime.engine.compare if runtime.engine else None, body.question, body.as_of_date,
+                tenant=body.tenant.value, user_role=body.user_role.value, strategies=strategies,
+                order_id=body.order_id, auth_token=body.auth_token or _bearer(request), request_id=rid,
+                scenario_id=request.state.scenario_id, case_id=request.state.case_id)
+            sp.set("qc.route", (out or {}).get("route") or "error")
         if err:
             return err
         out = dict(out)
@@ -288,8 +301,10 @@ def create_app(runtime=None, path_prefix=None, start_runtime=True):
                   "order_id": body.order_id, "tenant": body.tenant.value, "user_role": body.user_role.value,
                   "scenario_id": body.scenario_id or request.state.scenario_id, "request_id": rid,
                   "as_of_date": body.as_of_date}
-        out, err = await call_engine(request, runtime.engine.ask if runtime.engine else None,
-                                     body.question, strategy=strategy, **kwargs)
+        with obs.intent_route(**_route_attrs(request, strategy)) as sp:
+            out, err = await call_engine(request, runtime.engine.ask if runtime.engine else None,
+                                         body.question, strategy=strategy, **kwargs)
+            sp.set("qc.route", (out or {}).get("route") or "error")
         if err:
             return err
         out = dict(out)

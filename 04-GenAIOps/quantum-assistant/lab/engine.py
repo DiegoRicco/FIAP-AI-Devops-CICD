@@ -65,6 +65,12 @@ class InvalidInput(ValueError):
     """Entrada fora do contrato (data, tenant, papel, estrategia, produto)."""
 
 
+# Timeout de cada consulta do aquecimento (a 1a execucao compila o plano).
+WARMUP_TIMEOUT_S = 60.0
+# Rodada de aquecimento "rapida": 4 consultas somadas abaixo disto.
+WARMUP_FAST_MS = 1000.0
+
+
 class DependencyUnavailable(RuntimeError):
     """Neo4j (ou modelo) indisponivel: a API responde erro controlado, nunca inventa."""
 
@@ -125,6 +131,11 @@ class Engine:
                                            connection_timeout=5.0, max_transaction_retry_time=5.0)
         self.encoder = None
         self.bootstrapped = False
+        # Aquecido = as consultas de grafo e KNN ja rodaram uma vez com sucesso.
+        # Na 1a execucao o Neo4j compila o plano e le o page cache frio; com 1 vCPU
+        # isso passou dos 3 s do timeout de transacao (TransactionTimedOutClientConfiguration)
+        # e o 1o cliente via erro com /ready ja 200. /ready so fica 200 aquecido.
+        self.warmed = False
         self.cache_stats = None
         self._graph_version = None
         self._graph_version_at = 0.0
@@ -220,6 +231,7 @@ class Engine:
             idx, counts = self._neo4j(work)
             self.bootstrapped = True
             self._graph_version = None
+        self.warm_up(deadline)
         out = {"graph_version": self.graph_version(force=True), "graph_seed_version": self.seed_version,
                "counts": counts, "index": {"name": idx["name"], "dim": idx["dim"], "state": idx["state"]},
                "embedding_cache": self.cache_stats, "duration_ms": _ms(started)}
@@ -227,6 +239,53 @@ class Engine:
                       index_state=idx["state"], nodes=counts["nodes"], edges=counts["edges"],
                       duration_ms=out["duration_ms"])
         return out
+
+    def warm_up(self, deadline=None):
+        """Roda TODAS as consultas do catalogo (grafo por produto, por categoria,
+        trechos da versao e KNN) ate uma rodada inteira ficar rapida.
+
+        Por que repetir: medido no Neo4j com CPU limitada, a 1a execucao de cada
+        Cypher passou dos 3 s (compila o plano) e a 2a ainda levou 2,8 s (JIT da
+        JVM); so a partir da 3a ficou em ~15 ms. Uma consulta so nao aquece.
+        Idempotente e somente leitura."""
+        # O prazo do bootstrap pode estar quase no fim: o aquecimento ganha o seu.
+        deadline = max(deadline or 0.0, time.monotonic() + WARMUP_TIMEOUT_S)
+        product = self.seed["products"][0]
+        category = self.seed["categories"][0]["id"]
+        topic = (self.seed.get("topics") or [{"id": None}])[0]["id"]
+        version_id = next(n["id"] for n in self.expected_graph["nodes"] if n["label"] == "PolicyVersion")
+        embedding = self._load_encoder().encode(["prazo para troca"])[0]
+        started, last, rounds, round_ms = time.perf_counter(), None, 0, None
+
+        def work(s):
+            queries.run(s, queries.POLICY_FOR_PRODUCT, timeout=WARMUP_TIMEOUT_S,
+                        product_id=product["id"], tenant=product["tenant"], topic=topic)
+            queries.run(s, queries.POLICY_FOR_CATEGORY, timeout=WARMUP_TIMEOUT_S,
+                        category_id=category, topic=topic)
+            queries.run(s, queries.CHUNKS_FOR_VERSION, timeout=WARMUP_TIMEOUT_S, version_id=version_id)
+            vindex.query(s, embedding, self.cfg["vector"]["raw_top_k"], timeout=WARMUP_TIMEOUT_S)
+
+        while True:
+            t = time.perf_counter()
+            try:
+                self._neo4j(work)
+                rounds += 1
+                round_ms = _ms(t)
+                # Pronto quando a rodada inteira (4 consultas) cabe com folga no
+                # timeout de uma consulta so (3 s) que o cliente vai usar.
+                if rounds >= 2 and round_ms < WARMUP_FAST_MS:
+                    break
+            except (DependencyUnavailable, Neo4jError) as err:
+                last = getattr(err, "code", None) or type(err).__name__
+                time.sleep(1.0)
+            if time.monotonic() > deadline:
+                raise DependencyUnavailable(f"warm_up nao concluiu: {last or f'rodada {round_ms} ms'}")
+        self.warmed = True
+        telemetry.log("engine.warm_up", duration_ms=_ms(started), rounds=rounds, last_round_ms=round_ms,
+                      last_error=last, queries=",".join([queries.POLICY_FOR_PRODUCT["id"],
+                                                         queries.POLICY_FOR_CATEGORY["id"],
+                                                         queries.CHUNKS_FOR_VERSION["id"], vindex.QUERY_ID]))
+        return {"duration_ms": _ms(started), "rounds": rounds, "last_round_ms": round_ms}
 
     def graph_version(self, force=False):
         """Hash do grafo EM RUNTIME (lido do banco), com cache curto."""
@@ -247,12 +306,15 @@ class Engine:
                 return st, n
             st, n = self._neo4j(probe)
             checks["neo4j"] = True
+            checks["warmed_up"] = self.warmed
             checks["vector_index"] = st["state"]
             checks["graph_loaded"] = self.bootstrapped and n > 0
         except (DependencyUnavailable, Neo4jError) as err:
             checks["neo4j_error"] = str(err).split(":")[0]
+            # Neo4j caiu: quando voltar, o cache dele esta frio de novo.
+            self.warmed = False
         ok = (checks["neo4j"] and checks["vector_index"] == "ONLINE" and checks["model_loaded"]
-              and checks["graph_loaded"])
+              and checks["graph_loaded"] and self.warmed)
         return {"ready": bool(ok), "checks": checks}
 
     def close(self):
@@ -408,6 +470,7 @@ class Engine:
             td = time.perf_counter()
             rows = self._neo4j(lambda s: vindex.query(s, embedding, vc["raw_top_k"]))
             lat["db"] = _ms(td)
+            lat["query"] = lat["db"]
             sp.set("rows", len(rows))
         with telemetry.span("policy.version.filter", **attrs) as sp:
             tf = time.perf_counter()
@@ -505,11 +568,13 @@ class Engine:
         lat = {"embed": None}
         t0 = time.perf_counter()
         with telemetry.span("entity.link", **attrs) as sp:
+            tl = time.perf_counter()
             ents = self.link_entities(question)
             products = [product_override] if product_override else [p[0] for p in ents["products"]]
             topic = topic_override or ents["topic"]
             sp.set("products", len(products))
             sp.set("topic", topic or "none")
+        lat["link"] = _ms(tl)
         base = {"results": [], "blocked": [], "path": {"nodes": [], "edges": []}, "cypher_query_id": None,
                 "index_name": None, "raw_top_k": None, "entities": ents, "latency_ms": lat}
         fallback = None
@@ -535,6 +600,7 @@ class Engine:
                 return qid, rows
             qid, rows = self._neo4j(work)
             lat["db"] = _ms(td)
+            lat["traverse"] = lat["db"]
             sp.set("cypher_query_id", qid)
             sp.set("candidates", len(rows))
         with telemetry.span("policy.version.filter", **attrs) as sp:
@@ -655,7 +721,10 @@ class Engine:
         except (DependencyUnavailable, Neo4jError) as err:
             # Erro controlado: a estrategia nao responde; nunca inventa resposta.
             kind = "neo4j_unavailable" if isinstance(err, DependencyUnavailable) else "neo4j_error"
-            telemetry.log("engine.strategy_error", strategy=name, kind=kind, error=type(err).__name__)
+            # code = codigo do Neo4j (ex.: Neo.ClientError.Transaction.TransactionTimedOut):
+            # diz a causa sem repetir a pergunta nem dado do cliente.
+            telemetry.log("engine.strategy_error", strategy=name, kind=kind, error=type(err).__name__,
+                          code=getattr(err, "code", None))
             return {"strategy": name, "source": SOURCES[name], "answer": None, "abstained": True,
                     "abstain_reason": "dependency_unavailable", "citations": [], "results": [], "blocked": [],
                     "path": None, "cypher_query_id": None, "index_name": None, "raw_top_k": None,
@@ -673,7 +742,8 @@ class Engine:
         except DependencyUnavailable:
             pass
         attrs = self._span_attrs(scenario_id=scenario_id, case_id=case_id)
-        # O span intent.route e do adapter web (evita span duplicado); aqui so a regra.
+        # O span intent.route e aberto pelo adapter web em volta desta chamada
+        # (web/app/main.py); aqui so a regra, para nao duplicar a etapa no trace.
         intent, found_order = route_intent(question, order_id)
         trace_id = telemetry.current_trace_id()
         out = {"question_id": request_id, "request_id": request_id, "as_of_date": as_of_date,
@@ -694,7 +764,7 @@ class Engine:
                                    "section": c.get("section")} for c in res["citations"]],
                     "results": [], "blocked": [], "path": None, "cypher_query_id": None, "index_name": None,
                     "raw_top_k": None, "latency_ms": {"embed": None, "db": None, "filter": None, "compose": None,
-                                                      "total": total},
+                                                      "orders": total, "total": total},
                     "note": "rota order_status: o status vem SO da API de pedidos; nenhuma estrategia de busca decide o status"}
         elif intent == "unsupported":
             out["route"] = "unsupported"

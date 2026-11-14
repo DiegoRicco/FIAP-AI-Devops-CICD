@@ -1,13 +1,20 @@
-# Pipeline de release do Quantum Commerce AI Customer Assistant (Demo 5.1).
+# Pipeline de release do Quantum Commerce AI Customer Assistant (Aula 5).
 #
-# Onde fica: o aluno copia ESTE arquivo para a RAIZ do repositorio GitLab
-# (primeiro-projeto). A aplicacao fica em quantum-assistant/, e por isso todo
-# job comeca com "cd quantum-assistant". Os arquivos do modulo 03 continuam na
-# raiz e nao sao aplicados por este pipeline.
+# Onde fica: na RAIZ do projeto GitLab quantum-ai-assistant do aluno, que e uma
+# copia de 04-GenAIOps/quantum-assistant/. Por isso nenhum job faz "cd": todo
+# caminho (reports/, dist/, infra/, infra-ecs/) e relativo a raiz do projeto.
 #
-# Ideia central: nada chega ao cliente (alias "live") sem passar, nesta ordem,
-# por seguranca da infra, contrato da API, qualidade do retrieval, regras de
-# negocio, implantacao como "candidate" e verificacao na nuvem.
+# Dois runtimes, um pipeline so. QC_TARGET_RUNTIME escolhe:
+#   ecs     (padrao da Aula 5) imagem de conteiner no ECR, identificada pelo
+#           DIGEST, rodando no ECS Fargate atras do ALB, com Neo4j na task.
+#   lambda  o fluxo original da Demo 5.1 (bundle zip, aliases candidate/live).
+# Os gates de qualidade sao os MESMOS nos dois: so mudam empacotar, implantar,
+# promover e voltar. Por isso cada job declara so a regra do runtime dele.
+#
+# Ideia central: nada chega ao cliente (live) sem passar, nesta ordem, por
+# seguranca da infra, contrato da API, qualidade do retrieval, regras de
+# negocio, consistencia do grafo, implantacao como candidate e verificacao na
+# nuvem. O candidate nunca atende a URL do cliente.
 #
 # Regra de ouro dos gates: o JUnit e so a VITRINE do resultado. Quem reprova o
 # job e o exit code do comando. Por isso cada gate usa
@@ -28,6 +35,10 @@ stages:
 
 variables:
   AWS_DEFAULT_REGION: "us-east-1"
+  AWS_REGION: "us-east-1"
+  AWS_PAGER: ""
+  # ecs (Aula 5) ou lambda (fluxo original da Demo 5.1).
+  QC_TARGET_RUNTIME: "ecs"
   # "true" exige um clique humano antes do deploy (job approve).
   REQUIRE_MANUAL_APPROVAL: "false"
   # Vazio = descobre o bucket base-config-* da conta. Para fixar, defina em
@@ -35,94 +46,124 @@ variables:
   TF_STATE_BUCKET: ""
   TF_IN_AUTOMATION: "true"
   TF_INPUT: "false"
-  # O lock file do Terraform nao e versionado (infra/.gitignore); sem esta
-  # variavel o cache de providers seria ignorado e cada job baixaria de novo.
+  # O lock file do Terraform nao e versionado; sem esta variavel o cache de
+  # providers seria ignorado e cada job baixaria de novo.
   TF_PLUGIN_CACHE_MAY_BREAK_DEPENDENCY_LOCK_FILE: "true"
 
 default:
-  # Runner shell da EC2 quantum-ai-gitlab-runner, preparado no modulo 02.
+  # Runner shell da EC2 quantum-ai-gitlab-runner (Aula 3 / make runner).
   tags:
     - shell
+    - terraform
   before_script:
-    - cd quantum-assistant
     # A EC2 do runner tem a LabRole: o bucket do state e descoberto na conta.
     - export TF_STATE_BUCKET="${TF_STATE_BUCKET:-$(aws s3 ls | awk '{print $3}' | grep '^base-config' | head -1)}"
-    - echo "bucket do state -> ${TF_STATE_BUCKET:-NAO ENCONTRADO}"
+    - echo "runtime=$QC_TARGET_RUNTIME | bucket do state -> ${TF_STATE_BUCKET:-NAO ENCONTRADO}"
     # Cache de providers no HOME do runner: o provider AWS tem centenas de MB.
     - export TF_PLUGIN_CACHE_DIR="$HOME/.terraform.d/plugin-cache"
-    - mkdir -p "$TF_PLUGIN_CACHE_DIR"
+    - mkdir -p "$TF_PLUGIN_CACHE_DIR" reports
 
-# Fluxo normal de release. Um pipeline disparado com QC_ACTION=rollback roda
-# SO o job rollback (ver o fim do arquivo).
+# ---------------------------------------------------------------- regras
+# Fluxo normal de release (os dois runtimes). Um pipeline disparado com
+# QC_ACTION=rollback roda SO o job rollback do runtime escolhido.
 .release-flow:
   rules:
     - if: $QC_ACTION == "rollback"
       when: never
     - when: on_success
 
+# Jobs que so existem no runtime de conteiner (grafo e vetor nao existem na Lambda).
+.ecs-only:
+  rules:
+    - if: $QC_ACTION == "rollback"
+      when: never
+    - if: $QC_TARGET_RUNTIME == "ecs"
+      when: on_success
+
 # ---------- preflight: o ambiente permite rodar? ----------
-# Falha de credencial ou bucket aparece aqui em segundos, e nao no minuto 8
-# disfarcada de "gate reprovado".
+# Falha de credencial, bucket ou rede aparece aqui em segundos, e nao no
+# minuto 8 disfarcada de "gate reprovado".
 preflight:
   stage: preflight
   extends: .release-flow
   script:
     - source /opt/venv/bin/activate
-    - scripts/preflight.sh --bucket "$TF_STATE_BUCKET"
+    - |
+      if [ "$QC_TARGET_RUNTIME" = "ecs" ]; then
+        bash scripts/cloud/preflight.sh --bucket "$TF_STATE_BUCKET"
+        # O build da imagem roda NESTE runner: sem Docker, o package falharia no fim.
+        docker version --format 'docker {{.Server.Version}} {{.Server.Arch}}'
+      else
+        bash scripts/preflight.sh --bucket "$TF_STATE_BUCKET"
+      fi
 
 # ---------- validate: a infraestrutura e segura e valida? ----------
+# Mesmo gate para as duas infras: a do runtime escolhido. Checkov BLOQUEANTE:
+# as unicas excecoes aceitas estao no .checkov.yaml da pasta, cada uma com o
+# motivo. Achado novo fora daquela lista reprova o job.
 security-gate:
   stage: validate
   extends: .release-flow
   needs: [preflight]
   script:
     - source /opt/venv/bin/activate
-    - mkdir -p reports
-    - terraform -chdir=infra fmt -check -recursive
-    - terraform -chdir=infra init -backend=false
-    - terraform -chdir=infra validate
-    # terraform test faz um plan (nao cria nada) e confere o contrato do
-    # release: publish=true, aliases candidate/live, 5 rotas. Precisa do zip.
-    - python3 release/build_bundle.py > /dev/null
-    - terraform -chdir=infra test
-    # Checkov BLOQUEANTE: as unicas excecoes aceitas estao em
-    # infra/.checkov.yaml, cada uma com o motivo (X-Ray bloqueado no Learner
-    # Lab, KMS proprio sem dado sensivel, API publica de laboratorio...).
-    # Achado novo fora daquela lista reprova o job.
+    - if [ "$QC_TARGET_RUNTIME" = "ecs" ]; then TFDIR=infra-ecs; else TFDIR=infra; fi
+    - terraform -chdir=$TFDIR fmt -check -recursive
+    - terraform -chdir=$TFDIR init -backend=false
+    - terraform -chdir=$TFDIR validate
+    # terraform test faz um plan (nao cria nada) e confere o contrato da infra:
+    # no ecs, ALB com /candidate separado e services que o Terraform nao move;
+    # no lambda, aliases candidate/live. O legado precisa do zip para o plan.
+    - if [ "$TFDIR" = "infra" ]; then python3 release/build_bundle.py > /dev/null; fi
+    - terraform -chdir=$TFDIR test
     - |
       set +e
-      tflint --chdir infra --format junit > reports/junit-tflint.xml
+      tflint --chdir $TFDIR --format junit > reports/junit-tflint.xml
       rc_tflint=$?
-      checkov -d infra --config-file infra/.checkov.yaml --quiet --compact \
+      checkov -d $TFDIR --config-file $TFDIR/.checkov.yaml --quiet --compact \
         -o cli -o junitxml --output-file-path console,reports/junit-checkov.xml
       rc_checkov=$?
       set -e
-      echo "tflint exit=$rc_tflint | checkov exit=$rc_checkov"
+      echo "tflint exit=$rc_tflint | checkov exit=$rc_checkov ($TFDIR)"
       # "if ... exit 1" e nao "[ ] && [ ]": com set -e, uma lista && que falha
       # no primeiro teste NAO derruba o script, e o job sairia verde.
       if [ "$rc_tflint" -ne 0 ] || [ "$rc_checkov" -ne 0 ]; then exit 1; fi
+    # Dockerfile lint: so se o hadolint estiver instalado no runner (binario
+    # unico, opcional). Sem ele o job avisa e segue: o Dockerfile e conferido
+    # de verdade pelo build do package e pelo /ready do candidate.
+    - |
+      if [ "$QC_TARGET_RUNTIME" = "ecs" ]; then
+        if command -v hadolint >/dev/null 2>&1; then
+          set +e
+          hadolint --format junit containers/Dockerfile.app > reports/junit-hadolint.xml
+          rc=$?
+          set -e
+          if [ "$rc" -ne 0 ]; then exit $rc; fi
+        else
+          echo "hadolint ausente no runner: lint do Dockerfile pulado (ver README)"
+        fi
+      fi
   artifacts:
     when: always
     paths:
-      - quantum-assistant/reports/
+      - reports/
     reports:
       junit:
-        - quantum-assistant/reports/junit-tflint.xml
-        - quantum-assistant/reports/junit-checkov.xml
+        - reports/junit-tflint.xml
+        - reports/junit-checkov.xml
 
 # ---------- test: o codigo cumpre o contrato? ----------
-# Unitarios e contratos (core, adapters da Lambda, cliente HTTP de pedidos,
-# CLI de eval). Os testes usam corpus proprio de teste, entao uma mudanca so
-# de politica passa aqui e e reprovada onde deve: no gate de qualidade.
-# Fica FORA tests/test_ops_monitor_and_faults.py: e ferramenta da Demo 5.2
-# (operacao local) e le o corpus real, nao e contrato desta API.
+# Unitarios e contratos (core, adapters, cliente HTTP de pedidos, CLI de eval,
+# checker do seed do grafo). Testes que precisam de Neo4j/modelo pulam sozinhos
+# (skipif) neste job: o comportamento do grafo e cobrado no graph-policy-gate.
+# Fica FORA tests/test_ops_monitor_and_faults.py: e ferramenta de operacao e
+# le o corpus real, nao e contrato desta API.
 api-contract-gate:
   stage: test
   extends: .release-flow
   needs: [preflight]
   script:
     - source /opt/venv/bin/activate
-    - mkdir -p reports
     - |
       set +e
       python3 -m pytest -p no:cacheprovider tests/ \
@@ -134,20 +175,22 @@ api-contract-gate:
   artifacts:
     when: always
     paths:
-      - quantum-assistant/reports/
+      - reports/
     reports:
-      junit: quantum-assistant/reports/junit-pytest.xml
+      junit: reports/junit-pytest.xml
 
 # ---------- evaluate: a resposta continua certa? ----------
 # Golden set offline, seed fixa, sem AWS. Os dois gates juntos cobrem os 10
 # slices do golden_v1. Regra dura (fonte obsoleta, ACL, recusa, pedido,
 # injection) reprova mesmo com media alta.
+# needs: [preflight] e nao [api-contract-gate]: os gates de CONTEUDO rodam
+# mesmo se um teste unitario quebrar, para o JUnit mostrar a causa real (ex.:
+# "fonte obsoleta") em vez de "skipped". O package continua exigindo TODOS.
 retrieval-quality-gate:
   stage: evaluate
   extends: .release-flow
-  needs: [api-contract-gate]
+  needs: [preflight]
   script:
-    - mkdir -p reports
     - |
       set +e
       python3 evals/run_eval.py --set golden_v1 --target local --seed 42 \
@@ -159,16 +202,15 @@ retrieval-quality-gate:
   artifacts:
     when: always
     paths:
-      - quantum-assistant/reports/
+      - reports/
     reports:
-      junit: quantum-assistant/reports/junit-retrieval.xml
+      junit: reports/junit-retrieval.xml
 
 business-policy-gate:
   stage: evaluate
   extends: .release-flow
-  needs: [api-contract-gate]
+  needs: [preflight]
   script:
-    - mkdir -p reports
     # Dois conjuntos: os slices de negocio do golden e o adversarial
     # (injection e autorizacao). Os dois rodam sempre; qualquer um reprova.
     - |
@@ -186,34 +228,86 @@ business-policy-gate:
   artifacts:
     when: always
     paths:
-      - quantum-assistant/reports/
+      - reports/
     reports:
       junit:
-        - quantum-assistant/reports/junit-policy.xml
-        - quantum-assistant/reports/junit-adversarial.xml
+        - reports/junit-policy.xml
+        - reports/junit-adversarial.xml
 
-# ---------- package: o pacote avaliado e o plano ----------
-# O bundle (codigo + corpus + prompts + config) e reprodutivel e separado do
-# planfile. O manifesto liga release_id, versoes e o sha256 do zip.
+# Grafo e vetor (so ecs, onde eles existem). Dois blocos no mesmo job:
+# 1) consistencia do seed x front matter do corpus, sem banco (segundos);
+#    e aqui que "republicar a troca v2 como active" ou "inverter o SUPERSEDES"
+#    reprova, ANTES de qualquer build;
+# 2) golden_graph_v1 nas tres estrategias contra um Neo4j EFEMERO neste runner
+#    (127.0.0.1, senha aleatoria do job, apagado no fim), com o mesmo motor e o
+#    mesmo modelo de embedding do release. Contagem critica > 0 reprova.
+graph-policy-gate:
+  stage: evaluate
+  extends: .ecs-only
+  needs: [preflight]
+  script:
+    - |
+      set +e
+      bash scripts/release-ecs/graph_gate_ci.sh
+      rc=$?
+      set -e
+      exit $rc
+  artifacts:
+    when: always
+    paths:
+      - reports/
+    reports:
+      junit: reports/junit-graph.xml
+
+# ---------- package: o pacote avaliado ----------
+# Mesmo nome nos dois runtimes; muda so o que e empacotado.
+#   lambda: bundle zip reprodutivel + manifesto (sha256 do zip) + planfile.
+#   ecs:    build linux/amd64 NESTE runner, push no ECR; o DIGEST imutavel e a
+#           identidade do release. O manifesto liga digest, git sha, versoes de
+#           corpus, grafo, indice vetorial, modelo de embedding e os gates.
+# graph-policy-gate e optional: no lambda ele nao existe; no ecs, se reprovar,
+# o package nao roda (e a imagem nem e buildada).
 package:
   stage: package
   extends: .release-flow
-  needs: [security-gate, api-contract-gate, retrieval-quality-gate, business-policy-gate]
+  needs:
+    - job: security-gate
+      artifacts: false
+    - job: api-contract-gate
+      artifacts: false
+    - job: retrieval-quality-gate
+      artifacts: false
+    - job: business-policy-gate
+      artifacts: false
+    - job: graph-policy-gate
+      optional: true
   script:
-    - python3 release/build_bundle.py > /dev/null
-    - cat dist/manifest.json
-    - terraform -chdir=infra init -backend-config="bucket=$TF_STATE_BUCKET"
-    - terraform -chdir=infra plan -out=planfile
+    - |
+      if [ "$QC_TARGET_RUNTIME" = "ecs" ]; then
+        bash scripts/release-ecs/build.sh > reports/image-digest.txt
+        # Python do venv do motor (criado no graph-policy-gate): calcula tambem
+        # vector_index_version e o modelo de embedding sem subir Neo4j.
+        PY="$HOME/.cache/qc-assistant/venv-engine/bin/python"; [ -x "$PY" ] || PY=python3
+        "$PY" scripts/release-ecs/manifest.py build --digest "$(cat reports/image-digest.txt)" \
+          --reports reports --out dist/release-record.json > /dev/null
+        cat dist/release-record.json
+      else
+        python3 release/build_bundle.py > /dev/null
+        cat dist/manifest.json
+        terraform -chdir=infra init -backend-config="bucket=$TF_STATE_BUCKET"
+        terraform -chdir=infra plan -out=planfile
+      fi
   artifacts:
     paths:
-      - quantum-assistant/dist/
-      - quantum-assistant/infra/planfile
-      - quantum-assistant/infra/.terraform.lock.hcl
+      - dist/
+      - reports/
+      - infra/planfile
+      - infra/.terraform.lock.hcl
 
 # ---------- approve: so quando a politica pede um humano ----------
-# Com REQUIRE_MANUAL_APPROVAL="true" o pipeline PARA aqui ate alguem clicar.
-# Com "false" este job nem existe e a aprovacao e a politica automatica
-# (todos os gates verdes), registrada no manifesto como approved_by.
+# Com REQUIRE_MANUAL_APPROVAL="true" o pipeline PARA aqui ate alguem clicar
+# (quem clicou vai para o manifesto como approved_by). Com "false" este job
+# nem existe e a aprovacao e a politica automatica (todos os gates verdes).
 approve:
   stage: approve
   needs: [package]
@@ -226,42 +320,53 @@ approve:
   script:
     - echo "release aprovado por $GITLAB_USER_LOGIN"
 
-# ---------- deploy: nova versao da Lambda, so no alias candidate ----------
-# O apply publica uma versao imutavel e move SO o candidate. O live tem
-# ignore_changes no Terraform: o cliente ainda ve o release anterior.
+# ---------- deploy: so o candidate ----------
+#   lambda: o apply publica uma versao imutavel e move SO o alias candidate.
+#   ecs:    nova revisao da task definition do service CANDIDATE com o digest
+#           do package; o service do live nao e tocado. So fica verde com
+#           /candidate/ready 200 pelo ALB servido pela revisao nova.
 deploy-candidate:
   stage: deploy
   extends: .release-flow
   needs:
-    - job: security-gate
-      artifacts: false
-    - job: api-contract-gate
-      artifacts: false
-    - job: retrieval-quality-gate
-      artifacts: false
-    - job: business-policy-gate
-      artifacts: false
     - job: package
     - job: approve
       optional: true
   environment:
     name: candidate
   script:
-    - terraform -chdir=infra init -backend-config="bucket=$TF_STATE_BUCKET"
-    - terraform -chdir=infra apply planfile
-    # Os enderecos seguem para os proximos jobs como variaveis (dotenv).
-    - echo "CANDIDATE_URL=$(terraform -chdir=infra output -raw candidate_url)" > deploy.env
-    - echo "ASSISTANT_URL=$(terraform -chdir=infra output -raw assistant_url)" >> deploy.env
-    - echo "CANDIDATE_VERSION=$(terraform -chdir=infra output -raw candidate_version)" >> deploy.env
-    - cat deploy.env
+    - |
+      if [ "$REQUIRE_MANUAL_APPROVAL" = "true" ]; then APPROVER="$GITLAB_USER_LOGIN"; else APPROVER="politica-automatica"; fi
+      if [ "$QC_TARGET_RUNTIME" = "ecs" ]; then
+        # Cada etapa grava o PROPRIO arquivo de registro: artifacts de jobs
+        # diferentes com o mesmo caminho se sobrescrevem no job seguinte.
+        cp dist/release-record.json dist/release-record.candidate.json
+        bash scripts/release-ecs/deploy.sh candidate --record dist/release-record.candidate.json --approved-by "$APPROVER"
+        cat dist/release-record.candidate.json
+        echo "CANDIDATE_URL=$(jq -r .deploy.candidate.url dist/release-record.candidate.json)" > deploy.env
+      else
+        terraform -chdir=infra init -backend-config="bucket=$TF_STATE_BUCKET"
+        terraform -chdir=infra apply planfile
+        # Os enderecos seguem para os proximos jobs como variaveis (dotenv).
+        echo "CANDIDATE_URL=$(terraform -chdir=infra output -raw candidate_url)" > deploy.env
+        echo "ASSISTANT_URL=$(terraform -chdir=infra output -raw assistant_url)" >> deploy.env
+        echo "CANDIDATE_VERSION=$(terraform -chdir=infra output -raw candidate_version)" >> deploy.env
+      fi
+      cat deploy.env
   artifacts:
+    paths:
+      - dist/
     reports:
-      dotenv: quantum-assistant/deploy.env
+      dotenv: deploy.env
 
 # ---------- postdeploy: o que esta NO AR e o que foi avaliado? ----------
-# Contra o /candidate de verdade: /health precisa devolver o release_id e as
-# versoes do manifesto; depois um subset do golden via HTTP, com o
-# release_id conferido em cada resposta.
+#   lambda: /health com o release_id e as versoes do manifesto; depois um
+#           subset do golden via HTTP, release_id conferido em cada resposta.
+#   ecs:    contra o ALB REAL em /candidate: /candidate/ready precisa trazer o
+#           digest, corpus, grafo, embedding e indice do manifesto; depois
+#           smoke de comportamento (multi-hop, vetor, pedidos Q-1001/Q-2001,
+#           ACL, tenant) e o subset do golden_graph por HTTP.
+# Se falhar, promote nao roda.
 postdeploy-synthetic-gate:
   stage: postdeploy
   extends: .release-flow
@@ -269,56 +374,77 @@ postdeploy-synthetic-gate:
     - job: deploy-candidate
     - job: package
   script:
-    - mkdir -p reports
     - |
       set +e
-      python3 scripts/smoke.py --url "$CANDIDATE_URL" --manifest dist/manifest.json --reports reports
+      if [ "$QC_TARGET_RUNTIME" = "ecs" ]; then
+        cp dist/release-record.candidate.json dist/release-record.postdeploy.json
+        python3 scripts/release-ecs/smoke_ecs.py --env candidate --record dist/release-record.postdeploy.json --reports reports
+      else
+        python3 scripts/smoke.py --url "$CANDIDATE_URL" --manifest dist/manifest.json --reports reports
+      fi
       rc=$?
       set -e
       exit $rc
   artifacts:
     when: always
     paths:
-      - quantum-assistant/reports/
+      - reports/
+      - dist/release-record.postdeploy.json
     reports:
       junit:
-        - quantum-assistant/reports/junit-smoke.xml
-        - quantum-assistant/reports/junit-postdeploy.xml
+        - reports/junit-smoke*.xml
+        - reports/junit-postdeploy*.xml
 
 # ---------- promote: o cliente passa a ver o release verificado ----------
-# promote.sh confere que a versao candidata e o MESMO zip do manifesto
-# (sha256), move o live e grava o registro em s3://<bucket>/quantum-assistant/releases/.
+#   lambda: promote.sh confere que a versao candidata e o MESMO zip do
+#           manifesto (sha256), move o live e grava em releases/.
+#   ecs:    o live recebe o MESMO digest que passou no candidate (conferido no
+#           /candidate/ready), o registro vai para releases-ecs/ no S3 e a
+#           prova final e o /ready do live pelo ALB com digest e versoes.
 promote-live:
   stage: promote
   extends: .release-flow
+  # No ecs o registro que importa vem do postdeploy (deploy do candidate +
+  # veredito do smoke); no lambda, do package e do deploy-candidate.
   needs:
     - job: postdeploy-synthetic-gate
-      artifacts: false
     - job: deploy-candidate
     - job: package
   environment:
     name: live
   script:
-    - mkdir -p reports
     - |
       if [ "$REQUIRE_MANUAL_APPROVAL" = "true" ]; then APPROVER="$GITLAB_USER_LOGIN"; else APPROVER="politica-automatica"; fi
-    - scripts/promote.sh --bucket "$TF_STATE_BUCKET" --manifest dist/manifest.json --approved-by "$APPROVER" > reports/release-record.json
-    - cat reports/release-record.json
-    # Evidencia final: o endereco do cliente responde com o release promovido.
-    - |
+      if [ "$QC_TARGET_RUNTIME" = "ecs" ]; then
+        set +e
+        bash scripts/release-ecs/promote.sh --record dist/release-record.postdeploy.json --approved-by "$APPROVER" > reports/release-record.json
+        rc=$?
+        set -e
+        cat reports/release-record.json
+        exit $rc
+      fi
+      scripts/promote.sh --bucket "$TF_STATE_BUCKET" --manifest dist/manifest.json --approved-by "$APPROVER" > reports/release-record.json
+      cat reports/release-record.json
+      # Evidencia final: o endereco do cliente responde com o release promovido.
       EXPECTED=$(jq -r .release_id dist/manifest.json)
       LIVE=$(curl -s --retry 3 "$ASSISTANT_URL/health" | jq -r .release_id)
       echo "live /health release_id=$LIVE (esperado $EXPECTED)"
       if [ "$LIVE" != "$EXPECTED" ]; then exit 1; fi
   artifacts:
+    when: always
     paths:
-      - quantum-assistant/reports/release-record.json
+      - reports/release-record.json
 
 # ---------- rollback: manual, a qualquer momento ----------
-# Botao "play" no pipeline: volta o live para a versao promovida antes desta.
+# Botao "play" no pipeline: volta o live para o release promovido ANTES do
+# atual, lido do historico no S3 (nunca "revisao - 1" nem tag latest). No ecs
+# volta a mesma revisao da task definition: codigo + corpus + grafo + indice
+# juntos, com prova pelo /ready do live e por uma resposta conhecida.
 # needs: [] deixa o botao disponivel mesmo com o pipeline vermelho.
-# Sem clicar: Build > Pipelines > Run pipeline com a variavel QC_ACTION=rollback
-# (o pipeline roda so este job).
+# Sem clicar: Build > Pipelines > Run pipeline com QC_ACTION=rollback (o
+# pipeline roda so este job).
+# allow_failure: true aqui NAO e gate: e um botao manual opcional; sem ele o
+# pipeline inteiro ficaria "bloqueado" esperando alguem clicar.
 rollback:
   stage: rollback
   needs: []
@@ -330,8 +456,18 @@ rollback:
   environment:
     name: live
   script:
-    - scripts/rollback.sh --bucket "$TF_STATE_BUCKET" --reason "rollback manual pelo pipeline $CI_PIPELINE_ID por ${GITLAB_USER_LOGIN}"
     - |
-      ASSISTANT_URL=$(aws apigatewayv2 get-apis --query "Items[?Name=='qc-assistant'].ApiEndpoint | [0]" --output text)
-      echo "live /health depois do rollback:"
-      curl -s --retry 3 "$ASSISTANT_URL/health" | jq '{release_id, environment, function_version}'
+      REASON="rollback manual pelo pipeline $CI_PIPELINE_ID por ${GITLAB_USER_LOGIN}"
+      if [ "$QC_TARGET_RUNTIME" = "ecs" ]; then
+        bash scripts/release-ecs/rollback.sh --reason "$REASON" > reports/rollback-record.json
+        cat reports/rollback-record.json
+      else
+        scripts/rollback.sh --bucket "$TF_STATE_BUCKET" --reason "$REASON"
+        ASSISTANT_URL=$(aws apigatewayv2 get-apis --query "Items[?Name=='qc-assistant'].ApiEndpoint | [0]" --output text)
+        echo "live /health depois do rollback:"
+        curl -s --retry 3 "$ASSISTANT_URL/health" | jq '{release_id, environment, function_version}'
+      fi
+  artifacts:
+    when: always
+    paths:
+      - reports/

@@ -66,6 +66,8 @@ services:
       GF_SERVER_SERVE_FROM_SUB_PATH: "true"
       # Na internet, anonimo NAO: o ALB e publico. Login obrigatorio, sem cadastro.
       GF_AUTH_ANONYMOUS_ENABLED: "false"
+      # /metrics do Grafana responderia sem login pelo ALB (/grafana/metrics).
+      GF_METRICS_ENABLED: "false"
       GF_AUTH_DISABLE_LOGIN_FORM: "false"
       GF_USERS_ALLOW_SIGN_UP: "false"
       GF_USERS_ALLOW_ORG_CREATE: "false"

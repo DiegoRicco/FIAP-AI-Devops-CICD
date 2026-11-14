@@ -1,0 +1,63 @@
+{
+  "_comentario": "Limiares do graph-policy-gate. As MEDIAS saem de benchmark real (calibracao abaixo), com folga de um caso; as CONTAGENS criticas nao tem folga nenhuma. Com ~20 casos, cada caso vale ~5 pontos percentuais: nao exija 99%.",
+  "k": 3,
+  "calibracao": "Benchmark REAL 2026-11-14 03:55 (-03): Neo4j 5.26.33-community local + lab.engine + modelo paraphrase-multilingual-MiniLM-L12-v2@e8f8c21 (ONNX int8), golden_graph_v1 (25 casos), seed 42. Medido no baseline: graph Hit@3=1.0 MRR=1.0 (n=9 casos em que o grafo decide), caminho correto 1.0 (n=8); vector Hit@3=1.0 MRR=1.0 (n=6), vector case_pass=0.91; bm25 case_pass=1.0; case_pass_rate=0.92 (n=25); slice vector_quality=0.5 (n=4). Regra: minimo = medido menos 1 caso de folga (graph 8/9=0.88; vector 5/6=0.83); contagens criticas sem folga. Cenario B (v2 republicada como active) no mesmo benchmark: stale_source_served_count=6 (bm25 serve a v2), case_pass=0.76 -> FAIL.",
+  "hard_counts": {
+    "tenant_acl_violation_count": "trecho de outro tenant ou interno recuperado/citado para cliente, em QUALQUER estrategia",
+    "stale_source_served_count": "versao obsoleta, substituida, futura ou expirada citada (ou o prazo dela na resposta), ou seed/front matter que liga a versao errada",
+    "wrong_graph_edge_count": "caso critico em que o caminho do grafo nao chega na versao vigente esperada, ou SUPERSEDES invertido/ciclo no seed",
+    "order_auth_violation_count": "status de pedido devolvido sem token, para outro cliente ou diferente da API"
+  },
+  "strategies": {
+    "graph": {
+      "hit_at_k": {
+        "min": 0.88,
+        "por_que": "a versao certa precisa estar entre os k resultados da travessia"
+      },
+      "mrr": {
+        "min": 0.85,
+        "por_que": "a travessia escolhe pela precedencia: a versao certa deve vir em primeiro"
+      },
+      "graph_path_correct_rate": {
+        "min": 1.0,
+        "por_que": "todo caso com caminho esperado precisa chegar na versao vigente pelas arestas certas"
+      },
+      "source_is_current_rate": {
+        "min": 1.0,
+        "por_que": "fonte obsoleta servida e o incidente da Demo 5.2"
+      },
+      "abstention_correct_rate": {
+        "min": 1.0,
+        "por_que": "sem regra no grafo, recusar"
+      }
+    },
+    "vector": {
+      "hit_at_k": {
+        "min": 0.83,
+        "por_que": "similaridade semantica acha o trecho, mas nao conhece precedencia; limiar mais baixo e honesto"
+      },
+      "mrr": {
+        "min": 0.75,
+        "por_que": "a vetorial costuma trazer o certo, nem sempre no topo"
+      },
+      "source_is_current_rate": {
+        "min": 1.0,
+        "por_que": "o filtro de vigencia vale igual para as tres estrategias"
+      }
+    },
+    "bm25": {
+      "source_is_current_rate": {
+        "min": 1.0,
+        "por_que": "o filtro de vigencia vale igual para as tres estrategias"
+      }
+    }
+  },
+  "case_pass_rate": {
+    "min": 0.88,
+    "por_que": "medido 0.92 com 25 casos; folga de um caso (0.88). Media serve para tendencia, nunca para compensar regra dura"
+  },
+  "slice_pass_rate": {
+    "min": 0.5,
+    "por_que": "nenhum slice pode afundar escondido na media; com 2 a 4 casos por slice, 0.5 = no maximo metade (vector_quality mede 0.5 hoje: dois casos de frase exata que a vetorial nao compoe, o contraste honesto da aula)"
+  }
+}

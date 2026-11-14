@@ -32,46 +32,105 @@ SEMANTIC = {"IN_CATEGORY", "PARTICIPATES_IN", "APPLIES_TO", "HAS_VERSION", "SUPE
 
 
 # ----------------------------------------------------------- offline (sem banco)
-def test_seed_valido_e_sem_campos_do_front_matter():
-    assert loader.validate(ROOT) == []
-    with open(loader.seed_path(ROOT), encoding="utf-8") as f:
-        raw = f.read()
-    seed = json.loads(raw)
-    for kind in ("products", "categories", "campaigns", "policies"):
-        for item in seed[kind]:
-            assert not set(item) & set(loader.FRONT_MATTER_ONLY), item["id"]
-    assert 8 <= len(seed["products"]) <= 15 and 4 <= len(seed["categories"]) <= 6
-    assert 2 <= len(seed["campaigns"]) <= 3
+# Os testes offline usam uma arvore minima propria (tmp_path): sao invariantes
+# de CODIGO. Validar o seed/corpus REAIS e papel do graph-policy-gate do CI; se
+# o aluno muda o conteudo, o vermelho deve aparecer la, nao num teste unitario.
 
 
-def test_status_da_versao_vem_do_front_matter():
-    g = loader.build_graph(ROOT)
+MINI_DOC = """---
+doc_id: politica-x
+title: Politica X
+version: {version}
+effective_date: {effective}
+status: {status}
+tenant: {tenant}
+access_level: {access}
+category: policy
+{extra}---
+# Politica X
+
+## Prazo
+
+Texto da versao {version}.
+"""
+
+MINI_SEED = {
+    "tenants": [{"id": "quantum", "name": "Q"}, {"id": "outro", "name": "O"}],
+    "topics": [{"id": "troca", "terms": ["troca"]}],
+    "categories": [{"id": "cat-a", "name": "A", "synonyms": []}],
+    "products": [{"id": "prod-a", "name": "P", "tenant": "quantum", "category": "cat-a", "synonyms": []}],
+    "campaigns": [{"id": "camp-a", "name": "C", "tenant": "quantum", "start_date": "2026-01-01",
+                   "end_date": "2026-01-31", "participants": {"categories": [], "products": ["prod-a"]}}],
+    "policies": [{"id": "politica-x", "doc_id": "politica-x", "topics": ["troca"],
+                  "applies_to": {"categories": ["cat-a"], "campaigns": []}}],
+}
+
+
+def mini_root(tmp_path, v1_status="obsolete", v2_extra="supersedes: politica-x@v1\n"):
+    """Arvore minima (corpus + seed) so do teste: nao depende do conteudo do corpus real."""
+    (tmp_path / "corpus").mkdir(parents=True)
+    (tmp_path / "graph" / "seed").mkdir(parents=True)
+    (tmp_path / "corpus" / "x-v1.md").write_text(MINI_DOC.format(
+        version=1, effective="2025-01-01", status=v1_status, tenant="quantum", access="public", extra=""),
+        encoding="utf-8")
+    (tmp_path / "corpus" / "x-v2.md").write_text(MINI_DOC.format(
+        version=2, effective="2026-01-01", status="active", tenant="outro", access="internal", extra=v2_extra),
+        encoding="utf-8")
+    (tmp_path / "graph" / "seed" / loader.SEED_FILE).write_text(json.dumps(MINI_SEED), encoding="utf-8")
+    return str(tmp_path)
+
+
+def test_status_da_versao_vem_do_front_matter(tmp_path):
+    # Invariante de CODIGO (nao de conteudo): o que estiver no front matter vira
+    # propriedade da PolicyVersion, e "supersedes" vira a aresta nova -> antiga.
+    root = mini_root(tmp_path)
+    assert loader.validate(root) == []
+    g = loader.build_graph(root)
     pv = {n["id"]: n["props"] for n in g["nodes"] if n["label"] == "PolicyVersion"}
-    assert pv["politica-trocas@v2"]["status"] == "obsolete"
-    assert pv["politica-trocas@v3"]["status"] == "active"
-    assert pv["campanha-black-friday@v1"]["effective_date"] == "2027-11-22"
-    assert pv["parceiro-x-trocas@v1"]["tenant"] == "parceiro-x"
-    assert pv["manual-interno-reembolso@v1"]["access_level"] == "internal"
-    sup = [e for e in g["edges"] if e["type"] == "SUPERSEDES"]
-    assert [(e["source"], e["target"]) for e in sup] == [("politica-trocas@v3", "politica-trocas@v2")]
+    assert pv["politica-x@v1"]["status"] == "obsolete"
+    assert pv["politica-x@v2"]["status"] == "active"
+    assert pv["politica-x@v2"]["effective_date"] == "2026-01-01"
+    assert pv["politica-x@v2"]["tenant"] == "outro" and pv["politica-x@v2"]["access_level"] == "internal"
+    assert pv["politica-x@v2"]["status_source"] == "corpus:x-v2.md#front_matter"
+    sup = [(e["source"], e["target"]) for e in g["edges"] if e["type"] == "SUPERSEDES"]
+    assert sup == [("politica-x@v2", "politica-x@v1")]
 
 
-def test_toda_aresta_tem_provenance():
-    g = loader.build_graph(ROOT)
-    assert g["edges"] and all(e["props"].get("provenance") for e in g["edges"])
+def test_front_matter_editado_muda_o_grafo_e_o_seed_version(tmp_path):
+    # Cenario B do CI: republicar a versao antiga como active (e sem supersedes)
+    # muda o grafo e o graph_seed_version. Quem reprova isso e o graph-policy-gate,
+    # nao o loader: validate continua sem erro estrutural.
+    a = mini_root(tmp_path / "a")
+    b = mini_root(tmp_path / "b", v1_status="active", v2_extra="")
+    assert loader.validate(b) == []
+    pv = {n["id"]: n["props"] for n in loader.build_graph(b)["nodes"] if n["label"] == "PolicyVersion"}
+    assert pv["politica-x@v1"]["status"] == "active"
+    assert not [e for e in loader.build_graph(b)["edges"] if e["type"] == "SUPERSEDES"]
+    assert loader.graph_seed_version(a) != loader.graph_seed_version(b)
 
 
-def test_seed_quebrado_e_reprovado():
-    seed = loader.load_seed(ROOT)
+def test_toda_aresta_tem_provenance(tmp_path):
+    g = loader.build_graph(mini_root(tmp_path))
+    types = {e["type"] for e in g["edges"]}
+    assert {"BELONGS_TO", "IN_CATEGORY", "PARTICIPATES_IN", "APPLIES_TO", "HAS_VERSION", "SUPERSEDES",
+            "DOCUMENTED_BY", "CONTAINS"} <= types
+    assert all(e["props"].get("provenance") for e in g["edges"])
+
+
+def test_seed_quebrado_e_reprovado(tmp_path):
+    root = mini_root(tmp_path)
+    seed = loader.load_seed(root)
     seed["products"][0]["category"] = "categoria-que-nao-existe"
     seed["policies"][0]["status"] = "active"
-    errors = loader.validate(ROOT, seed)
+    errors = loader.validate(root, seed)
     assert any("categoria inexistente" in e for e in errors)
     assert any("front matter" in e for e in errors)
 
 
-def test_graph_seed_version_deterministico():
-    assert loader.graph_seed_version(ROOT) == loader.graph_seed_version(ROOT)
+def test_graph_seed_version_deterministico(tmp_path):
+    root = mini_root(tmp_path)
+    assert loader.graph_seed_version(root) == loader.graph_seed_version(root)
+    assert len(loader.graph_seed_version(root)) == 12
 
 
 # --------------------------------------------------------------- Neo4j real
