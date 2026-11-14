@@ -1524,7 +1524,7 @@
       "id": 11,
       "type": "table",
       "title": "Alertas em FIRING agora",
-      "description": "Cada linha é uma regra de ops/cloud/alert-rules.yml disparando. O runbook de cada alerta está em ops/runbook.md.",
+      "description": "Cada linha é uma regra de ops/cloud/alert-rules.yml disparando. O runbook de cada alerta está em ops/runbook.md. Uma linha por alerta (labels viram colunas).",
       "gridPos": {
         "x": 0,
         "y": 29,
@@ -1550,6 +1550,24 @@
         }
       ],
       "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {
+            "mode": "columns",
+            "keepLabels": [
+              "alertname",
+              "severity",
+              "signal",
+              "team",
+              "environment",
+              "scenario_id"
+            ]
+          }
+        },
+        {
+          "id": "merge",
+          "options": {}
+        },
         {
           "id": "organize",
           "options": {

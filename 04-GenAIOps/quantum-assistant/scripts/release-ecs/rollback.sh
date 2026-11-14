@@ -13,7 +13,11 @@
 # alvo, graph_version == graph_seed_version (grafo da fonte), e uma resposta
 # conhecida (troca de fone em 2026-11-14 = politica-trocas v3, 30 dias).
 #
-# Uso: scripts/release-ecs/rollback.sh [--reason TEXTO] [--dry-run]
+# --to-release ID: em vez do anterior, volta para um release ESPECIFICO do
+# historico (tem que ter sido promovido). Serve para desfazer um rollback
+# ("repromover" o release que saiu) sem rebuild: e a mesma revisao exata.
+#
+# Uso: scripts/release-ecs/rollback.sh [--reason TEXTO] [--to-release ID] [--dry-run]
 # Saida: stdout = registro do rollback; stderr = progresso.
 set -euo pipefail
 
@@ -22,9 +26,11 @@ export AWS_PAGER=""
 PROJECT="${PROJECT:-qc-assistant}"
 REASON="${ROLLBACK_REASON:-rollback manual}"
 DRY_RUN=0
+TO_RELEASE=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --reason) REASON="$2"; shift 2 ;;
+    --to-release) TO_RELEASE="$2"; shift 2 ;;
     --dry-run) DRY_RUN=1; shift ;;
     *) echo "rollback: opcao desconhecida: $1" >&2; exit 2 ;;
   esac
@@ -43,8 +49,15 @@ if [ "$SERVED" != "$CUR_ID" ]; then
   log "o live no ar ($SERVED) nao e o live registrado ($CUR_ID): alguem mexeu fora do pipeline; rollback manual"
   exit 1
 fi
-TARGET_ID="$(jq -r '.promotion.previous_release_id // empty' "$WORK/live.json")"
-[ -n "$TARGET_ID" ] || { log "o live atual ($CUR_ID) foi o primeiro promovido: nao ha release anterior aprovado"; exit 1; }
+if [ -n "$TO_RELEASE" ]; then
+  TARGET_ID="$TO_RELEASE"
+  EVENT="restore_approved"
+  [ "$TARGET_ID" != "$CUR_ID" ] || { log "$TARGET_ID ja e o live: nada a fazer"; exit 1; }
+else
+  TARGET_ID="$(jq -r '.promotion.previous_release_id // empty' "$WORK/live.json")"
+  EVENT="rollback"
+  [ -n "$TARGET_ID" ] || { log "o live atual ($CUR_ID) foi o primeiro promovido: nao ha release anterior aprovado"; exit 1; }
+fi
 # O alvo tem que ter sido PROMOVIDO de verdade (estar no historico).
 TARGET_KEY="$(jq -r --arg id "$TARGET_ID" '[.[] | select(.release_id == $id and .task_definition != null)] | last | .key // empty' "$WORK/history.json")"
 [ -n "$TARGET_KEY" ] || { log "$TARGET_ID nao esta no historico de promocoes: nao e destino valido"; exit 1; }
@@ -95,14 +108,18 @@ print(f"rollback: live /ready = {t['release_id']} {v['image_digest'][:19]}... co
 PY
 
 NOW="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+# Rollback: o "anterior" do alvo continua o dele (rollbacks seguidos andam para
+# tras). Restore de um release especifico: o anterior passa a ser o que saiu,
+# para um rollback depois dele desfazer exatamente este passo.
+if [ "$EVENT" = rollback ]; then PREV_ID="$(jq -r '.promotion.previous_release_id // empty' "$WORK/target.json")"; else PREV_ID="$CUR_ID"; fi
 jq --slurpfile d "$WORK/deploy.json" --slurpfile ready "$WORK/ready.json" --arg at "$NOW" --arg from "$CUR_ID" \
-   --arg reason "$REASON" --arg by "${GITLAB_USER_LOGIN:-terminal}" \
-   --arg prev "$(jq -r '.promotion.previous_release_id // empty' "$WORK/target.json")" \
+   --arg reason "$REASON" --arg by "${GITLAB_USER_LOGIN:-terminal}" --arg ev "$EVENT" \
+   --arg pipe "${CI_PIPELINE_ID:-terminal}" --arg prev "$PREV_ID" \
   '.deploy.live = ($d[0] + {deployed_at: $at})
-   | .promotion = {event: "rollback", promoted_at: $at, promoted_by: $by, rolled_back_from: $from,
+   | .promotion = {event: $ev, promoted_at: $at, promoted_by: $by, rolled_back_from: $from, ci_pipeline_id: $pipe,
                    reason: $reason, previous_release_id: (if $prev == "" then null else $prev end)}
    | .rollback_proof = {ready_versions: $ready[0].versions}' "$WORK/target.json" > "$WORK/rec.json"
 python3 "$M" seal --record "$WORK/rec.json" >/dev/null
 python3 "$M" publish --record "$WORK/rec.json" --kind live >/dev/null
-log "live = $TARGET_ID de novo; evento de rollback gravado em releases-ecs/history/"
+log "live = $TARGET_ID de novo; evento $EVENT gravado em releases-ecs/history/"
 cat "$WORK/rec.json"

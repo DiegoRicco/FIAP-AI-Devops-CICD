@@ -25,9 +25,23 @@ SECURITY_HEADERS = [
     (b"x-frame-options", b"DENY"),
     (b"referrer-policy", b"no-referrer"),
     (b"content-security-policy", CSP.encode("ascii")),
-    (b"cross-origin-opener-policy", b"same-origin"),
     (b"permissions-policy", b"camera=(), microphone=(), geolocation=()"),
 ]
+
+# COOP so vale em origem confiavel (HTTPS). O ALB do lab e HTTP:80, e nele o
+# Chrome ignora o header e registra um erro no console a cada carga de pagina.
+COOP_HEADER = (b"cross-origin-opener-policy", b"same-origin")
+
+
+def _is_https(scope):
+    """HTTPS direto (scope) ou atras de um proxy que terminou o TLS (ALB com
+    certificado repassa X-Forwarded-Proto: https)."""
+    if scope.get("scheme") == "https":
+        return True
+    for key, value in scope.get("headers") or []:
+        if key.lower() == b"x-forwarded-proto":
+            return value.split(b",")[0].strip().lower() == b"https"
+    return False
 
 
 async def send_json(send, status, body, extra_headers=()):
@@ -52,11 +66,15 @@ class SecurityHeadersMiddleware:
         if scope["type"] != "http":
             return await self.app(scope, receive, send)
 
+        https = _is_https(scope)
+
         async def wrapped(message):
             if message["type"] == "http.response.start":
                 headers = [(k, v) for k, v in message.get("headers", [])
                            if k.lower() not in (b"server", b"set-cookie")]
                 headers.extend(SECURITY_HEADERS)
+                if https:
+                    headers.append(COOP_HEADER)
                 message = dict(message, headers=headers)
             await send(message)
 

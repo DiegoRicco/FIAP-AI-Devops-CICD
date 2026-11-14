@@ -253,6 +253,20 @@ def test_headers_de_seguranca_sem_cors_e_sem_cookie(client):
         assert "server" not in r.headers
 
 
+def test_coop_nao_vai_em_http(client):
+    # ALB do lab e HTTP:80: COOP ali so geraria erro no console do navegador.
+    for r in (client.get("/health"), client.get("/nao-existe")):
+        assert "cross-origin-opener-policy" not in r.headers
+        assert "default-src 'self'" in r.headers["content-security-policy"]
+
+
+def test_coop_vai_quando_o_proxy_diz_https(client):
+    r = client.get("/health", headers={"X-Forwarded-Proto": "https"})
+    assert r.headers["cross-origin-opener-policy"] == "same-origin"
+    assert r.headers["x-frame-options"] == "DENY"
+    assert "default-src 'self'" in r.headers["content-security-policy"]
+
+
 # ------------------------------------------------------------ admin HMAC
 @pytest.fixture
 def admin(engine, monkeypatch):

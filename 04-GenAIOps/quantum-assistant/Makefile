@@ -6,7 +6,10 @@
 #   make help
 #
 # Variaveis:
-#   RM=12345            seu RM (so no make bootstrap, se o bucket ainda nao existir)
+#   ALUNO_RM=12345      seu RM (so no make bootstrap, se o bucket ainda nao existir)
+#                       Tambem aceita RM=12345 (make bootstrap RM=12345).
+#                       O nome interno nao e RM porque RM e variavel embutida do
+#                       GNU make (vale "rm -f"); esse valor embutido nunca vira RM do aluno.
 #   BUCKET=base-config-12345   bucket do state (padrao: descoberto na conta)
 #   COURSE_REPO=/workspaces/FIAP-AI-Devops-CICD   repositorio da disciplina
 #   ENV=live|candidate  ambiente do deploy/diagnose (padrao: live)
@@ -26,6 +29,14 @@ BUCKET ?= $(shell aws s3api list-buckets --query 'Buckets[].Name' --output text 
 TF_STATE_BUCKET := $(BUCKET)
 export TF_STATE_BUCKET
 
+# RM do aluno vale se veio da linha de comando ou do ambiente; o RM embutido do
+# make (origem "default", valor "rm -f") nunca e usado.
+ALUNO_RM ?= $(if $(filter default undefined,$(origin RM)),,$(RM))
+# Bucket que o bootstrap entrega aos passos seguintes: o descoberto (ou passado)
+# ou o que ele mesmo cria. Calculado aqui porque o make expande a receita inteira
+# antes de rodar a primeira linha: redescobrir depois do create-bucket nao funciona.
+BOOTSTRAP_BUCKET = $(or $(BUCKET),$(if $(ALUNO_RM),base-config-$(ALUNO_RM)))
+
 RUNNER_DIR := $(COURSE_REPO)/04-GenAIOps/shared/runner
 TF_ECS := terraform -chdir=infra-ecs
 # Copia de trabalho do Terraform fora do projeto: o init nao deixa .terraform
@@ -42,16 +53,16 @@ course-repo:
 
 bootstrap: course-repo ## Prepara a conta: bucket, rede fiap-lab, API de pedidos, segredos (idempotente)
 	@aws sts get-caller-identity >/dev/null 2>&1 || { echo "Credencial AWS invalida/expirada: Start Lab e cole AWS Details em ~/.aws/credentials"; exit 1; }
-	@if [ -z "$(BUCKET)" ]; then \
-	  [ -n "$(RM)" ] || { echo "Nenhum bucket base-config-* na conta. Rode: make bootstrap RM=<seu-rm>"; exit 1; }; \
-	  echo "Criando o bucket base-config-$(RM)..."; \
-	  aws s3api create-bucket --bucket "base-config-$(RM)" --region us-east-1 >/dev/null; \
-	  aws s3api put-bucket-versioning --bucket "base-config-$(RM)" --versioning-configuration Status=Enabled; \
-	  aws s3api put-public-access-block --bucket "base-config-$(RM)" --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true; \
-	else echo "Bucket do state: $(BUCKET)"; fi
+	@if [ -n "$(BUCKET)" ]; then echo "Bucket do state: $(BUCKET)"; else \
+	  [ -n "$(ALUNO_RM)" ] || { echo "Nenhum bucket base-config-* na conta. Rode: make bootstrap RM=<seu-rm>"; exit 1; }; \
+	  echo "Criando o bucket base-config-$(ALUNO_RM)..."; \
+	  aws s3api create-bucket --bucket "base-config-$(ALUNO_RM)" --region us-east-1 >/dev/null; \
+	  aws s3api put-bucket-versioning --bucket "base-config-$(ALUNO_RM)" --versioning-configuration Status=Enabled; \
+	  aws s3api put-public-access-block --bucket "base-config-$(ALUNO_RM)" --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true; \
+	fi
 	@n=$$(aws ec2 describe-vpcs --filters Name=tag:Name,Values=fiap-lab --query 'length(Vpcs)' --output text); \
 	if [ "$$n" = "0" ]; then echo "Rede fiap-lab ausente: recriando..."; bash "$(COURSE_REPO)/01-Terraform/scripts/recriar-rede.sh"; else echo "Rede fiap-lab: ok"; fi
-	@$(MAKE) --no-print-directory orders-up BUCKET="$${BUCKET:-base-config-$(RM)}"
+	@$(MAKE) --no-print-directory orders-up BUCKET="$(BOOTSTRAP_BUCKET)"
 	@$(MAKE) --no-print-directory secrets
 	@echo "Bootstrap ok. Proximo: make runner e depois make preflight."
 

@@ -59,5 +59,6 @@
   "slice_pass_rate": {
     "min": 0.5,
     "por_que": "nenhum slice pode afundar escondido na media; com 2 a 4 casos por slice, 0.5 = no maximo metade (vector_quality mede 0.5 hoje: dois casos de frase exata que a vetorial nao compoe, o contraste honesto da aula)"
-  }
+  },
+  "_slices": "Nomes de slice: golden_v1 (legado) usa portugues (politicas, vigencia, autorizacao, pedidos, abstencao, seguranca); golden_graph_v1 usa os nomes da especificacao da Aula 5 (graph_multi_hop, graph_precedence, vector_quality, temporal, tenant, authorization, orders, abstention, adversarial). Sao conjuntos e gates diferentes; os nomes nao foram unificados de proposito: graph_gate.py usa o slice para decidir qual contagem critica cada falha alimenta, e renomear mudaria o gate."
 }

@@ -442,7 +442,9 @@ promote-live:
 # juntos, com prova pelo /ready do live e por uma resposta conhecida.
 # needs: [] deixa o botao disponivel mesmo com o pipeline vermelho.
 # Sem clicar: Build > Pipelines > Run pipeline com QC_ACTION=rollback (o
-# pipeline roda so este job).
+# pipeline roda so este job), ou pelo git: git push -o ci.variable="QC_ACTION=rollback".
+# No ecs, QC_ROLLBACK_TO=<release_id> volta para um release aprovado especifico
+# do historico (ex.: repromover o que saiu num rollback), sem rebuild.
 # allow_failure: true aqui NAO e gate: e um botao manual opcional; sem ele o
 # pipeline inteiro ficaria "bloqueado" esperando alguem clicar.
 rollback:
@@ -459,7 +461,7 @@ rollback:
     - |
       REASON="rollback manual pelo pipeline $CI_PIPELINE_ID por ${GITLAB_USER_LOGIN}"
       if [ "$QC_TARGET_RUNTIME" = "ecs" ]; then
-        bash scripts/release-ecs/rollback.sh --reason "$REASON" > reports/rollback-record.json
+        bash scripts/release-ecs/rollback.sh --reason "$REASON" ${QC_ROLLBACK_TO:+--to-release "$QC_ROLLBACK_TO"} > reports/rollback-record.json
         cat reports/rollback-record.json
       else
         scripts/rollback.sh --bucket "$TF_STATE_BUCKET" --reason "$REASON"
