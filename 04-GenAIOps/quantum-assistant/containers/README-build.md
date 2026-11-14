@@ -38,7 +38,7 @@ Na AWS (Fargate, 1 vCPU, 3 GB), o pull da imagem levou 15,5 s, e o app ficou pro
 
 O modelo é baixado **no build**, não na task. Se o huggingface.co estiver fora do ar ou lento, o build quebra na camada 2. A task que já está no ar continua funcionando, porque o modelo está dentro da imagem.
 
-**Mitigação, antes da aula:** o professor builda uma vez e deixa no ECR uma imagem com as camadas 1 e 2 prontas. No dia, o cache do BuildKit no runner reaproveita essas camadas e o build não acessa o Hugging Face. Se o cache do runner tiver sido perdido (EC2 recriada), há dois caminhos: trocar o `FROM` por essa imagem base do ECR (pinada por digest) ou implantar o último digest já aprovado com `make deploy DIGEST=sha256:...`, sem build novo.
+**Mitigação, na própria aula:** o primeiro `make image` (Parte 1 da Demo 5.1) já deixa as camadas 1 e 2 no cache do BuildKit do runner; os builds seguintes do dia reaproveitam essas camadas e não acessam o Hugging Face. Se o Hugging Face estiver fora do ar nesse primeiro build, ou se o cache do runner tiver sido perdido (EC2 recriada), há dois caminhos: trocar o `FROM` por uma imagem base do ECR com as camadas 1 e 2 (pinada por digest) ou implantar o último digest já aprovado com `make deploy DIGEST=sha256:...`, sem build novo.
 
 Um download corrompido ou adulterado não entra na imagem: o `vector/encoder.py` recusa arquivo com sha256 diferente do pinado, e o build falha nesse ponto.
 
