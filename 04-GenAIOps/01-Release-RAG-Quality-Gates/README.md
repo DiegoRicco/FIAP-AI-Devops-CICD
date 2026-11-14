@@ -1,12 +1,5 @@
 # 04.1 — Demo 5.1: A evidência por trás da resposta
 
-<!--
-CONVENÇÃO DESTE README (nota para o professor, não aparece renderizada)
-- NOVA-IMAGEM: print que ainda não existe; salve o PNG no caminho indicado e descomente a linha de imagem logo abaixo.
-- CONFIRMAR-SAIDA: trecho que depende de uma saída real da homologação na AWS e ainda não foi conferido; substituir pelo valor observado (nunca inventar).
-- Saídas marcadas "varia por execução": o aluno confere a FORMA e os campos indicados, não o valor exato.
-- A versão anterior desta demo (runtime Lambda, aliases candidate/live) está preservada em LEGADO-lambda.md.
--->
 
 > **Quinta-feira, 8h50. Três semanas depois do pipeline com quality gates entrar no ar.**
 > **Helena Marques**, Head de Engenharia de IA e Entrega Contínua, chega com o celular na mão e um print de conversa:
@@ -175,7 +168,7 @@ Somando: cerca de **9 minutos de comandos** (Caminho A) e **25 minutos de relóg
 **Por quê:** o assistente ganha um repositório **de produto**, separado de qualquer projeto de aula anterior. É nele que o pipeline da Demo 5.2 vai rodar. Se você ainda não tem conta no [GitLab](https://gitlab.com/), crie uma agora (gratuita, um minuto) e volte aqui.
 **Execute:**
 
-**1.1. Crie o projeto em branco.** No GitLab, clique em **New project** → **Create blank project** e preencha a tela **um campo por vez**, na ordem em que ela mostra:
+**1.1. Crie o projeto em branco.** Acesse [Novo projeto](https://gitlab.com/projects/new) e clique em **Create blank project**. Preencha a tela **um campo por vez**, na ordem em que ela mostra:
 
 - **Project name**: `quantum-ai-assistant`.
 - **Project URL**: no seletor ao lado de `https://gitlab.com/`, escolha o **seu nome de usuário** (o seu nick, não um grupo nem outro workspace). É ele que aparece na URL SSH do 1.2 (`git@gitlab.com:SEU-USUARIO/...`).
@@ -188,7 +181,7 @@ Somando: cerca de **9 minutos de comandos** (Caminho A) e **25 minutos de relóg
 <!-- NOVA-IMAGEM: img/gitlab-create-blank-project.png | capturar: a tela Create blank project preenchida, com o Project URL mostrando o usuário selecionado no seletor de namespace e a opção Initialize repository with a README DESMARCADA | depois de salvar o arquivo, descomente a linha abaixo -->
 <!-- ![Tela Create blank project do GitLab: Project name quantum-ai-assistant, Project URL com o usuário selecionado, Visibility Private e Initialize repository with a README desmarcado](img/gitlab-create-blank-project.png) -->
 
-**1.2. Confirme o endereço SSH do projeto.** Na página do projeto recém-criado, clique em **Code** (botão azul) e copie a URL que começa com `git@gitlab.com:`. Ela tem a forma `git@gitlab.com:SEU-USUARIO/quantum-ai-assistant.git`.
+**1.2. Confirme o endereço SSH do projeto.** Na página do projeto recém-criado (`https://gitlab.com/SEU-USUARIO/quantum-ai-assistant`, com o seu usuário no lugar de `SEU-USUARIO`), clique em **Code** (botão azul) e copie a URL que começa com `git@gitlab.com:`. Ela tem a forma `git@gitlab.com:SEU-USUARIO/quantum-ai-assistant.git`.
 
 **1.3. Garanta uma chave SSH no GitLab.** O `git push` precisa provar ao GitLab que é você: em vez de senha, usa um par de chaves (uma **privada**, que fica só no seu Codespaces, e uma **pública**, que você cadastra no GitLab). Se você já cadastrou a chave `/home/vscode/.ssh/gitlab` numa aula anterior, pule para o passo 2. Se não, no terminal do Codespaces (o `test -f ... ||` não sobrescreve uma chave que já exista; o comando de criação é o mesmo do módulo 02):
 
@@ -379,9 +372,9 @@ make bootstrap
 
 **Execute (Caminho A):**
 
-**4.1.** No GitLab, abra o projeto `quantum-ai-assistant` → **Settings → CI/CD → Runners**. Em **Other available runners** (ou **Project runners** de outros projetos), localize o runner com as tags `shell` e `terraform` (criado na Aula 3) e clique em **Enable for this project**.
+**4.1.** Abra a página de runners do projeto: [`https://gitlab.com/SEU-USUARIO/quantum-ai-assistant/-/settings/ci_cd#js-runners-settings`](https://gitlab.com/SEU-USUARIO/quantum-ai-assistant/-/settings/ci_cd#js-runners-settings) (troque `SEU-USUARIO` pelo seu usuário na barra de endereço; é o mesmo que **Settings → CI/CD → Runners**). Em **Other available runners** (ou **Project runners** de outros projetos), localize o runner com as tags `shell` e `terraform` (criado na Aula 3) e clique em **Enable for this project**.
 
-**4.2.** Se ele **não aparece** na lista: abra o projeto antigo (`primeiro-projeto`) → **Settings → CI/CD → Runners**, clique no lápis do runner e **desmarque** *Lock to current projects*. Salve e volte ao 4.1.
+**4.2.** Se ele **não aparece** na lista: abra os runners do projeto antigo, `https://gitlab.com/SEU-USUARIO/primeiro-projeto/-/settings/ci_cd#js-runners-settings` (**Settings → CI/CD → Runners**), clique no lápis do runner e **desmarque** *Lock to current projects*. Salve e volte ao 4.1.
 
 **4.3.** No Codespaces, confira que a EC2 do runner está ligada e online; se estiver desligada entre aulas, o alvo a liga e espera (nada é criado nem registrado de novo):
 
@@ -392,7 +385,7 @@ make runner
 
 **Execute (Caminho B):**
 
-**4.4.** No GitLab, no projeto `quantum-ai-assistant` → **Settings → CI/CD → Runners** → **New project runner**. Em **Tags**, digite `shell, terraform`; marque **Run untagged jobs**; clique em **Create runner**. A tela seguinte mostra um token que começa com `glrt-`: copie-o **agora** (ele não aparece de novo).
+**4.4.** Abra direto a criação de runner do projeto: [`https://gitlab.com/SEU-USUARIO/quantum-ai-assistant/-/runners/new`](https://gitlab.com/SEU-USUARIO/quantum-ai-assistant/-/runners/new) (troque `SEU-USUARIO` pelo seu usuário; é o mesmo que **Settings → CI/CD → Runners → New project runner**). Em **Tags**, digite `shell, terraform`; marque **Run untagged jobs**; clique em **Create runner**. A tela seguinte mostra um token que começa com `glrt-`: copie-o **agora** (ele não aparece de novo).
 
 **4.5.** No Codespaces, guarde o token no **SSM Parameter Store** (o cofre de parâmetros da AWS; `SecureString` = guardado criptografado). Troque `glrt-...` pelo seu; o token **não** vai para nenhum arquivo:
 
@@ -423,7 +416,7 @@ make runner
 >
 > A primeira linha é o diagnóstico do `runner-preflight.sh` (`reuse` = há um runner ligado e registrado; nada a fazer); as linhas `chave=valor` são do `runner-docker.sh`, que confere o Docker no runner (`already` = já estava instalado). Se a EC2 estava desligada, a primeira linha é `diagnostico do runner: start`, seguida de `Recuperando o runner (menor passo: start)...` e do progresso do `recover` ligando a EC2 (~1-2 min). No Caminho B, o diagnóstico é `recreate`, seguido do Terraform e do Ansible criando e registrando o runner (~6-8 min <!-- CONFIRMAR-SAIDA: Caminho B não foi cronometrado na homologação desta versão -->), e só então as linhas do Docker (`docker_installed=now`).
 >
-> No GitLab, em **Settings → CI/CD → Runners** do `quantum-ai-assistant`, o runner aparece **online** (bolinha verde) com as tags `shell` e `terraform`. O pipeline pendente do passo 2 começa a rodar sozinho; ele pode ficar **vermelho** neste momento (ainda não há ambiente na AWS para o deploy), e isso é esperado: o primeiro pipeline que importa é o da Demo 5.2, com o ambiente de pé.
+> Em [`https://gitlab.com/SEU-USUARIO/quantum-ai-assistant/-/settings/ci_cd#js-runners-settings`](https://gitlab.com/SEU-USUARIO/quantum-ai-assistant/-/settings/ci_cd#js-runners-settings) (com o seu usuário), o runner aparece **online** (bolinha verde) com as tags `shell` e `terraform`. O pipeline pendente do passo 2 começa a rodar sozinho; ele pode ficar **vermelho** neste momento (ainda não há ambiente na AWS para o deploy), e isso é esperado: o primeiro pipeline que importa é o da Demo 5.2, com o ambiente de pé.
 
 **Se falhar:** `diagnostico do runner: start` = a EC2 existe mas está desligada; `make runner` já liga (ele roda o `recover --apply` quando o diagnóstico pede). `Bloqueado: leia a dica acima` com `token_param=missing` = o passo 4.5 não rodou (Caminho B). `ERRO: falta o session-manager-plugin neste terminal` (Caminho B) = o Codespaces é anterior a esta versão do devcontainer; **nada foi criado** (o `recover` confere o plugin antes do `terraform apply`), e a própria mensagem traz o comando de instalação (`curl` do pacote `.deb` oficial + `sudo dpkg -i`), ~1 min; depois repita `make runner`. Runner online no GitLab mas o job fica `stuck` = o runner está em outro projeto e **não** foi habilitado neste (Caminho A, passo 4.1). Nunca registre um segundo runner na mesma EC2: registro duplicado cria dois runners no projeto.
 

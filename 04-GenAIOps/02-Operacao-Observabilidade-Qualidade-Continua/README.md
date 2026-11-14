@@ -265,7 +265,15 @@ aws s3 ls "s3://$BUCKET/quantum-assistant/releases-ecs/"
 >
 > Os valores acima são os da homologação deste lab, em que um pipeline verde já tinha publicado o `live` (por isso há manifesto). **Na sua aula é diferente, e isso é esperado:** o que está no ar é o release que o `make deploy-live` da Parte 1 da 5.1 publicou há pouco, direto do terminal, sem pipeline e sem manifesto. O `release_id` tem a forma `rel-infra-live-…` (na homologação, `rel-infra-0346`), e a lista de manifestos vem **vazia**. Isso é informação: é um release **sem registro**, e **esse é o seu R1**. O primeiro pipeline verde do dia, o da Parte 4, é quem grava o primeiro arquivo em `releases-ecs/` (`history/`, `candidate.json`, `live.json` e um `<release_id>.json` por release publicado); a partir dali, o que está em `live.json` é sempre o release no ar.
 
-Abra o Grafana (a URL que o `obs.sh up` imprimiu no passo 2, ou `bash ops/cloud/obs.sh url`; usuário `admin`, senha do SSM), menu **Dashboards**, e abra **Visão do negócio · Atendimento** (o painel da Helena). Ajuste o intervalo para **Last 15 minutes**. O semáforo **Confiança do assistente agora** deve dizer **Confiável** (verde), com **Política vigente** e **Caminho do grafo** em 100% e **Casos críticos na janela** em 0 (todos sobre os últimos 2 min, a mesma janela do semáforo). O `n` da janela fica no painel do Diego, **Amostras na janela (n)**, e precisa estar ≥ 20. Se ainda for baixo, o probe acabou de subir; espere 2 min.
+Pegue a URL e a senha do Grafana no Codespaces (a senha só aparece no seu terminal, nunca vai para arquivo):
+
+```bash
+cd /home/vscode/environment/quantum-ai-assistant
+bash ops/cloud/obs.sh url
+aws ssm get-parameter --name /qc-assistant/obs/grafana-admin --with-decryption --query Parameter.Value --output text
+```
+
+Abra a URL no navegador e entre com usuário `admin` e a senha que o segundo comando imprimiu. Depois, menu **Dashboards**, e abra **Visão do negócio · Atendimento** (o painel da Helena). Ajuste o intervalo para **Last 15 minutes**. O semáforo **Confiança do assistente agora** deve dizer **Confiável** (verde), com **Política vigente** e **Caminho do grafo** em 100% e **Casos críticos na janela** em 0 (todos sobre os últimos 2 min, a mesma janela do semáforo). O `n` da janela fica no painel do Diego, **Amostras na janela (n)**, e precisa estar ≥ 20. Se ainda for baixo, o probe acabou de subir; espere 2 min.
 
 <!-- NOVA-IMAGEM: img/grafana-helena-baseline.png | capturar: dashboard da Helena no baseline: semáforo Confiável, Perguntas / Política vigente / Caminho do grafo / Pedidos sem status em 100%, Release que está atendendo visível, rodapé dizendo que os números vêm de probes sintéticos | FONTE REAL já capturada (R3, títulos curtos): /tmp/qc18/evid/5.2/screenshots/r3/01-helena-baseline-1920.png (versão 1366 ao lado) | depois de salvar o arquivo, descomente a linha abaixo -->
 <!-- ![Dashboard da Helena no baseline: semáforo Confiável, Política vigente e Caminho do grafo em 100%, zero casos críticos na janela e o release que está atendendo](img/grafana-helena-baseline.png) -->
@@ -497,7 +505,7 @@ eval $(ssh-agent -s) >/dev/null && ssh-add -k /home/vscode/.ssh/gitlab
 git push origin "$(git branch --show-current)"
 ```
 
-**Esperado:** o push termina com `<branch> -> <branch>` e, no GitLab (**Build → Pipelines**), um pipeline novo em execução.
+**Esperado:** o push termina com `<branch> -> <branch>` e, em [`https://gitlab.com/SEU-USUARIO/quantum-ai-assistant/-/pipelines`](https://gitlab.com/SEU-USUARIO/quantum-ai-assistant/-/pipelines) (com o seu usuário no lugar de `SEU-USUARIO`; é **Build → Pipelines**), um pipeline novo em execução.
 
 **Se falhar:** `Permission denied (publickey)` = repita o `ssh-add`. `nothing to commit` = o passo 7 não alterou nada (`git diff --stat -- corpus/`).
 
@@ -509,7 +517,7 @@ git push origin "$(git branch --show-current)"
 
 **Onde:** GitLab (navegador) e Codespaces.
 **Por quê:** a prova de que um gate funciona não é o job vermelho; é o **`deploy-candidate` sem rodar** e o cliente continuar em R1. A reprovação chega em pouco mais de **1 minuto e meio** depois que o runner pega o job (na homologação: `preflight` 27 s, `security-gate` 36 s, `api-contract-gate` 13 s, e os três gates do `evaluate` reprovando em 4 a 5 s cada); enquanto espera, leia a tabela do passo 6 de novo.
-**Execute:** no GitLab, **Build → Pipelines**, clique no pipeline mais recente (a linha de cima). A página do pipeline mostra os jobs em colunas, uma por stage. Quando os jobs do stage `evaluate` terminarem, clique na aba **Tests** (ao lado de **Pipeline** e **Jobs**, no topo da página): ela lista uma **suíte** por job que publicou relatório JUnit (um arquivo XML com um resultado por teste; é o que o GitLab desenha ali). Clique na suíte `graph-policy-gate` e depois no teste em vermelho para ler a mensagem.
+**Execute:** abra [`https://gitlab.com/SEU-USUARIO/quantum-ai-assistant/-/pipelines`](https://gitlab.com/SEU-USUARIO/quantum-ai-assistant/-/pipelines) (troque `SEU-USUARIO` pelo seu usuário; é **Build → Pipelines**) e clique no pipeline mais recente (a linha de cima). A página do pipeline mostra os jobs em colunas, uma por stage. Quando os jobs do stage `evaluate` terminarem, clique na aba **Tests** (ao lado de **Pipeline** e **Jobs**, no topo da página): ela lista uma **suíte** por job que publicou relatório JUnit (um arquivo XML com um resultado por teste; é o que o GitLab desenha ali). Clique na suíte `graph-policy-gate` e depois no teste em vermelho para ler a mensagem.
 
 **Esperado:**
 
@@ -1340,7 +1348,7 @@ cd /workspaces/FIAP-AI-Devops-CICD/02-Ansible/01-provisionando-gitlab-runner/ter
 terraform destroy -auto-approve
 ```
 
-**Esperado:** `stopping` (desligar) ou `Destroy complete! Resources: 3 destroyed.` (destruir). No GitLab, o runner fica offline; pode removê-lo em **Settings → CI/CD → Runners**.
+**Esperado:** `stopping` (desligar) ou `Destroy complete! Resources: 3 destroyed.` (destruir). No GitLab, o runner fica offline; pode removê-lo em [`https://gitlab.com/SEU-USUARIO/quantum-ai-assistant/-/settings/ci_cd#js-runners-settings`](https://gitlab.com/SEU-USUARIO/quantum-ai-assistant/-/settings/ci_cd#js-runners-settings) (com o seu usuário; **Settings → CI/CD → Runners**).
 
 **Se falhar:** `0 to destroy` no plano = o `init` apontou para um state vazio: ou o bucket está errado, ou o seu runner **não** foi criado por este Terraform (por exemplo, pelo `subir-runner.sh` de outra turma). Não rode o destroy; **desligue** com o primeiro bloco e avise o professor. `Error acquiring the state lock` = outro `terraform` aberto.
 
