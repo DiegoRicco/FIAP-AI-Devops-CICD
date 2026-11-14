@@ -21,7 +21,7 @@ Você é o **AI DevOps Engineer** da Quantum Commerce. Nesta demo você abre a *
 
 Quatro palavras que aparecem o tempo todo, definidas uma vez: **corpus** é o conjunto de documentos de política (arquivos Markdown); o **front matter** é o cabeçalho de cada documento, entre `---`, com metadados como versão, `status` (`active`/`obsolete`), datas de vigência, **tenant** (de qual loja o documento é: `quantum` ou `parceiro-x`) e **nível de acesso** (`public` para clientes, `internal` só para funcionários). Vigência, tenant e nível de acesso são as três regras de **aplicabilidade** que toda estratégia precisa respeitar.
 
-Os comandos rodam em dois lugares, e cada passo diz qual: **Codespaces** (terminal) e **navegador** (o GitLab, na Parte 0, e a Central de Evidências, hospedada no ALB da sua conta, no resto da aula). A Aula 5 é **independente das anteriores**: o assistente vive num projeto GitLab próprio, `quantum-ai-assistant`, e a Parte 0 cria tudo o que ele precisa, com ou sem as aulas 2 a 4 feitas.
+Os comandos rodam em dois lugares, e cada passo diz qual: **Codespaces** (terminal) e **navegador** (o GitLab, na Parte 1, e a Central de Evidências, hospedada no ALB da sua conta, no resto da aula). A Aula 5 é **independente das anteriores**: o assistente vive num projeto GitLab próprio, `quantum-ai-assistant`, e a Parte 1, feita **agora, no início da aula**, cria tudo o que ele precisa, com ou sem as aulas 2 a 4 feitas.
 
 Três siglas de infraestrutura que aparecem desde já: **ALB** é o balanceador de carga da AWS, o endereço público que recebe o seu navegador e encaminha para a aplicação; **ECS Fargate** é o serviço da AWS que roda contêineres sem você gerenciar servidor; **Terraform** é a ferramenta que descreve essa infraestrutura em arquivos e a cria (um *data source* é quando ele só **lê** algo que já existe, como a rede `fiap-lab`, em vez de criar).
 
@@ -31,8 +31,7 @@ Nunca usou terminal? Copie o bloco cinza inteiro, cole no terminal indicado e ap
 > **Pré-requisitos obrigatórios antes de começar:**
 >
 > - [ ] **Codespaces aberto no fork do repositório da disciplina**, sincronizado hoje pelo [Início de aula](../../00-create-codespaces/Inicio-de-aula.md), com as **credenciais AWS do Academy** atualizadas (elas expiram a cada sessão).
-> - [ ] **Conta no [GitLab](https://gitlab.com/)** (gratuita) e uma **chave SSH** cadastrada nela (a Parte 0 ensina, se você ainda não tem).
-> - [ ] **Parte 0 deste README concluída** (a preparação cria o projeto GitLab e sobe o ambiente na AWS; leva mais tempo que a aula permite; faça antes). Se o **professor preparou o ambiente** na conta da turma, você ainda faz os passos **1 e 2** (projeto e clone) e o **2.1** (ligar o seu terminal a esse ambiente); pula os passos 3 a 6.
+> - [ ] **Conta no [GitLab](https://gitlab.com/)** (gratuita). Se ainda não tem, o passo 1 cria em um minuto; a chave SSH também é cadastrada lá.
 > - [ ] **Nenhuma aula anterior é obrigatória.** Quem fez a Aula 3 reaproveita o runner (Caminho A do passo 4); quem não fez cria um (Caminho B).
 >
 > **Valide rapidamente** (terminal do Codespaces):
@@ -44,7 +43,7 @@ Nunca usou terminal? Copie o bloco cinza inteiro, cole no terminal indicado e ap
 >
 > Saída esperada: o número da sua conta (12 dígitos) e o caminho do `Makefile`. Se o primeiro der `ExpiredToken`, refaça o Início de aula; se o segundo der `No such file or directory`, sincronize o fork.
 >
-> **Tempo de aula: 60 min** (o roteiro das Partes 1 a 6 foi cronometrado; a Parte 0 fica fora do relógio).
+> **Tempo de aula: ~85 min, incluindo montar o ambiente** (Parte 1, ~25 min: cerca de 9 min de comandos medidos na homologação, o resto é leitura e espera usada para estudar; mais ~10 min se você criar o runner pelo Caminho B) **mais o roteiro das Partes 2 a 7 (60 min)**. Nada é feito antes da aula: cada aluno sobe o próprio ambiente, na própria conta do Learner Lab, com a turma.
 
 ## Principais pontos de aprendizagem
 
@@ -66,13 +65,13 @@ Os blocos **💡 Clique para entender** trazem o aprofundamento; os blocos **⚠
 
 | Parte | Relógio | O que você faz | Passos | Tempo |
 |-------|---------|----------------|--------|-------|
-| [Parte 0](#parte-0---preparação-antes-da-aula) | antes da aula | Criar o projeto GitLab `quantum-ai-assistant`, rodar `make bootstrap`, habilitar o runner, subir o ambiente na AWS e esperar o `/ready` (vale para 5.1 e 5.2) | [1](#passo-1) · [2](#passo-2) · [3](#passo-3) · [4](#passo-4) · [5](#passo-5) · [6](#passo-6) | fora do relógio |
-| [Parte 1](#parte-1---a-reclamação-da-cliente) | 00–08 | Abrir a Central, ler `/ready`, release, tenant e data de referência | [7](#passo-7) · [8](#passo-8) | 8 min |
-| [Parte 2](#parte-2---bm25-e-vetorial-a-mesma-pergunta-duas-buscas) | 08–18 | A mesma pergunta no BM25 e no vetorial: trechos, scores, citação e limites | [9](#passo-9) · [10](#passo-10) · [11](#passo-11) | 10 min |
-| [Parte 3](#parte-3---grafo-o-caminho-até-a-política) | 18–33 | Navegar o caminho produto → categoria → campanha → política → versão → trecho e ler o Cypher | [12](#passo-12) · [13](#passo-13) · [14](#passo-14) | 15 min |
-| [Parte 4](#parte-4---desafio-datas-tenants-e-quatro-coisas-diferentes) | 33–43 | Trocar `as_of_date` entre 2026 e 2027; tenant errado; troca × arrependimento × pedido | [15](#passo-15) · [16](#passo-16) · [17](#passo-17) · [18](#passo-18) | 10 min |
-| [Parte 5](#parte-5---mexer-no-grafo-e-ver-a-versão-mudar) | 43–53 | Remover uma aresta de laboratório, ver a resposta e o `graph_version` mudarem, restaurar | [19](#passo-19) · [20](#passo-20) · [21](#passo-21) · [22](#passo-22) | 10 min |
-| [Parte 6](#parte-6---qual-evidência-autoriza-o-release) | 53–60 | A pergunta de Helena, a escolha de estratégia e o gancho para a 5.2 | [23](#passo-23) · [24](#passo-24) | 7 min |
+| [Parte 1](#parte-1---montar-o-ambiente-dentro-da-aula) | 00–25 | Criar o projeto GitLab `quantum-ai-assistant`, rodar `make bootstrap`, habilitar o runner, construir a imagem, subir o ambiente na AWS e esperar o `/ready`; cada espera longa vem com leitura guiada (vale para 5.1 e 5.2) | [1](#passo-1) · [2](#passo-2) · [3](#passo-3) · [4](#passo-4) · [5](#passo-5) · [6](#passo-6) | 25 min (35 com o Caminho B) |
+| [Parte 2](#parte-2---a-reclamação-da-cliente) | 25–33 | Abrir a Central, ler `/ready`, release, tenant e data de referência | [7](#passo-7) · [8](#passo-8) | 8 min |
+| [Parte 3](#parte-3---bm25-e-vetorial-a-mesma-pergunta-duas-buscas) | 33–43 | A mesma pergunta no BM25 e no vetorial: trechos, scores, citação e limites | [9](#passo-9) · [10](#passo-10) · [11](#passo-11) | 10 min |
+| [Parte 4](#parte-4---grafo-o-caminho-até-a-política) | 43–58 | Navegar o caminho produto → categoria → campanha → política → versão → trecho e ler o Cypher | [12](#passo-12) · [13](#passo-13) · [14](#passo-14) | 15 min |
+| [Parte 5](#parte-5---desafio-datas-tenants-e-quatro-coisas-diferentes) | 58–68 | Trocar `as_of_date` entre 2026 e 2027; tenant errado; troca × arrependimento × pedido | [15](#passo-15) · [16](#passo-16) · [17](#passo-17) · [18](#passo-18) | 10 min |
+| [Parte 6](#parte-6---mexer-no-grafo-e-ver-a-versão-mudar) | 68–78 | Remover uma aresta de laboratório, ver a resposta e o `graph_version` mudarem, restaurar | [19](#passo-19) · [20](#passo-20) · [21](#passo-21) · [22](#passo-22) | 10 min |
+| [Parte 7](#parte-7---qual-evidência-autoriza-o-release) | 78–85 | A pergunta de Helena, a escolha de estratégia e o gancho para a 5.2 | [23](#passo-23) · [24](#passo-24) | 7 min |
 
 <details>
 <summary><b>💡 O que é "recuperação" num assistente de IA, em 3 parágrafos</b></summary>
@@ -132,27 +131,39 @@ Quatro decisões que explicam esse desenho, e que você vai ver na prática:
 | Neo4j Community (versão pinada) | Mesma task ECS, só `localhost` | Grafo + índice vetorial `chunk_embedding` (cosseno, 384 dimensões). Nunca exposto fora da task. |
 | `quantum-assistant/infra-ecs/` | Terraform, state em `s3://base-config-<SEU RM>/quantum-assistant/ecs/terraform.tfstate` | ECR, cluster, dois serviços, ALB, target groups, security groups, log groups. Zero `aws_iam_*`: usa o `LabRole`. |
 | `quantum-assistant/infra/` | Terraform, state em `quantum-assistant/terraform.tfstate` | A **mesma** API de pedidos da versão anterior (Lambda `qc-assistant-orders` + DynamoDB). |
-| `Makefile` e `scripts/cloud/` (raiz do projeto) | Codespaces | Os comandos da Parte 0 e da operação: cada alvo `make` chama um script e imprime o resultado em `chave=valor`. |
-| Projeto GitLab `quantum-ai-assistant` + runner EC2 | GitLab + AWS | O repositório **de produto** do assistente (criado na Parte 0) e o runner que roda o pipeline da Demo 5.2. |
+| `Makefile` e `scripts/cloud/` (raiz do projeto) | Codespaces | Os comandos da Parte 1 e da operação: cada alvo `make` chama um script e imprime o resultado em `chave=valor`. |
+| Projeto GitLab `quantum-ai-assistant` + runner EC2 | GitLab + AWS | O repositório **de produto** do assistente (criado na Parte 1) e o runner que roda o pipeline da Demo 5.2. |
 
 > [!CAUTION]
-> **Custo enquanto estiver de pé.** Cada task Fargate ligada (1 vCPU + 3 GB, app + Neo4j juntos: ~US$ 0,053/h), o ALB (~US$ 0,0225/h) e a EC2 do runner (`t3.small`, ~US$ 0,02/h) cobram **por hora, com ou sem uso**. Com os preços públicos de `us-east-1` de novembro de 2026 (vCPU-hora US$ 0,04048; GB-hora US$ 0,004445; ALB-hora US$ 0,0225), cada task custa **US$ 0,054/h** e o ALB **US$ 0,0225/h**: **US$ 0,13/h** com as duas tasks ligadas, **US$ 0,08/h** só com o `live`. Em números de aula: uma sessão de **4 horas** com as duas tasks custa **≈ US$ 0,52** por aluno (0,215 por task + 0,09 do ALB + centavos de LCU e ECR); desligando o `candidate` após a promoção, **≈ US$ 0,36**. Para uma turma de 40, ≈ US$ 21 ou ≈ US$ 14. Fora dessa conta, porque são de outros states: o runner `t3.small` (~US$ 0,02/h) e a EC2 de observabilidade da 5.2 (`t3.medium`, ~US$ 0,04/h) (preços de lista de `us-east-1`; o `terraform output cost_warning` repete o lembrete). A API de pedidos (Lambda, API Gateway, DynamoDB) custa ~US$ 0 parada. **Não destrua nada entre a 5.1 e a 5.2**: a 5.2 opera exatamente este ambiente. A limpeza segura está na Parte 6 e sempre começa em `--dry-run`.
+> **Custo enquanto estiver de pé.** Cada task Fargate ligada (1 vCPU + 3 GB, app + Neo4j juntos: ~US$ 0,053/h), o ALB (~US$ 0,0225/h) e a EC2 do runner (`t3.small`, ~US$ 0,02/h) cobram **por hora, com ou sem uso**. Com os preços públicos de `us-east-1` de novembro de 2026 (vCPU-hora US$ 0,04048; GB-hora US$ 0,004445; ALB-hora US$ 0,0225), cada task custa **US$ 0,054/h** e o ALB **US$ 0,0225/h**: **US$ 0,13/h** com as duas tasks ligadas, **US$ 0,08/h** só com o `live`. Em números de aula: uma sessão de **4 horas** com as duas tasks custa **≈ US$ 0,52** por aluno (0,215 por task + 0,09 do ALB + centavos de LCU e ECR); desligando o `candidate` após a promoção, **≈ US$ 0,36**. Para uma turma de 40, ≈ US$ 21 ou ≈ US$ 14. Fora dessa conta, porque são de outros states: o runner `t3.small` (~US$ 0,02/h) e a EC2 de observabilidade da 5.2 (`t3.medium`, ~US$ 0,04/h) (preços de lista de `us-east-1`; o `terraform output cost_warning` repete o lembrete). A API de pedidos (Lambda, API Gateway, DynamoDB) custa ~US$ 0 parada. **Não destrua nada entre a 5.1 e a 5.2**: a 5.2 opera exatamente este ambiente. A limpeza segura está na Parte 7 e sempre começa em `--dry-run`.
 
 ---
 
-## Parte 0 - Preparação (antes da aula)
+## Parte 1 - Montar o ambiente (dentro da aula)
 
-> **Sexta-feira, uma semana antes.** Helena, no planejamento: *— "O assistente deixou de ser um experimento dentro do repositório de infraestrutura. Ele vira um **produto**, com repositório próprio, pipeline próprio e ciclo de release próprio. Quem chegar hoje não precisa saber o que fizemos nas aulas passadas: clona, roda o bootstrap e tem o ambiente de pé."*
+> **00–25 min.** Helena abre a reunião, antes de qualquer análise: *— "O assistente deixou de ser um experimento dentro do repositório de infraestrutura. A partir de hoje ele é um **produto**, com repositório próprio, pipeline próprio e ciclo de release próprio. Quem está nesta sala não precisa saber o que fizemos nas aulas passadas: clona, roda o bootstrap e tem o ambiente de pé. Diego, sobe com eles agora; eu volto com o print quando o `/ready` responder."*
+>
+> Diego, já com o terminal aberto no telão: *— "Vinte e cinco minutos. Enquanto a AWS trabalha, a gente lê o que ela está subindo."*
 
 ### Resultado esperado desta parte
 
-Um projeto GitLab **novo**, `quantum-ai-assistant`, com o código do assistente na raiz e um runner habilitado; a conta AWS com bucket de state, rede `fiap-lab`, API de pedidos, segredos no SSM, imagem no ECR, os serviços `live` e `candidate` ligados atrás do ALB; e `GET /ready` respondendo `200`. **Esta parte leva mais tempo do que a aula permite** e por isso fica fora do relógio: faça-a em casa, ou no início do dia, ou confirme que o professor a fez por você. **Ela vale para as duas demos**: a 5.2 usa o mesmo projeto e o mesmo ambiente.
+Um projeto GitLab **novo**, `quantum-ai-assistant`, com o código do assistente na raiz e um runner habilitado; a conta AWS com bucket de state, rede `fiap-lab`, API de pedidos, segredos no SSM, imagem no ECR, os serviços `live` e `candidate` ligados atrás do ALB; e `GET /ready` respondendo `200`. Tudo isso é feito **agora, com a turma**, na sua conta do Learner Lab. **Ela vale para as duas demos**: a 5.2 usa o mesmo projeto e o mesmo ambiente.
 
 Toda a preparação na AWS passa por **um** arquivo: o `Makefile` na raiz do projeto. Cada alvo é idempotente (pode rodar de novo sem medo), descobre sozinho o que precisa (conta, bucket, rede) e diz, item a item, o que conferiu (`[PASS]`) ou o que falta (`[FAIL]`, com a correção na mesma linha).
 
-**Quanto tempo leva:** o que domina a primeira execução é o **cold start** de cada deploy (na homologação, `cold_start_s` de **190 s** no `candidate` e **202 s** no `live`: puxar a imagem, subir o Neo4j, reconstruir o grafo e esperar o índice) e o primeiro build da imagem (download do modelo de embeddings, não cronometrado de ponta a ponta na homologação); reserve **uma hora** com folga para ler e para o `make runner` do Caminho B (que cria uma EC2 e roda Ansible, ~8 min). Rodar a Parte 0 **de novo**, com tudo já criado, é rápido: na homologação, `make preflight` 25 s, `make bootstrap` 32 s, `make runner` 25 s (Caminho A, runner ligado), `make image` 30 s (cache de build quente) e `make ready` 5 s, cerca de **2,5 minutos** de comandos. Se o professor preparou o ambiente na conta da turma, você faz só os passos 1, 2 e 2.1 (~10 min).
+**Quanto tempo leva, e onde o tempo vai.** Os tempos abaixo são os medidos na homologação deste lab; o que domina é a espera pela AWS, e cada espera tem uma leitura para fazer em paralelo:
 
-**Seu ambiente é seu.** Cada aluno tem a própria conta do Learner Lab e o próprio projeto GitLab; ninguém mais altera o seu `live`. Quando este README diz "alguém da sala", está falando de uma conta **compartilhada** pelo professor em sala de aula; na sua conta, "alguém" é você mesmo numa tentativa anterior.
+| Passo | Comando | Tempo medido | O que você faz enquanto espera |
+|---|---|---|---|
+| 1 e 2 | projeto GitLab, chave SSH, clone e primeiro push | ~5 min de cliques e comandos (não é espera) | |
+| 3 | `make bootstrap` | **32 s** com tudo já criado; na primeira vez, mais o `apply` da API de pedidos e, se faltar, ~1 min recriando a rede <!-- CONFIRMAR-SAIDA: duração do primeiro bootstrap numa conta vazia não foi cronometrada --> | ler a tabela 💡 do `Makefile` |
+| 4 | `make runner` | **25 s** (Caminho A, runner ligado); ~6-8 min no Caminho B | ler o 💡 do runner e do token no SSM |
+| 5 | `make image` | **74 s** de build a frio (mais o envio do contexto e o push); **8-30 s** com o cache do runner quente | abrir a arquitetura e apostar numa estratégia |
+| 6 | `make up` + `make deploy-live` + `make deploy-candidate` + `make ready` | `apply` de 28 recursos <!-- CONFIRMAR-SAIDA: duração do apply de infra-ecs não foi cronometrada -->; cold start de **202 s** (`live`) e **190 s** (`candidate`); `ready` 5 s | ler o corpus (v2 × v3, Black Friday) e a semente do grafo |
+
+Somando: cerca de **9 minutos de comandos** (Caminho A) e **25 minutos de relógio** com a leitura, as esperas e os checkpoints; **35 minutos** se você cria o runner (Caminho B). Repetir a Parte 1 numa sessão nova do Academy, com tudo já criado, leva ~2,5 min de comandos (`preflight` 25 s, `bootstrap` 32 s, `runner` 25 s, `image` 30 s, `ready` 5 s).
+
+**Seu ambiente é seu.** Cada aluno tem a própria conta do Learner Lab e o próprio projeto GitLab; ninguém mais altera o seu `live`. Quando este README diz "alguém da sala", na sua conta esse alguém é você mesmo numa tentativa anterior. Se algum passo da Parte 1 travar e não resolver com o **Se falhar**, não pare a turma: o professor projeta o próprio ambiente no telão, você acompanha o roteiro nele e volta ao seu assim que o passo destravar (quase sempre é credencial expirada ou runner desligado).
 
 ---
 
@@ -161,25 +172,36 @@ Toda a preparação na AWS passa por **um** arquivo: o `Makefile` na raiz do pro
 **1. Crie o projeto `quantum-ai-assistant` no GitLab**
 
 **Onde:** navegador, GitLab.
-**Por quê:** o assistente ganha um repositório **de produto**, separado de qualquer projeto de aula anterior. É nele que o pipeline da Demo 5.2 vai rodar. Se você ainda não tem conta no [GitLab](https://gitlab.com/), crie uma (gratuita) antes.
+**Por quê:** o assistente ganha um repositório **de produto**, separado de qualquer projeto de aula anterior. É nele que o pipeline da Demo 5.2 vai rodar. Se você ainda não tem conta no [GitLab](https://gitlab.com/), crie uma agora (gratuita, um minuto) e volte aqui.
 **Execute:**
 
-**1.1. Crie o projeto em branco.** No GitLab, clique em **New project** → **Create blank project**. Preencha **Project name** com `quantum-ai-assistant` (o **Project slug** fica igual, automaticamente). Em **Visibility Level**, escolha **Private**. **Desmarque** a opção *Initialize repository with a README* (o código vai entrar pelo seu primeiro push). Clique em **Create project**.
+**1.1. Crie o projeto em branco.** No GitLab, clique em **New project** → **Create blank project** e preencha a tela **um campo por vez**, na ordem em que ela mostra:
+
+- **Project name**: `quantum-ai-assistant`.
+- **Project URL**: no seletor ao lado de `https://gitlab.com/`, escolha o **seu nome de usuário** (o seu nick, não um grupo nem outro workspace). É ele que aparece na URL SSH do 1.2 (`git@gitlab.com:SEU-USUARIO/...`).
+- **Project slug**: fica `quantum-ai-assistant` sozinho.
+- **Project deployment target (optional)**: deixe em branco.
+- **Visibility Level**: **Private**.
+- **Project Configuration**: **desmarque** *Initialize repository with a README* (o código vai entrar pelo seu primeiro push); deixe *Enable Static Application Security Testing (SAST)* e *Enable Secret Detection* desmarcados.
+- Clique em **Create project**.
+
+<!-- NOVA-IMAGEM: img/gitlab-create-blank-project.png | capturar: a tela Create blank project preenchida, com o Project URL mostrando o usuário selecionado no seletor de namespace e a opção Initialize repository with a README DESMARCADA | depois de salvar o arquivo, descomente a linha abaixo -->
+<!-- ![Tela Create blank project do GitLab: Project name quantum-ai-assistant, Project URL com o usuário selecionado, Visibility Private e Initialize repository with a README desmarcado](img/gitlab-create-blank-project.png) -->
 
 **1.2. Confirme o endereço SSH do projeto.** Na página do projeto recém-criado, clique em **Code** (botão azul) e copie a URL que começa com `git@gitlab.com:`. Ela tem a forma `git@gitlab.com:SEU-USUARIO/quantum-ai-assistant.git`.
 
-**1.3. Garanta uma chave SSH no GitLab.** O `git push` precisa provar ao GitLab que é você: em vez de senha, usa um par de chaves (uma **privada**, que fica só no seu Codespaces, e uma **pública**, que você cadastra no GitLab). Se você já cadastrou a chave `/home/vscode/.ssh/gitlab` numa aula anterior, pule para o passo 2. Se não, no terminal do Codespaces:
+**1.3. Garanta uma chave SSH no GitLab.** O `git push` precisa provar ao GitLab que é você: em vez de senha, usa um par de chaves (uma **privada**, que fica só no seu Codespaces, e uma **pública**, que você cadastra no GitLab). Se você já cadastrou a chave `/home/vscode/.ssh/gitlab` numa aula anterior, pule para o passo 2. Se não, no terminal do Codespaces (o `test -f ... ||` não sobrescreve uma chave que já exista; o comando de criação é o mesmo do módulo 02):
 
 ```bash
-test -f /home/vscode/.ssh/gitlab || ssh-keygen -t ed25519 -f /home/vscode/.ssh/gitlab -N "" -C "codespaces-gitlab"
+test -f /home/vscode/.ssh/gitlab || ssh-keygen -t rsa -b 2048 -C "gitlab key" -f /home/vscode/.ssh/gitlab -N ""
 cat /home/vscode/.ssh/gitlab.pub
 ```
 
-Copie a linha inteira que começa com `ssh-ed25519` e, no GitLab, vá em **avatar → Edit profile → SSH Keys → Add new key**, cole em **Key** e clique em **Add key**.
+Copie a linha inteira que começa com `ssh-rsa` (termina em `gitlab key`). Se a linha começar com `ssh-ed25519`, também serve: é outro tipo de chave, cadastre do mesmo jeito. Acesse a página de chaves SSH do seu GitLab: [Chaves SSH do GitLab](https://gitlab.com/-/user_settings/ssh_keys) e clique em **Add new key**. Cole em **Key**, o **Title** fica `gitlab key` (preenchido sozinho com o comentário da chave) e clique em **Add key**.
 
-**Esperado:** o projeto `quantum-ai-assistant` aberto no GitLab, **vazio** (a página mostra as instruções *Command line instructions*), e a sua chave listada em SSH Keys.
+**Esperado:** o projeto `quantum-ai-assistant` aberto no GitLab, **vazio** (a página mostra as instruções *Command line instructions*), e a sua chave listada em SSH Keys com o título `gitlab key`.
 
-**Se falhar:** *Project namespace ... has already been taken* = já existe um projeto com esse nome na sua conta; abra-o e use-o (se estiver vazio) ou escolha `quantum-ai-assistant-2` e **lembre de trocar o nome** em todos os comandos abaixo.
+**Se falhar:** *Project namespace ... has already been taken* = já existe um projeto com esse nome na sua conta; abra-o e use-o (se estiver vazio) ou escolha `quantum-ai-assistant-2` e **lembre de trocar o nome** em todos os comandos abaixo. A URL do 1.2 mostra um **grupo** em vez do seu usuário = o projeto nasceu no namespace errado; apague-o em **Settings → General → Advanced → Delete project** e crie de novo escolhendo o seu usuário no **Project URL**.
 
 ---
 
@@ -220,7 +242,7 @@ git push -u origin "$(git branch --show-current)"
 
 **Se falhar:** `Permission denied (publickey)` = a chave não está no GitLab (passo 1.3) ou o `ssh-add` não rodou neste terminal; repita as duas primeiras linhas. `Repository not found` = o `GITLAB_USER` está errado ou o projeto tem outro nome; confira a URL do passo 1.2. `cp: cannot stat` = repositório do curso desatualizado: `cd /workspaces/FIAP-AI-Devops-CICD && git pull origin master`.
 
-**2.1. Ligue o terminal ao ambiente da AWS (obrigatório também para quem pulou os passos 3 a 6).** Os comandos da aula leem a URL do assistente com `terraform -chdir=infra-ecs output`; para isso o Terraform precisa conhecer o state que está no bucket **da conta onde o ambiente foi criado**. Se foi o professor quem preparou, ele envia o bloco de credenciais dessa conta (igual ao do Início de aula) e você o cola em `~/.aws/credentials` **no lugar** do seu antes de seguir; se foi você, as suas credenciais já servem. O comando abaixo só **lê** o state (não cria nem altera nada) e é seguro repetir:
+**2.1. Ligue o terminal ao state da AWS.** Os comandos da aula leem a URL do assistente com `terraform -chdir=infra-ecs output`; para isso o Terraform precisa conhecer o state que fica no bucket `base-config-<SEU RM>` da **sua** conta. O comando abaixo só **lê** o state (não cria nem altera nada) e é seguro repetir, inclusive em todo terminal novo:
 
 ```bash
 cd /home/vscode/environment/quantum-ai-assistant
@@ -229,7 +251,7 @@ terraform -chdir=infra-ecs init -input=false -reconfigure -backend-config="bucke
 terraform -chdir=infra-ecs output -raw app_url 2>/dev/null; echo
 ```
 
-> Saída esperada: `bucket: base-config-<RM>`, `init: ok` e, se o ambiente já existe, a `app_url` (`http://qc-assistant-alb-...`). Se a última linha vier vazia, o ambiente **ainda não existe** nesta conta: se é a sua conta, siga para o passo 3; se são as credenciais da conta do professor, confira com ele se o ambiente está de pé (`make start`, se as tasks foram desligadas). Se `bucket:` vier vazio, as credenciais expiraram ou a conta ainda não tem bucket (o `make bootstrap` do passo 3 cria).
+> Saída esperada: `bucket: base-config-<RM>`, `init: ok` e, se o ambiente já existe (sessão repetida), a `app_url` (`http://qc-assistant-alb-...`). Na primeira vez a última linha vem **vazia**: o ambiente ainda não existe, e é exatamente o que os passos 3 a 6 criam. Se `bucket:` vier vazio, as credenciais expiraram ou a conta ainda não tem bucket (o `make bootstrap` do passo 3 cria); nesse caso repita o 2.1 depois do passo 3.
 
 <details>
 <summary><b>💡 Clique para entender: o que há em cada pasta do projeto</b></summary>
@@ -249,7 +271,7 @@ terraform -chdir=infra-ecs output -raw app_url 2>/dev/null; echo
 | `infra-obs/`, `ops/cloud/` | Observabilidade na AWS (Demo 5.2): EC2 com Collector, Jaeger, Prometheus, Loki, Grafana, probes. | Operação |
 | `evals/` | Golden set, adversarial, thresholds, `run_eval.py`, `graph_gate.py`. | Qualidade |
 | `orders/` | Pedidos e tokens **100% fictícios** da API de pedidos. | (só laboratório) |
-| `scripts/cloud/`, `Makefile` | Os alvos `make` desta Parte 0 e da operação. | Plataforma |
+| `scripts/cloud/`, `Makefile` | Os alvos `make` desta Parte 1 e da operação. | Plataforma |
 | `.gitlab-ci.yml` | O pipeline da Demo 5.2, na raiz. | Plataforma |
 
 </blockquote>
@@ -318,9 +340,9 @@ make bootstrap
 > Bootstrap ok. Proximo: make runner e depois make preflight.
 > ```
 >
-> Na **primeira** vez os segredos aparecem como `created` (o valor nunca é mostrado), o bucket como `Criando o bucket base-config-<SEU RM>...` e, se a rede `fiap-lab` não existe, `Rede fiap-lab ausente: recriando...` seguido do `recriar-rede.sh` do repositório do curso (~1 min). A API de pedidos é a Lambda `qc-assistant-orders` + DynamoDB: o assistente a chama por `QC_ORDERS_BASE_URL`, e o status do pedido do passo 18 vem dela. Rodar o bootstrap de novo depois de um commit novo mostra `Plan: 0 to add, 3 to change, 0 to destroy` no Terraform da API (o pacote da Lambda carrega o `git_sha` do projeto, então ganha uma versão nova); nada é destruído.
+> Na **primeira** vez os segredos aparecem como `created` (o valor nunca é mostrado), o bucket como `Criando o bucket base-config-<SEU RM>...` e, se a rede `fiap-lab` não existe, `Rede fiap-lab ausente: recriando...` seguido do `recriar-rede.sh` do repositório do curso (~1 min). **Enquanto o Terraform da API de pedidos roda**, abra o 💡 logo abaixo e leia a tabela do `Makefile`: são os mesmos alvos que o pipeline da 5.2 vai chamar, e saber o que cada um faz por baixo é metade desta Parte. A API de pedidos é a Lambda `qc-assistant-orders` + DynamoDB: o assistente a chama por `QC_ORDERS_BASE_URL`, e o status do pedido do passo 18 vem dela. Rodar o bootstrap de novo depois de um commit novo mostra `Plan: 0 to add, 3 to change, 0 to destroy` no Terraform da API (o pacote da Lambda carrega o `git_sha` do projeto, então ganha uma versão nova); nada é destruído.
 
-**Se falhar:** `Credencial AWS invalida/expirada` = refaça o [Início de aula](../../00-create-codespaces/Inicio-de-aula.md) e repita. `Nenhum bucket base-config-* na conta. Rode: make bootstrap RM=<seu-rm>` = faça exatamente isso, com o seu RM. `Nao achei o repositorio da disciplina` = o bootstrap precisa do repositório do curso (para recriar a rede e para o runner); se o seu está fora de `/workspaces/FIAP-AI-Devops-CICD`, rode `make bootstrap COURSE_REPO=/caminho/para/FIAP-AI-Devops-CICD`. `multiple EC2 VPCs matched` = duas redes `fiap-lab`; não apague nada, chame o professor. Para conferir tudo **sem criar nada** (antes da aula, por exemplo), `make preflight` imprime uma linha `[PASS]`/`[FAIL]` por item, com a correção ao lado de cada `[FAIL]`; na homologação deste lab foram 26 `[PASS]`, 0 `[FAIL]`, e a última linha `[PASS] preflight ok`.
+**Se falhar:** `Credencial AWS invalida/expirada` = refaça o [Início de aula](../../00-create-codespaces/Inicio-de-aula.md) e repita. `Nenhum bucket base-config-* na conta. Rode: make bootstrap RM=<seu-rm>` = faça exatamente isso, com o seu RM. `Nao achei o repositorio da disciplina` = o bootstrap precisa do repositório do curso (para recriar a rede e para o runner); se o seu está fora de `/workspaces/FIAP-AI-Devops-CICD`, rode `make bootstrap COURSE_REPO=/caminho/para/FIAP-AI-Devops-CICD`. `multiple EC2 VPCs matched` = duas redes `fiap-lab`; não apague nada, chame o professor. Para conferir tudo **sem criar nada** (ao voltar numa sessão nova do Academy, por exemplo), `make preflight` imprime uma linha `[PASS]`/`[FAIL]` por item, com a correção ao lado de cada `[FAIL]`; na homologação deste lab foram 26 `[PASS]`, 0 `[FAIL]`, e a última linha `[PASS] preflight ok`.
 
 <details>
 <summary><b>💡 Clique para entender: o que cada comando do <code>Makefile</code> faz de verdade</b></summary>
@@ -338,7 +360,7 @@ make bootstrap
 | `make down` / `make start` | `scripts/cloud/stop.sh all` / `start.sh $(ENV)` (`scale.sh 0|1`): só muda o `desired_count` dos services. | Desligar ao fim da aula e ligar no começo da próxima custa minutos de boot, não um deploy: a **mesma** revisão volta. |
 | `make diagnose` | `scripts/cloud/diagnose.sh $(ENV)`. | Quando o `/ready` não chega a 200. |
 | `make plan` / `make destroy-dry-run` | `terraform plan` do runtime (deve dizer `No changes` depois do `up`) / `scripts/cloud/cleanup.sh --dry-run`. | Conferir drift; ver o que a limpeza faria. |
-| `make preflight` | `scripts/cloud/preflight.sh`, só leitura: ferramentas; `sts get-caller-identity` (conta mascarada, role `voclabs`/`LabRole`, região); `head-bucket`; `describe-vpcs`/`describe-subnets` da `fiap-lab`; `iam get-role LabRole` (confia em `ecs-tasks`?); `ecs list-clusters`, `ecr describe-repositories`, `elbv2 describe-load-balancers`; quota de vCPU Fargate; EC2 do runner `running` e `Online` no SSM, e o SG dela; `GET /orders/Q-1001` na API de pedidos; existência dos seis segredos (sem ler o valor); oferta de `t3.medium` na região (é o tamanho da EC2 de observabilidade da Demo 5.2; o runner é `t3.small`). Sai `[PASS]`/`[FAIL]` por item e exit 0/1. | Para conferir antes da aula sem mexer em nada. Falha de credencial aparece em segundos, não no minuto 8 disfarçada de outro erro. |
+| `make preflight` | `scripts/cloud/preflight.sh`, só leitura: ferramentas; `sts get-caller-identity` (conta mascarada, role `voclabs`/`LabRole`, região); `head-bucket`; `describe-vpcs`/`describe-subnets` da `fiap-lab`; `iam get-role LabRole` (confia em `ecs-tasks`?); `ecs list-clusters`, `ecr describe-repositories`, `elbv2 describe-load-balancers`; quota de vCPU Fargate; EC2 do runner `running` e `Online` no SSM, e o SG dela; `GET /orders/Q-1001` na API de pedidos; existência dos seis segredos (sem ler o valor); oferta de `t3.medium` na região (é o tamanho da EC2 de observabilidade da Demo 5.2; o runner é `t3.small`). Sai `[PASS]`/`[FAIL]` por item e exit 0/1. | Para conferir o ambiente sem mexer em nada, no início de cada sessão. Falha de credencial aparece em segundos, não no minuto 8 disfarçada de outro erro. |
 
 </blockquote>
 </details>
@@ -378,7 +400,7 @@ make runner
 aws ssm put-parameter --name /fiap/gitlab-runner/token --type SecureString --overwrite --value 'glrt-...' --region us-east-1
 ```
 
-**4.6.** Suba e registre o runner (Terraform cria a EC2 na rede `fiap-lab`; Ansible, via SSM, instala e registra o `gitlab-runner` lendo o token do SSM). O Ansible fala com a EC2 pelo `session-manager-plugin`, que o devcontainer já instala (versão `1.2.896.0`); o `runner-recover.sh` confere o plugin **antes** de criar qualquer coisa e, se ele faltar, para sem ter criado a EC2:
+**4.6.** Suba e registre o runner (Terraform cria a EC2 na rede `fiap-lab`; Ansible, via SSM, instala e registra o `gitlab-runner` lendo o token do SSM). São ~6-8 min de espera: use-os lendo o 💡 abaixo (um runner, vários projetos) e, se sobrar, a tabela do `Makefile` do passo 3. O Ansible fala com a EC2 pelo `session-manager-plugin`, que o devcontainer já instala (versão `1.2.896.0`); o `runner-recover.sh` confere o plugin **antes** de criar qualquer coisa e, se ele faltar, para sem ter criado a EC2:
 
 ```bash
 cd /home/vscode/environment/quantum-ai-assistant
@@ -453,7 +475,9 @@ make image
 > sha256:<64 caracteres hex>
 > ```
 >
-> As linhas `remote-build:`/`build-push:` são o progresso (`build 8 s, push 1 s` é o cache quente; na primeira vez aparece o log do build, que é longo); o **resultado** é a última linha, só o digest.
+> As linhas `remote-build:`/`build-push:` são o progresso (`build 8 s, push 1 s` é o cache quente; na primeira vez aparece o log do build, que é longo); o **resultado** é a última linha, só o digest. Na primeira vez, o build a frio levou **74 s** na medição de referência (mais o envio do contexto e o push), porque baixa o modelo de embeddings e pré-calcula os vetores; com o cache do runner quente, 8 a 30 s.
+>
+> **Enquanto o build roda (1 a 3 min):** abra a [arquitetura da demo](img/arquitetura-5-1.png) e localize o ECR, as duas tasks (`live` e `candidate`, cada uma com `app` + `neo4j`) e o ALB na frente. Depois responda no caderno, antes de ver qualquer resposta: para a pergunta da cliente, *"quantos dias eu tenho para trocar um fone?"*, **qual das três estratégias você aposta que cita a política certa** (`politica-trocas@v3`, 30 dias) e qual você aposta que cita outra coisa? Os passos 9 e 12 dão a resposta; guarde a aposta.
 >
 > São seis parâmetros `SecureString` (três por ambiente: a senha do Neo4j, a mesma senha no formato `neo4j/<senha>` que a imagem do banco espera, e a chave HMAC da porta administrativa). O `make bootstrap` do passo 3 já os criou, por isso aqui eles aparecem como `exists` (se você pulou o passo 3, aparecem como `created`). Rodar `make secrets` de novo é sempre seguro: parâmetro que já existe **não** é trocado (trocar a senha com a task rodando quebraria a conexão app → Neo4j); os **valores** nunca aparecem no terminal. O `image_digest` varia com o conteúdo; é o identificador do release de hoje. Guarde-o: você vai vê-lo de novo no `/ready` (passo 8) e, na Demo 5.2, no manifesto de release.
 
@@ -467,7 +491,7 @@ Uma imagem de contêiner é um pacote imutável, identificado pelo hash do seu c
 
 O `Dockerfile` em `containers/` faz três coisas que importam para a aula: (1) instala dependências com versões pinadas; (2) baixa do Hugging Face o modelo de embeddings **com revisão fixa** (um commit específico do repositório do modelo) e grava os pesos na imagem; (3) roda o encoder sobre todos os trechos do corpus e grava os vetores (384 números por trecho) junto com o hash do corpus. Na subida da task, o bootstrap compara o hash: se o corpus é o mesmo, usa os vetores prontos; se não, recalcula.
 
-Resultado: a task não depende de internet para ficar pronta, o cold start cabe no tempo de aula, e dois ambientes com a mesma imagem têm **exatamente** o mesmo índice vetorial. Isso é o que torna `vector_index_version` e `graph_seed_version` comparáveis entre `live` e `candidate`. Na Demo 5.2, quem constrói e publica a imagem é o **pipeline**, no runner (que tem Docker); hoje, na Parte 0, é você, do terminal, para ter um primeiro release no ar.
+Resultado: a task não depende de internet para ficar pronta, o cold start cabe no tempo de aula, e dois ambientes com a mesma imagem têm **exatamente** o mesmo índice vetorial. Isso é o que torna `vector_index_version` e `graph_seed_version` comparáveis entre `live` e `candidate`. Na Demo 5.2, quem constrói e publica a imagem é o **pipeline**, no runner (que tem Docker); agora, na Parte 1, é você, do terminal, para ter um primeiro release no ar.
 
 📚 Regras do Learner Lab (resumo do guia oficial da AWS Academy) que valem para este módulo: só `us-east-1` e `us-west-2`; EC2 até `large`, no máximo 9 instâncias e 32 vCPU ao mesmo tempo; ECS/Fargate usam o `LabRole` como task role e execution role; ao encerrar a sessão, as EC2 **param** e voltam com IP público novo (e as tasks Fargate param também: `make start` as religa na mesma revisão; `make ready` confere).
 
@@ -484,7 +508,7 @@ Resultado: a task não depende de internet para ficar pronta, o cold start cabe 
 
 **Onde:** Codespaces.
 **Por quê:** `make up` é o Terraform de `infra-ecs/`: cria cluster, os dois serviços (desligados), ALB, target groups, security groups e logs, só **lendo** a rede `fiap-lab`. `make deploy-live` e `make deploy-candidate` publicam o release: registram a task definition com o digest do `make image`, ligam cada serviço e **esperam** o `/ready` responder 200 pelo ALB. `make ready` é a conferência final; enquanto o `/ready` responder 503, nada adiante funciona.
-**Execute:**
+**Execute:** os quatro comandos, em sequência, no mesmo terminal. Os dois `deploy` esperam sozinhos o cold start (3 a 5 min cada, medidos em **202 s** e **190 s** na homologação); você sabe que terminou quando a linha `deploy: pronto em <n>s` aparece, e o `make ready` fecha com `HTTP 200` na última linha.
 
 ```bash
 cd /home/vscode/environment/quantum-ai-assistant
@@ -493,6 +517,24 @@ make deploy-live
 make deploy-candidate
 make ready
 ```
+
+**Enquanto espera, num segundo terminal** (botão `+` no painel do terminal do Codespaces), leia o que está subindo. Durante o `make deploy-live`, as duas versões da política de trocas, que são o centro da aula:
+
+```bash
+cd /home/vscode/environment/quantum-ai-assistant
+cat corpus/trocas-v2.md
+cat corpus/trocas-v3.md
+```
+
+Compare só o cabeçalho entre `---` (o front matter): `version`, `status`, `effective_date` e, na v3, `supersedes`. A v2 está `obsolete` e diz 15 dias; a v3 está vigente e diz 30. Anote: é a v2 que a cliente recebeu. Durante o `make deploy-candidate`, a campanha e a semente do grafo:
+
+```bash
+cd /home/vscode/environment/quantum-ai-assistant
+cat corpus/black-friday-2027.md
+grep -n -E 'fone-bluetooth-qc|black-friday-2027|politica-trocas' graph/seed/catalog.json
+```
+
+No front matter da campanha, repare nas datas de vigência (a Parte 5 vai mover a data simulada da pergunta para dentro e para fora delas). No `catalog.json`, cada linha do `grep` é uma relação que o grafo vai percorrer na Parte 4: o fone pertence à categoria `audio`, participa da `black-friday-2027`, e a `politica-trocas` se aplica à categoria. Quando o primeiro terminal mostrar `deploy: pronto`, volte a ele.
 
 **Esperado:**
 
@@ -563,16 +605,16 @@ Por que `/ready` e não `/health` no health check: `/health` diz que o processo 
 
 ### Checkpoint
 
-- o projeto `quantum-ai-assistant` existe no GitLab com o código na raiz, e o runner aparece **online** nele (quem usa o ambiente do professor confere só o projeto no GitLab e o 2.1 com a `app_url` impressa; o runner e o pipeline ficam para a Demo 5.2, quando ele fizer o passo 4)
+- o projeto `quantum-ai-assistant` existe no GitLab com o código na raiz, e o runner aparece **online** nele
 - `make bootstrap` terminou com `Bootstrap ok`; `make image` imprimiu um digest
 - `make up` aplicou sem erro, `make deploy-live` e `make deploy-candidate` terminaram com `"ok": true`, e `make ready` devolveu `HTTP 200`
-- você tem a `app_url` anotada e **nada foi destruído**
+- você tem a `app_url` anotada, a sua aposta de estratégia no caderno, e **nada foi destruído**
 
 ---
 
-## Parte 1 - A reclamação da cliente
+## Parte 2 - A reclamação da cliente
 
-> **00–08 min.** Helena projeta o print do Instagram: *"15 dias para trocar o fone. Fonte: Política de trocas."* E pergunta à sala: *"Essa resposta está errada. Mas ela está errada **por quê**? Antes de mexer no sistema, eu quero saber o que ele está rodando."*
+> **25–33 min.** Helena projeta o print do Instagram: *"15 dias para trocar o fone. Fonte: Política de trocas."* E pergunta à sala: *"Essa resposta está errada. Mas ela está errada **por quê**? Antes de mexer no sistema, eu quero saber o que ele está rodando."*
 
 ### Resultado esperado desta parte
 
@@ -652,7 +694,7 @@ curl -s "$APP/ready" | python3 -m json.tool
 > }
 > ```
 
-Três coisas para anotar no caderno, porque a Parte 5 e a Demo 5.2 vão compará-las: **`graph_version`**, **`graph_seed_version`** e **`image_digest`**. Hoje `graph_version` e `graph_seed_version` são **iguais entre si** (na homologação, `c07dde5b8806`; se o catálogo mudar numa turma futura, o valor muda, e o que importa é a igualdade): o grafo em memória é exatamente o que veio na imagem. `corpus_version` é `72532257bea3` e `index_version` é `4f0ea92022d2`, os **mesmos** hashes das aulas anteriores: o conteúdo das políticas e o índice BM25 não mudaram; o que mudou foi o que há **além** deles (`vector_index_version`, `graph_seed_version`). O `cold_start_s` é quanto esta task levou, do início do processo ao `/ready` pronto, para carregar o modelo, reconstruir o grafo e esperar o índice (na homologação, 16,5 s numa task e 25,5 s em outra: varia por execução); o resto dos ~200 s do deploy é o Fargate puxando a imagem e subindo o Neo4j. Os valores de digest e `release_id` acima são os da homologação; os seus mudam se a imagem foi reconstruída. Repare também em `model_version: "none"`: não há modelo gerativo. O que há é um **modelo de embeddings**, identificado à parte (`embedding_model_id`, `embedding_model_revision`, `embedding_dim`). São coisas diferentes, e o 💡 do passo 10 explica por quê.
+Três coisas para anotar no caderno, porque a Parte 6 e a Demo 5.2 vão compará-las: **`graph_version`**, **`graph_seed_version`** e **`image_digest`**. Hoje `graph_version` e `graph_seed_version` são **iguais entre si** (na homologação, `c07dde5b8806`; se o catálogo mudar numa turma futura, o valor muda, e o que importa é a igualdade): o grafo em memória é exatamente o que veio na imagem. `corpus_version` é `72532257bea3` e `index_version` é `4f0ea92022d2`, os **mesmos** hashes das aulas anteriores: o conteúdo das políticas e o índice BM25 não mudaram; o que mudou foi o que há **além** deles (`vector_index_version`, `graph_seed_version`). O `cold_start_s` é quanto esta task levou, do início do processo ao `/ready` pronto, para carregar o modelo, reconstruir o grafo e esperar o índice (na homologação, 16,5 s numa task e 25,5 s em outra: varia por execução); o resto dos ~200 s do deploy é o Fargate puxando a imagem e subindo o Neo4j. Os valores de digest e `release_id` acima são os da homologação; os seus mudam se a imagem foi reconstruída. Repare também em `model_version: "none"`: não há modelo gerativo. O que há é um **modelo de embeddings**, identificado à parte (`embedding_model_id`, `embedding_model_revision`, `embedding_dim`). São coisas diferentes, e o 💡 do passo 10 explica por quê.
 
 **Se falhar:** `"ready": false` = volte ao `⚠` do passo 6. `command not found: terraform` = você está fora do devcontainer; abra o terminal do Codespaces.
 
@@ -668,7 +710,7 @@ Três coisas para anotar no caderno, porque a Parte 5 e a Demo 5.2 vão compará
 | `index_version` | o índice BM25 é reconstruído com corpus ou parâmetros diferentes | derivada |
 | `vector_index_version` | o índice vetorial muda (corpus, modelo ou revisão diferentes) | derivada |
 | `graph_seed_version` | a semente do grafo na imagem muda (produtos, campanhas, relações) | Catálogo, marketing |
-| `graph_version` | o **conteúdo do grafo em runtime** muda. Igual à seed quando ninguém mexeu. | ninguém deveria, fora de um release (Parte 5) |
+| `graph_version` | o **conteúdo do grafo em runtime** muda. Igual à seed quando ninguém mexeu. | ninguém deveria, fora de um release (Parte 6) |
 | `embedding_model_id` / `_revision` / `_dim` | o modelo de embeddings é trocado | Engenharia de IA |
 | `eval_set_version` | o golden set ganha ou perde casos | Qualidade |
 | `model_version` | um modelo **gerativo** entrar no caminho. Hoje `none`. | (ainda não) |
@@ -686,9 +728,9 @@ A diferença entre `graph_seed_version` e `graph_version` é o coração da Demo
 
 ---
 
-## Parte 2 - BM25 e vetorial: a mesma pergunta, duas buscas
+## Parte 3 - BM25 e vetorial: a mesma pergunta, duas buscas
 
-> **08–18 min.** Diego: *"Façam a pergunta da cliente. Primeiro vejam o que a busca por **palavras** devolve. Depois a busca por **significado**. E antes de olhar, apostem: qual das duas vai trazer a política antiga mais perto do topo?"*
+> **33–43 min.** Diego: *"Façam a pergunta da cliente. Primeiro vejam o que a busca por **palavras** devolve. Depois a busca por **significado**. E antes de olhar, apostem: qual das duas vai trazer a política antiga mais perto do topo?"*
 
 ### Resultado esperado desta parte
 
@@ -792,7 +834,7 @@ Leia as duas colunas com atenção ao que **difere**:
 | O que fez a v2 aparecer | As **palavras** "dias", "trocar": a v2 obsoleta usa as mesmas. | O **significado** "prazo de troca": a v2 fala exatamente disso. |
 | O que **barrou** a v2 | O filtro (`reason=status`), **não** o score. | O filtro. O mesmo. |
 
-Esse é o ponto de Diego, duas vezes. Primeiro: a v2 aparece em `blocked` nas duas buscas, porque é **similar** à pergunta; não é **aplicável**, porque o metadado `status` diz `obsolete` e a v3 a supersede. Se o filtro falhar, a v2 pode vencer; a Demo 5.2 mostra isso acontecendo. Segundo, e mais sutil: o BM25 **não errou por causa da v2**. Ele errou escolhendo a garantia, um documento vigente, da loja certa, público, perfeitamente aplicável a fones... só que a pergunta era sobre **troca**. Nenhum filtro de metadado pega isso. O que pega é saber que "fone" é um produto, que produtos têm categoria, e que a política de trocas se aplica à categoria: **relações**, que é a Parte 3.
+Esse é o ponto de Diego, duas vezes. Primeiro: a v2 aparece em `blocked` nas duas buscas, porque é **similar** à pergunta; não é **aplicável**, porque o metadado `status` diz `obsolete` e a v3 a supersede. Se o filtro falhar, a v2 pode vencer; a Demo 5.2 mostra isso acontecendo. Segundo, e mais sutil: o BM25 **não errou por causa da v2**. Ele errou escolhendo a garantia, um documento vigente, da loja certa, público, perfeitamente aplicável a fones... só que a pergunta era sobre **troca**. Nenhum filtro de metadado pega isso. O que pega é saber que "fone" é um produto, que produtos têm categoria, e que a política de trocas se aplica à categoria: **relações**, que é a Parte 4.
 
 No JSON enviado, `user_role: "customer"` diz que quem pergunta é um cliente (só documentos `public`); o canal público do assistente **fixa** esse valor no servidor, e o `/lab/compare` o aceita só para você poder comparar com `internal` em laboratório. Repare também em `latency_ms`: a coluna vetorial tem um estágio `embed` (gerar o vetor da pergunta, em CPU) que o BM25 não tem. É custo real, medido agora, não um número de slide. Na homologação, 20 chamadas ao `/lab/compare` pelo ALB, a partir do Codespaces: **p50 312 ms, p95 402 ms** de ida e volta, dos quais o servidor gastou **p50 21 ms, p95 28 ms**; o resto é rede até `us-east-1`.
 
@@ -844,7 +886,7 @@ O que ele **não** faz: gerar texto. Ele não escreve a resposta, não resume, n
 
 **R3.** A vetorial. "devolver para pegar outro" não compartilha palavras com "troca", mas o significado é próximo, e o modelo multilíngue foi treinado para paráfrases. O BM25 provavelmente abstém ou acha a política de **devoluções** (que fala de "devolver"), e aí a resposta seria sobre arrependimento de 7 dias, não sobre troca de 30. Teste na Central se quiser.
 
-**R4.** Um **conhecimento relacional**: fone → categoria áudio (um eletrônico) → políticas que se aplicam a essa categoria (troca, garantia) → versão vigente. Nenhum texto contém essa cadeia inteira; ela existe como **relações** entre entidades. É o que a Parte 3 mostra.
+**R4.** Um **conhecimento relacional**: fone → categoria áudio (um eletrônico) → políticas que se aplicam a essa categoria (troca, garantia) → versão vigente. Nenhum texto contém essa cadeia inteira; ela existe como **relações** entre entidades. É o que a Parte 4 mostra.
 
 </blockquote>
 </details>
@@ -857,9 +899,9 @@ O que ele **não** faz: gerar texto. Ele não escreve a resposta, não resume, n
 
 ---
 
-## Parte 3 - Grafo: o caminho até a política
+## Parte 4 - Grafo: o caminho até a política
 
-> **18–33 min.** Diego: *"Agora a terceira coluna. Ela não procurou texto parecido. Ela **partiu do fone** e andou pelas relações até a política. Quero que vocês vejam cada passo desse caminho, e a consulta que o produziu."*
+> **43–58 min.** Diego: *"Agora a terceira coluna. Ela não procurou texto parecido. Ela **partiu do fone** e andou pelas relações até a política. Quero que vocês vejam cada passo desse caminho, e a consulta que o produziu."*
 
 ### Resultado esperado desta parte
 
@@ -1029,9 +1071,9 @@ Cada aresta tem **procedência**, e ela aponta para a **linha de origem**: `seed
 
 ---
 
-## Parte 4 - Desafio: datas, tenants e quatro coisas diferentes
+## Parte 5 - Desafio: datas, tenants e quatro coisas diferentes
 
-> **33–43 min.** Helena: *"Agora eu quero ver o sistema **mudar de ideia** quando o mundo muda. Mesma pergunta, outra data. Mesma pergunta, outra loja. E quero que vocês me digam a diferença entre troca, arrependimento, regra de campanha e status do pedido, porque a cliente do Instagram misturou as quatro."*
+> **58–68 min.** Helena: *"Agora eu quero ver o sistema **mudar de ideia** quando o mundo muda. Mesma pergunta, outra data. Mesma pergunta, outra loja. E quero que vocês me digam a diferença entre troca, arrependimento, regra de campanha e status do pedido, porque a cliente do Instagram misturou as quatro."*
 
 ### Resultado esperado desta parte
 
@@ -1185,9 +1227,9 @@ A cliente do Instagram juntou as duas coisas numa pergunta ("meu fone chegou, po
 
 ---
 
-## Parte 5 - Mexer no grafo e ver a versão mudar
+## Parte 6 - Mexer no grafo e ver a versão mudar
 
-> **43–53 min.** Diego: *"Tudo isso depende das **relações** estarem certas. Agora eu quero que vocês quebrem uma, de propósito, num ambiente de laboratório, e vejam o que o sistema mostra. E quero que vocês anotem o `graph_version` antes e depois."*
+> **68–78 min.** Diego: *"Tudo isso depende das **relações** estarem certas. Agora eu quero que vocês quebrem uma, de propósito, num ambiente de laboratório, e vejam o que o sistema mostra. E quero que vocês anotem o `graph_version` antes e depois."*
 
 ### Resultado esperado desta parte
 
@@ -1321,9 +1363,9 @@ Por que isso **não é um release**: o release é a imagem (digest) e o que ela 
 
 ---
 
-## Parte 6 - Qual evidência autoriza o release?
+## Parte 7 - Qual evidência autoriza o release?
 
-> **53–60 min.** Helena, fechando o notebook: *"Vocês viram três estratégias, três datas, duas lojas e um grafo alterado por fora. Agora me respondam: quando um release novo chegar, **qual evidência** me autoriza a dizer que ele pode ir para o cliente? E quem vai perceber se, depois, alguém mexer no grafo como vocês acabaram de mexer?"*
+> **78–85 min.** Helena, fechando o notebook: *"Vocês viram três estratégias, três datas, duas lojas e um grafo alterado por fora. Agora me respondam: quando um release novo chegar, **qual evidência** me autoriza a dizer que ele pode ir para o cliente? E quem vai perceber se, depois, alguém mexer no grafo como vocês acabaram de mexer?"*
 
 ### Resultado esperado desta parte
 

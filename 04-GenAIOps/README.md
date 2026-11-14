@@ -2,17 +2,17 @@
 
 Módulo prático da **Aula 5**, o fechamento da disciplina. O **Quantum Commerce AI Customer Assistant** (o Assistente de Rastreio e Políticas) deixa de ser um experimento e vira um **produto de IA operado na AWS**: responde sobre trocas, devoluções, entrega e garantia citando a política **aplicável** (vigente, da loja certa, com permissão, na data certa), consulta o **status do pedido na API de pedidos** (nunca em documento), e é publicado, promovido, observado, quebrado de propósito e corrigido como um sistema em produção.
 
-São **2 demos de 60 minutos**, uma por metade da aula, sobre **o mesmo ambiente**:
+São **2 demos**, uma por metade da aula, sobre **o mesmo ambiente**, e **tudo acontece dentro da aula**: a 5.1 começa montando o ambiente (projeto GitLab, bootstrap da conta, imagem, ECS) e a 5.2 começa subindo a observabilidade. Com os tempos medidos na homologação, as duas cabem no dia:
 
 | # | Demo | Pergunta que ela responde | Tempo de aula |
 |---|------|---------------------------|---------------|
-| **04.1** | **[Demo 5.1: A evidência por trás da resposta](01-Release-RAG-Quality-Gates/README.md)** | *"De onde veio esta resposta, por que esta fonte foi escolhida e ela **se aplica** a este cliente, produto e data?"* A mesma pergunta respondida por **BM25**, **busca vetorial** (embeddings open source, CPU) e **grafo** (Neo4j, caminho produto → categoria → campanha → política → versão), com evidências lado a lado; `as_of_date` em 2026, na Black Friday de 2027 e depois dela; tenant errado bloqueado; uma aresta alterada em runtime e o `graph_version` denunciando. | 60 min + preparação fora do relógio |
-| **04.2** | **[Demo 5.2: O dashboard estava verde. O cliente, errado.](02-Operacao-Observabilidade-Qualidade-Continua/README.md)** | *"Como impedir que a evidência errada seja publicada, e como descobrir, sem ninguém olhando, que ela mudou depois?"* Pipeline GitLab real **vermelho** por uma aresta errada (`live` intocado), correção e promoção `candidate → live` por **digest** com manifesto, observabilidade OpenTelemetry **na AWS**, incidente injetado **sem commit** com HTTP 200, alerta de qualidade por probes, trace até o span da causa, restore, replay, postmortem e caso golden novo. | 60 min + preparação fora do relógio |
+| **04.1** | **[Demo 5.1: A evidência por trás da resposta](01-Release-RAG-Quality-Gates/README.md)** | *"De onde veio esta resposta, por que esta fonte foi escolhida e ela **se aplica** a este cliente, produto e data?"* A mesma pergunta respondida por **BM25**, **busca vetorial** (embeddings open source, CPU) e **grafo** (Neo4j, caminho produto → categoria → campanha → política → versão), com evidências lado a lado; `as_of_date` em 2026, na Black Friday de 2027 e depois dela; tenant errado bloqueado; uma aresta alterada em runtime e o `graph_version` denunciando. | ~85 min (25 montando o ambiente + 60 de roteiro) |
+| **04.2** | **[Demo 5.2: O dashboard estava verde. O cliente, errado.](02-Operacao-Observabilidade-Qualidade-Continua/README.md)** | *"Como impedir que a evidência errada seja publicada, e como descobrir, sem ninguém olhando, que ela mudou depois?"* Pipeline GitLab real **vermelho** por uma aresta errada (`live` intocado), correção e promoção `candidate → live` por **digest** com manifesto, observabilidade OpenTelemetry **na AWS**, incidente injetado **sem commit** com HTTP 200, alerta de qualidade por probes, trace até o span da causa, restore, replay, postmortem e caso golden novo. | ~72 min (12 subindo a observabilidade + 60 de roteiro), mais ~8 min de limpeza no fim do módulo |
 
-A **Parte 0 da Demo 5.1** prepara as duas: cria o projeto GitLab, sobe o ambiente na AWS e espera o `/ready`. Ela leva mais tempo do que a aula permite e por isso fica **fora do relógio** (em casa, no início do dia, ou feita pelo professor). A 5.2 acrescenta só a observabilidade (`bash ops/cloud/obs.sh up`) e parte do que a 5.1 deixou de pé.
+A **Parte 1 da Demo 5.1** prepara as duas, **no início da aula, com a turma**: cria o projeto GitLab, sobe o ambiente na AWS e espera o `/ready` (cerca de 9 min de comandos; as esperas longas, como o cold start de ~200 s de cada deploy, vêm com leitura guiada do corpus e da arquitetura). A 5.2 acrescenta só a observabilidade (`bash ops/cloud/obs.sh up`, ~2 a 7 min) e parte do que a 5.1 deixou de pé. Nada é feito antes da aula e cada aluno usa a própria conta do Learner Lab.
 
 > [!IMPORTANT]
-> **A Aula 5 é independente das anteriores.** O assistente vive num projeto GitLab **próprio**, `quantum-ai-assistant`, criado na Parte 0 da Demo 5.1 com o código de `quantum-assistant/` na raiz. Quem fez as Aulas 2 a 4 reaproveita bucket, rede `fiap-lab` e runner; quem não fez tem tudo criado pelo `make bootstrap` (bucket, rede, API de pedidos) e pelo `make runner` (runner novo, com o token no SSM). Nenhum passo depende do `primeiro-projeto` nem do módulo 03.
+> **A Aula 5 é independente das anteriores.** O assistente vive num projeto GitLab **próprio**, `quantum-ai-assistant`, criado na Parte 1 da Demo 5.1 com o código de `quantum-assistant/` na raiz. Quem fez as Aulas 2 a 4 reaproveita bucket, rede `fiap-lab` e runner; quem não fez tem tudo criado pelo `make bootstrap` (bucket, rede, API de pedidos) e pelo `make runner` (runner novo, com o token no SSM). Nenhum passo depende do `primeiro-projeto` nem do módulo 03.
 
 ## Aula 5 na Quantum Commerce
 
@@ -46,8 +46,7 @@ O que **não** muda: Terraform, GitLab, o runner de EC2 com `LabRole`, o `core/`
 
 > [!WARNING]
 > - [ ] **Codespaces aberto no fork da disciplina**, sincronizado hoje pelo [Início de aula](../00-create-codespaces/Inicio-de-aula.md), com as **credenciais AWS do Academy** atualizadas.
-> - [ ] **Conta no GitLab** (gratuita) e chave SSH (a Parte 0 da 5.1 ensina, se faltar).
-> - [ ] **Parte 0 da [Demo 5.1](01-Release-RAG-Quality-Gates/README.md#parte-0---preparação-antes-da-aula) feita antes da aula** (ou pelo professor).
+> - [ ] **Conta no GitLab** (gratuita); se faltar, o passo 1 da 5.1 cria em um minuto, e cadastra a chave SSH.
 >
 > **Valide rapidamente** (terminal do Codespaces):
 >
@@ -160,7 +159,7 @@ Tudo com prefixo **`qc-assistant-`**, tags `Project=quantum-commerce`, `Lab=05-x
 
 - **Por que o build da imagem roda no runner, e não no Codespaces?** Porque o runner é `amd64` (a arquitetura do Fargate escolhido), já tem Docker desde a preparação, e é onde o pipeline da 5.2 vai construir: o aluno não instala nada, e o build de aula é o mesmo build do CI.
 
-- **Por que um projeto GitLab novo?** Porque o assistente virou produto, com ciclo de release próprio; e porque a Aula 5 precisa ser cursável por quem não fez as anteriores. O custo é uma Parte 0 maior, fora do relógio.
+- **Por que um projeto GitLab novo?** Porque o assistente virou produto, com ciclo de release próprio; e porque a Aula 5 precisa ser cursável por quem não fez as anteriores. O custo é uma Parte 1 de ~25 min no início da 5.1, dentro da aula, com as esperas usadas para ler o que está subindo.
 - **Por que ECS Fargate e não Lambda?** Porque um grafo Neo4j e um modelo de embeddings não cabem no modelo Lambda do laboratório, e porque "imagem = release" é a lição central da 5.2 (rollback de conjunto, digest como identidade, grafo reconstruído da fonte de verdade).
 - **Por que o Neo4j dentro da task, efêmero?** Para que a fonte de verdade seja a imagem versionada, não um disco. É o que torna o restart da task uma restauração **nesta** arquitetura, e a 5.2 usa isso para discutir quando restart resolve e quando é placebo.
 - **Por que sem LLM, de novo?** Bedrock bloqueado no Learner Lab e, mais importante, **determinismo**: a mesma regressão reprova pelo mesmo motivo em todas as contas da turma, e a aula olha só para a escolha da fonte. O modelo de embeddings é aberto, pequeno e roda em CPU; ele **não gera texto**. Onde um LLM entraria está explicado na 5.1.
@@ -181,4 +180,4 @@ Tudo com prefixo **`qc-assistant-`**, tags `Project=quantum-commerce`, `Lab=05-x
 
 ## Próximo passo
 
-Comece pela **[Demo 5.1](01-Release-RAG-Quality-Gates/README.md)**, pela Parte 0 (antes da aula). A pergunta que ela deixa aberta ("qual evidência autoriza o release, e quem percebe quando ela muda por fora?") é a abertura da **[Demo 5.2](02-Operacao-Observabilidade-Qualidade-Continua/README.md)**.
+Comece pela **[Demo 5.1](01-Release-RAG-Quality-Gates/README.md)**, pela [Parte 1](01-Release-RAG-Quality-Gates/README.md#parte-1---montar-o-ambiente-dentro-da-aula), montando o ambiente com a turma. A pergunta que ela deixa aberta ("qual evidência autoriza o release, e quem percebe quando ela muda por fora?") é a abertura da **[Demo 5.2](02-Operacao-Observabilidade-Qualidade-Continua/README.md)**.

@@ -24,10 +24,9 @@ Os comandos rodam em três lugares, e cada passo diz qual: **Codespaces** (termi
 > [!WARNING]
 > **Pré-requisitos obrigatórios antes de começar:**
 >
-> - [ ] **Parte 0 da [Demo 5.1](../01-Release-RAG-Quality-Gates/README.md#parte-0---preparação-antes-da-aula) concluída**: projeto GitLab `quantum-ai-assistant` com o código na raiz, runner **online** nele, e o ambiente ECS de pé (`make ready` com `ready=ok`).
-> - [ ] **Credenciais AWS do Academy atualizadas** hoje ([Início de aula](../../00-create-codespaces/Inicio-de-aula.md)).
-> - [ ] **Observabilidade de pé** (Parte 0 deste README, feita antes da aula): `bash ops/cloud/obs.sh up` concluído, com o Grafana acessível em `/grafana/`.
-> - [ ] **Grafo íntegro**: `"in_sync": true` no estado administrativo (passo 1 confere).
+> - [ ] **Demo 5.1 feita hoje, na primeira metade da aula**, com a [Parte 1 dela](../01-Release-RAG-Quality-Gates/README.md#parte-1---montar-o-ambiente-dentro-da-aula) de pé: projeto GitLab `quantum-ai-assistant` com o código na raiz, runner **online** nele, e o ambiente ECS respondendo (`make ready` com `HTTP 200`).
+> - [ ] **Credenciais AWS do Academy válidas** ([Início de aula](../../00-create-codespaces/Inicio-de-aula.md); se a sessão virou desde a 5.1, recole-as).
+> - [ ] **Grafo íntegro**: `"in_sync": true` no estado administrativo (o passo 1 confere; a Parte 6 da 5.1 terminou com o restore).
 >
 > **Valide rapidamente** (terminal do Codespaces):
 >
@@ -37,10 +36,9 @@ Os comandos rodam em três lugares, e cada passo diz qual: **Codespaces** (termi
 >
 > Saída esperada: `HTTP 200`. Se vier `HTTP 503` (ou `000`, sem resposta), o runtime está desligado ou doente: `make start` e `make diagnose`, ou volte ao [passo 6 da Demo 5.1](../01-Release-RAG-Quality-Gates/README.md#passo-6).
 >
-> **Tempo de aula: 60 min** (o roteiro das Partes 1 a 6 foi cronometrado; a Parte 0 fica fora do relógio).
+> **Tempo de aula: ~72 min, incluindo subir a observabilidade** (Parte 1, ~12 min: `obs.sh up` medido em 125 s com a pilha já de pé e ~7 min na primeira vez, mais o baseline) **e o roteiro das Partes 2 a 7 (60 min)**; o Encerramento (limpeza) leva ~8 min no fim do módulo. Com a 5.1 (~85 min), as duas demos cabem no dia de aula.
 
-> [!WARNING]
-> **Em sala, com ambiente compartilhado pelo professor:** as Partes 2 e 3 (commit, push, pipeline vermelho, correção, pipeline verde) são conduzidas **pelo professor, no telão**, uma vez só: dois pipelines simultâneos de 40 alunos no mesmo projeto disputariam o runner e o `candidate`. As Partes 4 a 6 (incidente, trace, restore, postmortem) são feitas **por todos**, cada um no próprio terminal, contra o mesmo `live`; o `incident.sh` é idempotente e o professor tem `--teacher-reset`. Quem tem a própria conta e o próprio projeto faz tudo sozinho.
+Cada aluno faz **todas** as Partes no próprio projeto GitLab e na própria conta: o seu pipeline, o seu `candidate`, o seu `live`. Se o seu ambiente travar em algum passo e o **Se falhar** não resolver, acompanhe o roteiro no ambiente que o professor projeta no telão enquanto destrava o seu; o `incident.sh` é idempotente, então dá para retomar de onde parou.
 
 ## Principais pontos de aprendizagem
 
@@ -62,14 +60,14 @@ Os blocos **💡 Clique para entender** trazem o aprofundamento; a linha **Se fa
 
 | Parte | Relógio | O que você faz | Passos | Tempo |
 |-------|---------|----------------|--------|-------|
-| [Parte 0](#parte-0---preparação-antes-da-aula) | antes da aula | Subir a observabilidade na AWS e confirmar o baseline R1 | [1](#passo-1) · [2](#passo-2) · [3](#passo-3) | fora do relógio |
-| [Parte 1](#parte-1---pipeline-verde-cliente-errado) | 00–07 | Ver o `live` R1, health 200 e o baseline de qualidade no Grafana | [4](#passo-4) · [5](#passo-5) | 7 min |
-| [Parte 2](#parte-2---o-gate-protege-o-cliente) | 07–20 | Republicar a v2 como vigente no corpus, commit, push, pipeline **vermelho** real, `live` intocado | [6](#passo-6) · [7](#passo-7) · [8](#passo-8) · [9](#passo-9) | 13 min |
-| [Parte 3](#parte-3---a-correção-merece-confiança) | 20–35 | Corrigir e dar push; **enquanto o pipeline verde roda** (10–15 min), ler o 💡 do passo 10 e acompanhar os jobs; candidate → smoke → promote R2, manifesto e digest | [10](#passo-10) · [11](#passo-11) · [12](#passo-12) | 15 min (10 de espera guiada) |
-| [Parte 4](#parte-4---nenhum-commit-aconteceu-mesmo-assim-piorou) | 35–43 | Injetar `stale_graph_policy` no `live`; HTTP 200 e resposta errada; alerta crítico | [13](#passo-13) · [14](#passo-14) · [15](#passo-15) | 8 min |
-| [Parte 5](#parte-5---encontre-o-elo-quebrado) | 43–52 | Trace no Jaeger, painel do Diego, o elo quebrado, restore e replay | [16](#passo-16) · [17](#passo-17) · [18](#passo-18) · [19](#passo-19) | 9 min |
-| [Parte 6](#parte-6---transforme-incidente-em-aprendizado) | 52–60 | Postmortem (pré-preenchido: você completa horários, `trace_id` e versões), caso golden novo, Three Ways | [20](#passo-20) · [21](#passo-21) · [22](#passo-22) | 8 min |
-| [Encerramento](#encerramento-da-disciplina-e-limpeza) | depois | O ciclo da disciplina e a limpeza segura | [23](#passo-23) · [24](#passo-24) | fora do relógio |
+| [Parte 1](#parte-1---subir-a-observabilidade-dentro-da-aula) | 00–12 | Conferir o grafo, subir a observabilidade na AWS (lendo a arquitetura enquanto ela sobe) e registrar o baseline R1 | [1](#passo-1) · [2](#passo-2) · [3](#passo-3) | 12 min |
+| [Parte 2](#parte-2---pipeline-verde-cliente-errado) | 12–19 | Ver o `live` R1, health 200 e o baseline de qualidade no Grafana | [4](#passo-4) · [5](#passo-5) | 7 min |
+| [Parte 3](#parte-3---o-gate-protege-o-cliente) | 19–32 | Republicar a v2 como vigente no corpus, commit, push, pipeline **vermelho** real, `live` intocado | [6](#passo-6) · [7](#passo-7) · [8](#passo-8) · [9](#passo-9) | 13 min |
+| [Parte 4](#parte-4---a-correção-merece-confiança) | 32–47 | Corrigir e dar push; **enquanto o pipeline verde roda** (10–15 min), ler o 💡 do passo 10 e acompanhar os jobs; candidate → smoke → promote R2, manifesto e digest | [10](#passo-10) · [11](#passo-11) · [12](#passo-12) | 15 min (10 de espera guiada) |
+| [Parte 5](#parte-5---nenhum-commit-aconteceu-mesmo-assim-piorou) | 47–55 | Injetar `stale_graph_policy` no `live`; HTTP 200 e resposta errada; alerta crítico | [13](#passo-13) · [14](#passo-14) · [15](#passo-15) | 8 min |
+| [Parte 6](#parte-6---encontre-o-elo-quebrado) | 55–64 | Trace no Jaeger, painel do Diego, o elo quebrado, restore e replay | [16](#passo-16) · [17](#passo-17) · [18](#passo-18) · [19](#passo-19) | 9 min |
+| [Parte 7](#parte-7---transforme-incidente-em-aprendizado) | 64–72 | Postmortem (pré-preenchido: você completa horários, `trace_id` e versões), caso golden novo, Three Ways | [20](#passo-20) · [21](#passo-21) · [22](#passo-22) | 8 min |
+| [Encerramento](#encerramento-da-disciplina-e-limpeza) | 72–80 | O ciclo da disciplina e a limpeza segura, no fim do módulo | [23](#passo-23) · [24](#passo-24) | 8 min |
 
 <details>
 <summary><b>💡 Por que operar é diferente de entregar, em 3 parágrafos</b></summary>
@@ -132,13 +130,15 @@ flowchart LR
 
 ---
 
-## Parte 0 - Preparação (antes da aula)
+## Parte 1 - Subir a observabilidade (dentro da aula)
+
+> **00–12 min.** Diego, de volta à sala: *— "Vocês já sabem **de onde** vem cada resposta. Agora eu quero **medir** isso o tempo todo, sem ninguém olhando. Subam a pilha de observabilidade e, enquanto ela sobe, olhem para onde a telemetria vai."*
 
 ### Resultado esperado desta parte
 
 A pilha de observabilidade de pé na AWS, o Grafana acessível pelo ALB com login, os probes rodando contra o `live`, e o release que está no ar registrado como **R1**: o baseline contra o qual a aula inteira vai comparar.
 
-Pré-requisito desta parte: a [Parte 0 da Demo 5.1](../01-Release-RAG-Quality-Gates/README.md#parte-0---preparação-antes-da-aula) inteira (projeto, runner, ambiente). Se as tasks foram desligadas entre as aulas (`make down`, ou a sessão do Academy encerrou), `make start` as religa na mesma revisão em alguns minutos; se o ambiente foi destruído, refaça os passos 5 e 6 de lá.
+Esta parte continua **exatamente** do ponto em que a Demo 5.1 parou: o ambiente da [Parte 1 de lá](../01-Release-RAG-Quality-Gates/README.md#parte-1---montar-o-ambiente-dentro-da-aula) (projeto, runner, `live` e `candidate`) é o mesmo. Se a sessão do Academy virou no intervalo e as tasks pararam, `make start` as religa na mesma revisão em alguns minutos; se o ambiente foi destruído, refaça os passos 5 e 6 de lá.
 
 ---
 
@@ -147,7 +147,7 @@ Pré-requisito desta parte: a [Parte 0 da Demo 5.1](../01-Release-RAG-Quality-Ga
 **1. Confira o ambiente e o estado do grafo**
 
 **Onde:** Codespaces.
-**Por quê:** a aula só funciona se o `live` estiver atendendo o release que a Demo 5.1 publicou e **sem drift** no grafo (alguém pode ter deixado um cenário da Parte 5 ativo).
+**Por quê:** a aula só funciona se o `live` estiver atendendo o release que a Demo 5.1 publicou e **sem drift** no grafo (alguém pode ter deixado um cenário da Parte 6 ativo).
 **Execute:**
 
 ```bash
@@ -174,12 +174,12 @@ bash ops/cloud/incident.sh state --env live
 
 | Comando | O que faz por baixo | Quando |
 |---|---|---|
-| `bash ops/cloud/obs.sh up` | Senha do Grafana no SSM (se faltar) + envio da configuração ao S3 + `terraform apply` de `infra-obs/` + bootstrap da EC2 via SSM (Docker Compose). Imprime a URL do Grafana. | Parte 0 |
+| `bash ops/cloud/obs.sh up` | Senha do Grafana no SSM (se faltar) + envio da configuração ao S3 + `terraform apply` de `infra-obs/` + bootstrap da EC2 via SSM (Docker Compose). Imprime a URL do Grafana. | Parte 1 |
 | `bash ops/cloud/obs.sh status` / `url` | Contêineres na EC2 e saúde do Grafana pelo ALB / só a URL. | Quando um painel não carrega |
-| `bash ops/cloud/incident.sh state\|apply\|restore [--scenario X] [--env live]` | Via SSM no runner, roda `web/admin_client.py` contra a porta admin 8001 da task, com assinatura HMAC lida do SSM dentro do runner. `state` lê; `apply`/`restore` mudam o grafo do Neo4j da task. `--teacher-reset` restaura os dois cenários nos dois ambientes. Saída: JSON com `graph_version` antes/depois, `in_sync`, `active_mutations`, `diff`. | Partes 0, 4, 5, 6 |
-| `aws s3 ls s3://<bucket>/quantum-assistant/releases-ecs/` | Lista os manifestos de release (um por promoção, mais `live.json`). | Partes 0 e 3 |
+| `bash ops/cloud/incident.sh state\|apply\|restore [--scenario X] [--env live]` | Via SSM no runner, roda `web/admin_client.py` contra a porta admin 8001 da task, com assinatura HMAC lida do SSM dentro do runner. `state` lê; `apply`/`restore` mudam o grafo do Neo4j da task. `--teacher-reset` restaura os dois cenários nos dois ambientes. Saída: JSON com `graph_version` antes/depois, `in_sync`, `active_mutations`, `diff`. | Partes 1, 5, 6, 7 |
+| `aws s3 ls s3://<bucket>/quantum-assistant/releases-ecs/` | Lista os manifestos de release (um por promoção, mais `live.json`). | Partes 1 e 4 |
 | `make start` / `make down` / `make diagnose` | Liga/desliga as tasks na mesma revisão / diagnóstico sem segredos. | Quando o ambiente não responde |
-| `python3 evals/graph_gate.py --target seed\|local\|http` | O gate de grafo em três alvos: `seed` cruza semente e corpus sem banco (o que você roda no Codespaces); `local` percorre os casos num Neo4j (o que o pipeline roda no runner); `http --url` avalia o que está **atendendo**. Grava `--out` e `--junit` (sempre). | Partes 2, 3, 6 |
+| `python3 evals/graph_gate.py --target seed\|local\|http` | O gate de grafo em três alvos: `seed` cruza semente e corpus sem banco (o que você roda no Codespaces); `local` percorre os casos num Neo4j (o que o pipeline roda no runner); `http --url` avalia o que está **atendendo**. Grava `--out` e `--junit` (sempre). | Partes 3, 4, 7 |
 
 </blockquote>
 </details>
@@ -199,7 +199,9 @@ cd /home/vscode/environment/quantum-ai-assistant
 bash ops/cloud/obs.sh up
 ```
 
-**Esperado** (saída real da homologação, com a pilha já de pé: 125 s; na primeira vez o `apply` cria 9 recursos e o Grafana responde pelo ALB ~2 min depois, mais ~4 min de `docker pull` no bootstrap):
+**Enquanto o `obs.sh up` roda** (125 s na homologação com a pilha já de pé; na primeira vez, a sua, cerca de 7 min: o `apply` cria 9 recursos, o Grafana responde pelo ALB ~2 min depois e o bootstrap faz ~4 min de `docker pull`), abra a [arquitetura da demo](img/arquitetura-5-2.png) e siga duas setas: a tracejada **OTLP**, que sai das tasks `live` e `candidate` e chega à EC2 `qc-assistant-obs` (é para lá que os spans e as métricas vão), e a dos **probes rotulados**, que sai dessa EC2 e volta ao ALB (é ela que faz perguntas com gabarito ao `live`). Depois responda no caderno: dos dois painéis que você vai abrir no passo 3 (o do Diego, de engenharia, e o da Helena, de negócio), **qual deles deveria mudar de cor** quando o assistente responder um prazo errado com HTTP 200? O passo 5 cobra a resposta. Você sabe que o comando terminou quando a última linha é a URL do Grafana.
+
+**Esperado** (saída real da homologação, com a pilha já de pé: 125 s; na primeira vez as linhas marcadas abaixo mudam):
 
 > ```text
 > obs: /qc-assistant/obs/grafana-admin ja existe (nao alterado)
@@ -261,9 +263,7 @@ aws s3 ls "s3://$BUCKET/quantum-assistant/releases-ecs/"
 > 2026-11-14 ...        rel-b8aa56f8-df18cb90.json
 > ```
 >
-> Os valores acima são os da homologação deste lab, em que um pipeline verde já tinha publicado R1 antes da aula; os seus terão outro digest e outro `release_id`, e isso é esperado.
->
-> A lista de manifestos vem **vazia**, e isso é informação: o que está no ar foi publicado pelo `make deploy-live` da Parte 0 da 5.1, direto do terminal, sem pipeline e sem manifesto (na homologação, o `/health` dizia `rel-infra-0346`). É um release **sem registro**; o primeiro pipeline verde (que na homologação rodou antes da aula, para deixar **R1 = `rel-b8aa56f8-df18cb90`** no `live` com manifesto) é quem grava o primeiro arquivo em `releases-ecs/`. Se o seu professor já rodou esse pipeline, a lista mostra `history/`, `candidate.json`, `live.json` e um `<release_id>.json` por release publicado, e o R1 da sua aula é o que está em `live.json`.
+> Os valores acima são os da homologação deste lab, em que um pipeline verde já tinha publicado o `live` (por isso há manifesto). **Na sua aula é diferente, e isso é esperado:** o que está no ar é o release que o `make deploy-live` da Parte 1 da 5.1 publicou há pouco, direto do terminal, sem pipeline e sem manifesto. O `release_id` tem a forma `rel-infra-live-…` (na homologação, `rel-infra-0346`), e a lista de manifestos vem **vazia**. Isso é informação: é um release **sem registro**, e **esse é o seu R1**. O primeiro pipeline verde do dia, o da Parte 4, é quem grava o primeiro arquivo em `releases-ecs/` (`history/`, `candidate.json`, `live.json` e um `<release_id>.json` por release publicado); a partir dali, o que está em `live.json` é sempre o release no ar.
 
 Abra o Grafana (a URL que o `obs.sh up` imprimiu no passo 2, ou `bash ops/cloud/obs.sh url`; usuário `admin`, senha do SSM), menu **Dashboards**, e abra **Visão do negócio · Atendimento** (o painel da Helena). Ajuste o intervalo para **Last 15 minutes**. O semáforo **Confiança do assistente agora** deve dizer **Confiável** (verde), com **Política vigente** e **Caminho do grafo** em 100% e **Casos críticos na janela** em 0 (todos sobre os últimos 2 min, a mesma janela do semáforo). O `n` da janela fica no painel do Diego, **Amostras na janela (n)**, e precisa estar ≥ 20. Se ainda for baixo, o probe acabou de subir; espere 2 min.
 
@@ -280,9 +280,9 @@ Abra o Grafana (a URL que o `obs.sh up` imprimiu no passo 2, ou `bash ops/cloud/
 
 ---
 
-## Parte 1 - "Pipeline verde, cliente errado?"
+## Parte 2 - "Pipeline verde, cliente errado?"
 
-> **00–07 min.** Diego projeta o painel: *"Isto é o que eu vi ontem às 18h: health 200, p95 normal, zero 5xx, e este release aqui no ar desde quinta. Com isso na tela, alguém me diz onde está o erro?"*
+> **12–19 min.** Diego projeta o painel: *"Isto é o que eu vi ontem às 18h: health 200, p95 normal, zero 5xx, e este release aqui no ar desde quinta. Com isso na tela, alguém me diz onde está o erro?"*
 
 ### Resultado esperado desta parte
 
@@ -316,9 +316,9 @@ curl -s -X POST "$APP/assistant/ask" -H 'content-type: application/json' \
 > answer  : Você tem até 30 dias corridos, contados a partir da data de recebimento, para trocar ...
 > ```
 
-A estratégia padrão do `live` é `graph` (`QC_DEFAULT_STRATEGY`), e hoje ela responde certo: 30 dias, versão 3. Guarde o `release_id`: é R1 (na homologação, `rel-b8aa56f8-df18cb90`, publicado por um pipeline verde antes da aula; se o seu `live` ainda mostra `rel-infra-live-…`, é o deploy manual da Parte 0 e vale como R1 do mesmo jeito).
+A estratégia padrão do `live` é `graph` (`QC_DEFAULT_STRATEGY`), e hoje ela responde certo: 30 dias, versão 3. Guarde o `release_id`: é R1. Na sua aula ele tem a forma `rel-infra-live-…`, o deploy manual da Parte 1 da 5.1 (na homologação, que já tinha um pipeline verde, era `rel-b8aa56f8-df18cb90`); os dois valem como R1 do mesmo jeito.
 
-**Se falhar:** `release` diferente do anotado no passo 3 = alguém publicou entre a preparação e a aula; anote o novo como R1. `citacao` versão `2` = incidente já ativo (alguém pulou para a Parte 4); rode o `restore` do passo 18 antes de seguir.
+**Se falhar:** `release` diferente do anotado no passo 3 = um deploy aconteceu entre os dois passos (um `make deploy-live` repetido, por exemplo); anote o novo como R1. `citacao` versão `2` = incidente já ativo (alguém pulou para a Parte 5); rode o `restore` do passo 18 antes de seguir.
 
 ---
 
@@ -328,7 +328,7 @@ A estratégia padrão do `live` é `graph` (`QC_DEFAULT_STRATEGY`), e hoje ela r
 
 **Onde:** navegador, Grafana.
 **Por quê:** a tese da demo em uma tela: o painel de **engenharia** (Diego) e o de **negócio** (Helena) medem coisas diferentes, de fontes diferentes, e um não substitui o outro.
-**Execute:** abra **Visão técnica · SRE** (o painel do Diego) e **Visão do negócio · Atendimento** (o painel da Helena) lado a lado (duas abas), intervalo **Last 15 minutes**, refresh 10 s. O terceiro dashboard, **Investigação · Incidente**, fica para a Parte 5.
+**Execute:** abra **Visão técnica · SRE** (o painel do Diego) e **Visão do negócio · Atendimento** (o painel da Helena) lado a lado (duas abas), intervalo **Last 15 minutes**, refresh 10 s. O terceiro dashboard, **Investigação · Incidente**, fica para a Parte 6.
 
 **Esperado:**
 
@@ -340,7 +340,7 @@ A estratégia padrão do `live` é `graph` (`QC_DEFAULT_STRATEGY`), e hoje ela r
 > | **Latência p95 por etapa** (os spans: `auth.tenant`, `intent.route`, `entity.link`, `graph.traverse`, `vector.embed`, `db.query`, `policy.version.filter`, `compose.deterministic`, `orders.lookup`) · **Dependência: API de pedidos (orders.lookup)** | **HTTP verde não significa resposta certa**: a linha verde (servidor sem erro) e a ciano (resposta certa) juntas em 100%, a tracejada é o SLO de 90% |
 > | **Estado do monitor de qualidade**: `ok` (não `insufficient_data`) · **Alertas em FIRING agora**: tabela vazia | **Perguntas por estratégia de busca** · **Acerto dos probes por assunto**: todos em 100% · **Release que está atendendo** · **Casos críticos na janela** 0 · **Linha do tempo da confiança** |
 >
-> Os três dashboards ficam na pasta **Quantum Commerce · Assistente (AWS)** e têm no topo as variáveis **Ambiente** (`live`), **Release** e **Cenário dos probes** (`live_watch`). As versões (`graph_version`, `graph_seed_version`) aparecem no dashboard **Investigação · Incidente**, painel **Versões observadas pelos probes**, que você vai usar na Parte 5.
+> Os três dashboards ficam na pasta **Quantum Commerce · Assistente (AWS)** e têm no topo as variáveis **Ambiente** (`live`), **Release** e **Cenário dos probes** (`live_watch`). As versões (`graph_version`, `graph_seed_version`) aparecem no dashboard **Investigação · Incidente**, painel **Versões observadas pelos probes**, que você vai usar na Parte 6.
 
 <!-- NOVA-IMAGEM: img/grafana-diego-baseline.png | capturar: dashboard do Diego no baseline: Tráfego, 0% 5xx, p95, Probes corretos 100%, n, Alertas disparando 0 e a latência p95 por etapa | FONTE REAL já capturada (R3): /tmp/qc18/evid/5.2/screenshots/r3/02-diego-baseline-1920.png (versão 1366 ao lado) | depois de salvar o arquivo, descomente a linha abaixo -->
 <!-- ![Dashboard do Diego no baseline: tráfego, zero erros 5xx, latência p95, probes corretos em 100%, amostras na janela e nenhum alerta disparando; abaixo, a latência p95 por etapa do pipeline de recuperação](img/grafana-diego-baseline.png) -->
@@ -356,9 +356,9 @@ Leia o rodapé **Como ler esta tela** do painel da Helena: *"os números de qual
 
 ---
 
-## Parte 2 - "O gate protege o cliente"
+## Parte 3 - "O gate protege o cliente"
 
-> **07–20 min.** Helena: *"Façam o erro acontecer **do jeito que ele aconteceria**: alguém do catálogo liga o fone à política errada, abre um commit com uma mensagem razoável e dá push. Eu quero ver onde o pipeline para, e quero ver com os meus olhos que o cliente não sentiu nada."*
+> **19–32 min.** Helena: *"Façam o erro acontecer **do jeito que ele aconteceria**: alguém do catálogo liga o fone à política errada, abre um commit com uma mensagem razoável e dá push. Eu quero ver onde o pipeline para, e quero ver com os meus olhos que o cliente não sentiu nada."*
 
 ### Resultado esperado desta parte
 
@@ -560,9 +560,9 @@ aws ecs describe-services --cluster qc-assistant --services qc-assistant-live qc
 
 ---
 
-## Parte 3 - "A correção merece confiança"
+## Parte 4 - "A correção merece confiança"
 
-> **20–35 min.** Diego: *"Reverte. Mas reverter não basta: a correção passa pelo **mesmo** gate que reprovou, vai para o `candidate`, é testada **lá**, na AWS, e só então vai para o `live`. E eu quero o manifesto: o que exatamente está no ar, por qual digest, aprovado por quem."*
+> **32–47 min.** Diego: *"Reverte. Mas reverter não basta: a correção passa pelo **mesmo** gate que reprovou, vai para o `candidate`, é testada **lá**, na AWS, e só então vai para o `live`. E eu quero o manifesto: o que exatamente está no ar, por qual digest, aprovado por quem."*
 
 ### Resultado esperado desta parte
 
@@ -598,7 +598,7 @@ git push origin "$(git branch --show-current)"
 <summary><b>💡 Clique para entender: o que <code>package</code>, <code>deploy-candidate</code>, <code>postdeploy</code> e <code>promote-live</code> fazem por baixo dos panos (ECS)</b></summary>
 <blockquote>
 
-- **`package`**: `docker build` no runner (ele tem Docker e Buildx desde a Parte 0; a imagem é `linux/amd64`, a mesma arquitetura do Fargate escolhido) e `docker push` para o ECR. O push devolve o **digest** (`sha256:...`), que é o que vai para o `release-record.json` junto com `git_sha`, `corpus_version`, `graph_seed_version`, `vector_index_version`, `embedding_model_revision`, `eval_set_version` e o resultado de cada gate. Dois commits com o mesmo conteúdo produzem o mesmo digest; é assim que você sabe que "nada mudou de verdade".
+- **`package`**: `docker build` no runner (ele tem Docker e Buildx desde a Parte 1; a imagem é `linux/amd64`, a mesma arquitetura do Fargate escolhido) e `docker push` para o ECR. O push devolve o **digest** (`sha256:...`), que é o que vai para o `release-record.json` junto com `git_sha`, `corpus_version`, `graph_seed_version`, `vector_index_version`, `embedding_model_revision`, `eval_set_version` e o resultado de cada gate. Dois commits com o mesmo conteúdo produzem o mesmo digest; é assim que você sabe que "nada mudou de verdade".
 - **`deploy-candidate`**: `aws ecs register-task-definition` com a imagem **por digest** (`repo@sha256:...`, nunca `repo:tag`), depois `aws ecs update-service --service qc-assistant-candidate --task-definition <nova>`, `aws ecs wait services-stable` e um laço em `GET /candidate/ready` até `200` **com `image_digest` igual ao do manifesto**. `RUNNING` não basta: o job só passa quando o `/ready` confirma que o candidate está atendendo exatamente o digest que o pipeline construiu. Uma nota honesta sobre esses ~200 s: logo depois do boot, a **primeira** execução de cada consulta Cypher pode estourar o timeout de 3 s do Neo4j (o banco ainda está aquecendo caches e planos); por isso a aplicação faz um **warm-up** (roda as consultas uma vez) antes de declarar `/ready` 200, e o JSON do `/ready` traz `checks.warmed_up`. Sem isso, o ALB mandaria clientes para uma task que responderia 503 nas primeiras perguntas.
 - **`postdeploy-synthetic-gate`**: `smoke.py` contra a URL **pública** `/candidate` (confere release, versões, as três estratégias respondendo, pedido com token, tenant errado bloqueado) e `run_eval.py --target http` + `graph_gate.py --target http` com um subconjunto do golden. É a "validação do candidate": o artefato publicado, não o código do commit.
 - **`promote-live`**: `update-service --service qc-assistant-live --task-definition <a mesma do candidate>`, `wait services-stable`, `GET /health` do live conferindo o digest, e `aws s3 cp` do manifesto para `releases-ecs/<data-hora>Z-<release_id>.json` mais a atualização de `releases-ecs/live.json`. O circuit breaker do ECS desfaz o deploy sozinho se a task nova nunca ficar saudável; o `wait` falha e o job reprova.
@@ -703,9 +703,9 @@ Repare em três coisas. `corpus_version`, `graph_seed_version` e `vector_index_v
 
 ---
 
-## Parte 4 - "Nenhum commit aconteceu. Mesmo assim piorou."
+## Parte 5 - "Nenhum commit aconteceu. Mesmo assim piorou."
 
-> **35–43 min.** Diego: *"R2 está no ar, pipeline verde, manifesto gravado. Agora imagine que são 23h. Ninguém faz commit. E mesmo assim, de manhã, três tickets. Eu vou reproduzir o que aconteceu, e vocês vão me dizer **qual painel** percebe."*
+> **47–55 min.** Diego: *"R2 está no ar, pipeline verde, manifesto gravado. Agora imagine que são 23h. Ninguém faz commit. E mesmo assim, de manhã, três tickets. Eu vou reproduzir o que aconteceu, e vocês vão me dizer **qual painel** percebe."*
 
 ### Resultado esperado desta parte
 
@@ -748,7 +748,7 @@ bash ops/cloud/incident.sh state --env live
 >
 > Saída da homologação (11 s do `apply` ao retorno; cada chamada do `incident.sh` leva de 10 a 25 s, é o `send-command` via runner). Leia o `diff`: é a lista exata do que difere entre o grafo em memória e a semente publicada. Dois metadados do nó da v2 mudaram e a aresta `SUPERSEDES` foi invertida. Nada mais.
 
-**Se falhar:** `chamada admin falhou` com `401` no stderr = a chave HMAC que o runner leu do SSM não é a que a task tem (acontece se a chave foi girada no SSM depois do deploy: `scripts/cloud/secrets.sh --rotate`). **Não** rode `make deploy-live` agora (ele reimplantaria no `live` a imagem do último `make image`, a da Parte 0 da 5.1, por cima de R2): peça ao professor, ou reimplante R2 pelo pipeline (**Build → Pipelines**, pipeline do passo 10, botão **Retry** no `promote-live`). `InvalidInstanceId` = runner desligado (`make runner`).
+**Se falhar:** `chamada admin falhou` com `401` no stderr = a chave HMAC que o runner leu do SSM não é a que a task tem (acontece se a chave foi girada no SSM depois do deploy: `scripts/cloud/secrets.sh --rotate`). **Não** rode `make deploy-live` agora (ele reimplantaria no `live` a imagem do último `make image`, a da Parte 1 da 5.1, por cima de R2): peça ao professor, ou reimplante R2 pelo pipeline (**Build → Pipelines**, pipeline do passo 10, botão **Retry** no `promote-live`). `InvalidInstanceId` = runner desligado (`make runner`).
 
 ---
 
@@ -854,9 +854,9 @@ Limite honesto: 20 probes artificiais por janela não têm validade populacional
 
 ---
 
-## Parte 5 - "Encontre o elo quebrado"
+## Parte 6 - "Encontre o elo quebrado"
 
-> **43–52 min.** Diego: *"Alerta disparou. Agora é com vocês: **onde** a resposta errada nasceu? Qual relação, qual versão, por que o sistema escolheu 15 dias? Não quero 'o grafo está errado'. Quero o span e o nó."*
+> **55–64 min.** Diego: *"Alerta disparou. Agora é com vocês: **onde** a resposta errada nasceu? Qual relação, qual versão, por que o sistema escolheu 15 dias? Não quero 'o grafo está errado'. Quero o span e o nó."*
 
 ### Resultado esperado desta parte
 
@@ -948,7 +948,7 @@ Sem pergunta do cliente, sem token, sem PII: só o **caminho**. Em métricas (Pr
 
 **Por que isso não é uma regra geral.** Três situações em que restart **não** resolve, ou piora:
 
-1. **Fonte de verdade corrompida.** Se o erro estivesse na semente **da imagem** (o cenário da Parte 2, se tivesse passado pelo gate), toda task nova nasceria errada. Restart = mesma resposta errada, mais alguns minutos de `503`. A correção é um **release** (ou rollback).
+1. **Fonte de verdade corrompida.** Se o erro estivesse na semente **da imagem** (o cenário da Parte 3, se tivesse passado pelo gate), toda task nova nasceria errada. Restart = mesma resposta errada, mais alguns minutos de `503`. A correção é um **release** (ou rollback).
 2. **Estado persistente.** Se o Neo4j tivesse volume persistente (EFS, EBS) e a corrupção estivesse lá, a task nova leria o mesmo estado. Restart = placebo (é o caso da demo anterior, com overlay em disco).
 3. **Causa recorrente.** Se um processo externo (um sync de catálogo às 2h) refaz a mutação, o restart corrige até o próximo sync. Você tratou o sintoma e **apagou a evidência**: spans em buffer, o estado que mostrava a causa.
 
@@ -1032,9 +1032,9 @@ O replay **em escala** é feito pelo `qc-probe`, que continua rodando na AWS com
 
 ---
 
-## Parte 6 - "Transforme incidente em aprendizado"
+## Parte 7 - "Transforme incidente em aprendizado"
 
-> **52–60 min.** Helena: *"Ninguém errou de propósito, e eu não quero saber quem rodou o sync. Quero saber o que no sistema **permitiu** que isso chegasse ao cliente, e o que muda para a próxima vez. E, no fim, quero saber o que eu posso prometer para a liderança de atendimento."*
+> **64–72 min.** Helena: *"Ninguém errou de propósito, e eu não quero saber quem rodou o sync. Quero saber o que no sistema **permitiu** que isso chegasse ao cliente, e o que muda para a próxima vez. E, no fim, quero saber o que eu posso prometer para a liderança de atendimento."*
 
 ### Resultado esperado desta parte
 
@@ -1048,7 +1048,7 @@ Um postmortem blameless curto, um caso golden novo que **reprova** se a corrupç
 
 **Onde:** Codespaces (editor).
 **Por quê:** o incidente só vira aprendizado se for escrito com **evidência**, não com "deveria".
-**Execute:** o modelo `ops/postmortem-template.md` já está no seu projeto (veio com a cópia da Parte 0; tem oito seções). Copie-o e abra a cópia no editor:
+**Execute:** o modelo `ops/postmortem-template.md` já está no seu projeto (veio com a cópia da Parte 1; tem oito seções). Copie-o e abra a cópia no editor:
 
 ```bash
 cd /home/vscode/environment/quantum-ai-assistant
@@ -1089,7 +1089,7 @@ cd /home/vscode/environment/quantum-ai-assistant
 head -1 evals/golden_graph_v1.jsonl | python3 -m json.tool --no-ensure-ascii
 ```
 
-**Esperado:** um JSON com `case_id`, `question`, `as_of_date`, `tenant`, `user_role`, `gate_strategies` (quais estratégias o caso cobra), `expected_doc_id`, `expected_doc_version`, `expected_path_edges` (os tipos de aresta que o caminho do grafo precisa percorrer), `expected_answer_fields`, `must_not_cite`, `must_not_contain`, `slice`, `severity`, `tags`, `explanation`. O primeiro caso do arquivo é, de propósito, **o do incidente de hoje**: `gg-incidente-troca-fone-2026-11-14` (pergunta `Comprei um fone de ouvido, qual o prazo para trocar?`), com `tags: ["postmortem", "stale_graph_policy"]`. Ele já estava lá quando o pipeline verde da Parte 3 rodou, e **passou**, porque o gate avalia a semente em disco e o candidate recém-publicado, e os dois estavam certos. O que ele não cobria era o grafo **em memória do live**, mudado depois.
+**Esperado:** um JSON com `case_id`, `question`, `as_of_date`, `tenant`, `user_role`, `gate_strategies` (quais estratégias o caso cobra), `expected_doc_id`, `expected_doc_version`, `expected_path_edges` (os tipos de aresta que o caminho do grafo precisa percorrer), `expected_answer_fields`, `must_not_cite`, `must_not_contain`, `slice`, `severity`, `tags`, `explanation`. O primeiro caso do arquivo é, de propósito, **o do incidente de hoje**: `gg-incidente-troca-fone-2026-11-14` (pergunta `Comprei um fone de ouvido, qual o prazo para trocar?`), com `tags: ["postmortem", "stale_graph_policy"]`. Ele já estava lá quando o pipeline verde da Parte 4 rodou, e **passou**, porque o gate avalia a semente em disco e o candidate recém-publicado, e os dois estavam certos. O que ele não cobria era o grafo **em memória do live**, mudado depois.
 
 Agora o seu caso: a **formulação exata** da pergunta da cliente, que não está no arquivo (o comando se recusa a duplicar se rodar duas vezes; para desfazer: `git checkout -- evals/golden_graph_v1.jsonl`):
 
@@ -1128,7 +1128,7 @@ python3 evals/graph_gate.py --target http --url "$APP" --out /tmp/graph-gate-pm.
 >
 > O gate decide por **métrica e limiar** (os quatro contadores críticos em zero, pisos por estratégia e por slice), não por "todos os casos passaram": o veredito é `PASS` mesmo que um caso isolado reprove numa estratégia. É por isso que o caso novo cobra **só** `graph` (`"gate_strategies": ["graph"]`, igual ao caso modelo do `head -1`): para esta pergunta, o BM25 cita a garantia de eletrônicos e o vetorial se abstém, exatamente o que você viu na Demo 5.1 (similaridade não é aplicabilidade); cobrar as três faria o seu caso reprovar nelas sem acrescentar nada ao que o incidente ensinou.
 
-Passou, porque o grafo está restaurado. Repare no que **não** mudou com o seu caso: o `gg-incidente-troca-fone-2026-11-14` já existia, já cobria essa pergunta, e o pipeline verde de hoje passou por ele. O caso não faltava. **O que faltava era o alvo**: rodar o gate `--target http` contra **o que está no ar**, continuamente, e não só contra a semente em disco e o candidate recém-publicado. O caso golden novo é o registro do incidente; a ação preventiva de verdade é o probe que executa esses casos contra o `live` o tempo todo (ele já está rodando desde a Parte 0) e o alerta de drift.
+Passou, porque o grafo está restaurado. Repare no que **não** mudou com o seu caso: o `gg-incidente-troca-fone-2026-11-14` já existia, já cobria essa pergunta, e o pipeline verde de hoje passou por ele. O caso não faltava. **O que faltava era o alvo**: rodar o gate `--target http` contra **o que está no ar**, continuamente, e não só contra a semente em disco e o candidate recém-publicado. O caso golden novo é o registro do incidente; a ação preventiva de verdade é o probe que executa esses casos contra o `live` o tempo todo (ele já está rodando desde a Parte 1) e o alerta de drift.
 
 <details>
 <summary><b>💡 Se sobrar tempo: veja o caso pegar o incidente, com o gate contra o live</b></summary>
@@ -1201,8 +1201,8 @@ Esse push dispara um pipeline que vai até o `promote-live` com o caso novo no g
 
 ```mermaid
 flowchart LR
-    F["FLOW<br/>Parte 2-3: gate de grafo barra; candidate validado; live promovido por digest; manifesto"] --> FB["FEEDBACK<br/>Parte 4-5: probes rotulados na AWS; critical com HTTP 200; trace até o span; restore e replay"]
-    FB --> L["CONTINUAL LEARNING<br/>Parte 6: postmortem blameless; caso golden novo; alerta de drift; defesa em profundidade"]
+    F["FLOW<br/>Parte 3-4: gate de grafo barra; candidate validado; live promovido por digest; manifesto"] --> FB["FEEDBACK<br/>Parte 5-6: probes rotulados na AWS; critical com HTTP 200; trace até o span; restore e replay"]
+    FB --> L["CONTINUAL LEARNING<br/>Parte 7: postmortem blameless; caso golden novo; alerta de drift; defesa em profundidade"]
     L -->|R3| F
 ```
 
