@@ -1,0 +1,61 @@
+{
+  "_comentario": "Cenarios do probe de qualidade NA AWS (ops/cloud/probe/probe.py). Mesmo formato do ops/scenarios.json local: os casos vem do golden set (evals/*.jsonl), a mesma referencia que aprovou o release mede a operacao. Conjuntos ausentes (ex.: golden_graph_v1 antes da 5.1 cria-lo) sao ignorados. slice_weights = peso de cada slice no sorteio (0 = fora). 'dependencia' fica fora: Q-5000/Q-4290 falham de proposito nas fixtures e poluiriam o sinal.",
+  "monitor": {
+    "window_s": 120,
+    "min_n": 20,
+    "warn_below": 0.9,
+    "_por_que": "Janela de 2 min e n >= 20: com o probe a 0,5/s a janela tem ~60 amostras; abaixo de 20 nao ha evidencia para chamar de verde. Fonte obsoleta, ACL/tenant, pedido alheio ou aresta errada no grafo sao CRITICOS com qualquer n."
+  },
+  "scenarios": {
+    "live_watch": {
+      "descricao": "Vigilancia continua do live: mistura de politicas, vigencia, pedidos, ACL e FAQ, 24x7 enquanto a EC2 estiver de pe.",
+      "sets": [
+        "golden_v1",
+        "golden_graph_v1"
+      ],
+      "rate_per_s": 0.5,
+      "slice_weights": {
+        "politicas": 3,
+        "vigencia": 2,
+        "entrega": 1,
+        "faq": 1,
+        "pedidos": 2,
+        "autorizacao": 1,
+        "abstencao": 1,
+        "seguranca": 1,
+        "multi_fonte": 1,
+        "dependencia": 0,
+        "graph_precedence": 3,
+        "graph_multi_hop": 2,
+        "temporal": 1,
+        "tenant": 1,
+        "vector_quality": 1,
+        "authorization": 1,
+        "orders": 1,
+        "abstention": 1,
+        "adversarial": 1
+      },
+      "legacy_strategy": "bm25"
+    },
+    "stale_graph_policy": {
+      "descricao": "Replay do incidente: pico de perguntas sobre troca e vigencia. Mesma seed antes e depois do restore = mesmas perguntas, na mesma ordem.",
+      "sets": [
+        "golden_v1",
+        "golden_graph_v1"
+      ],
+      "rate_per_s": 2.0,
+      "slice_weights": {
+        "graph_precedence": 5,
+        "graph_multi_hop": 3,
+        "temporal": 2,
+        "politicas": 2,
+        "vigencia": 1,
+        "tenant": 1,
+        "orders": 1,
+        "entrega": 1
+      },
+      "legacy_strategy": "bm25"
+    }
+  },
+  "_legacy_strategy": "golden_v1 foi escrito para o BM25 (contrato legado); a estrategia graph recusa com entity_not_found quando a pergunta nao cita produto/categoria (comportamento honesto). Por isso os casos golden_v1 vao com strategy=bm25 e os casos de grafo vem do golden_graph_v1 (strategy=graph, /lab/compare)."
+}

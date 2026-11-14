@@ -1,0 +1,8 @@
+{
+  "_comentario": "Fonte unica da versao do Neo4j. O Terraform le o digest daqui e o scripts/cloud/mirror-neo4j.sh copia exatamente esta imagem do Docker Hub para o ECR. Digest = manifesto linux/amd64 da tag (Fargate X86_64).",
+  "repository": "neo4j",
+  "tag": "5.26.33-community",
+  "platform": "linux/amd64",
+  "digest": "sha256:b2699aee42587a5a579648ff5dd4cfa35b82326615280a8df7c632a247485aca",
+  "index_digest": "sha256:577eb43120e8688e62e753e962c47d30044ecaa95147ee5386c29f226b878008"
+}

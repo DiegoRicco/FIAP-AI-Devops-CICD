@@ -1,0 +1,39 @@
+# Excecoes ACEITAS do Checkov para o runtime ECS, uma por linha e cada uma com o motivo.
+# O security-gate roda o Checkov como BLOQUEANTE com este arquivo:
+#   checkov -d infra-ecs --config-file infra-ecs/.checkov.yaml
+# Achado novo, fora desta lista, reprova o pipeline. Remover uma linha daqui e
+# o jeito de transformar a excecao em obrigacao de novo.
+framework:
+  - terraform
+skip-check:
+  # HTTPS exige certificado de um dominio proprio; o Learner Lab nao tem dominio nem Route 53 utilizavel.
+  - CKV_AWS_2
+  # Mesmo motivo: sem listener HTTPS nao ha politica TLS a escolher.
+  - CKV_AWS_103
+  # Redirecionar para HTTPS e impossivel sem certificado (mesmo motivo do CKV_AWS_2).
+  - CKV2_AWS_20
+  # WAF cobra por mes e por regra; o lab nao tem dado real. A protecao aqui e o SG (so a porta 80) e o app.
+  - CKV2_AWS_28
+  # O cleanup do laboratorio precisa apagar o ALB; protecao contra delete travaria o make destroy.
+  - CKV_AWS_150
+  # Log de acesso do ALB exige bucket com politica para a conta do ELB; os logs do app ja ficam no CloudWatch.
+  - CKV_AWS_91
+  # Learner Lab so oferece a LabRole: nao podemos criar uma segunda role so para a execution role.
+  - CKV_AWS_249
+  # Container Insights cobra por metrica; a observabilidade da aula e a stack open source da Demo 5.2.
+  - CKV_AWS_65
+  # Chave KMS propria custa por mes; imagens e logs do lab nao tem segredo (ECR usa AES256 gerenciado).
+  - CKV_AWS_136
+  - CKV_AWS_158
+  # Estes parametros sao URL publica, ARN e "disabled"; os segredos de verdade sao SecureString (secrets.sh).
+  - CKV2_AWS_34
+  # Subnet publica sem NAT Gateway: o IP publico da task e so de SAIDA (ECR, SSM, logs). A entrada fica fechada pelo SG (8000 so do ALB, 8001 so do runner).
+  - CKV_AWS_333
+  # Plataforma pinada em 1.4.0 (a atual do Fargate Linux) para o deploy ser reproduzivel; LATEST mudaria sozinho entre aulas.
+  - CKV_AWS_332
+  # O ALB e a interface publica do lab: so a porta 80 aberta para a internet; as tasks nao aceitam conexao direta.
+  - CKV_AWS_260
+  # Target groups em HTTP: o trafego ALB -> task fica dentro da VPC e nao ha certificado sem dominio (mesmo motivo do CKV_AWS_2).
+  - CKV_AWS_378
+  # Retencao de 3 dias: log de laboratorio sem dado sensivel; guardar 1 ano custaria sem motivo.
+  - CKV_AWS_338

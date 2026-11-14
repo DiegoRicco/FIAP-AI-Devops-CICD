@@ -147,6 +147,22 @@ tf_plan() {
   fi
 }
 
+# reconfigure e recreate terminam no playbook, que fala com a EC2 pelo SSM e
+# precisa do session-manager-plugin NESTE terminal. Conferimos antes de agir:
+# no recreate, descobrir a falta so no playbook deixaria a EC2 recem-criada sem
+# runner registrado. Vale tambem no dry-run, para o plano nao prometer o que o
+# --apply nao consegue cumprir. Mesma versao fixada no .devcontainer/script.sh.
+require_ssm_plugin() {
+  command -v session-manager-plugin >/dev/null && return 0
+  local arch=ubuntu_64bit
+  if [ "$(dpkg --print-architecture 2>/dev/null)" = arm64 ]; then arch=ubuntu_arm64; fi
+  out action "$1"; out reason session_manager_plugin_missing; out result blocked
+  log "ERRO: falta o session-manager-plugin neste terminal. A acao '$1' roda o playbook via SSM e pararia no meio."
+  log "    Nada foi feito. Instale o plugin (~1 min, e o passo 3.5 do Modulo 02) com o comando abaixo e rode este script de novo:"
+  log "    curl -fsSL https://s3.amazonaws.com/session-manager-downloads/plugin/1.2.896.0/$arch/session-manager-plugin.deb -o /tmp/smp.deb && sudo dpkg -i /tmp/smp.deb && session-manager-plugin --version"
+  exit 3
+}
+
 log "modo: $MODE (nada muda sem --apply)"
 DONE=" "
 for round in 1 2 3 4; do
@@ -177,6 +193,7 @@ for round in 1 2 3 4; do
     log "a acao '$D' ja foi executada e o diagnostico nao mudou. Pare e chame o professor."
     exit 1
   fi
+  case "$D" in reconfigure|recreate) require_ssm_plugin "$D" ;; esac
 
   case "$D" in
     restart)

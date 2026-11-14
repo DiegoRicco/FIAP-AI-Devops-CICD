@@ -1,0 +1,18 @@
+# O contexto do build e a raiz do projeto: so entra o que a imagem usa.
+**/.terraform
+**/.venv
+**/__pycache__
+**/*.pyc
+**/.DS_Store
+.git
+dist
+reports
+ops/results
+infra
+infra-ecs
+infra-obs
+tests
+scripts
+release
+*.tfstate*
+*.tfplan

@@ -1,0 +1,13 @@
+apiVersion: 1
+providers:
+  # Os 3 dashboards da Demo 5.2 na AWS (negocio, tecnico e investigacao) ficam
+  # numa pasta so, para o aluno achar tudo em Dashboards > Quantum Commerce.
+  # allowUiUpdates: false porque o JSON versionado e a fonte da verdade: quem
+  # mexer na tela nao muda o que a proxima turma ve.
+  - name: quantum-aws
+    folder: "Quantum Commerce · Assistente (AWS)"
+    type: file
+    disableDeletion: true
+    allowUiUpdates: false
+    options:
+      path: /var/lib/grafana/dashboards

@@ -1,0 +1,123 @@
+# Stack de observabilidade da Demo 5.2 NA AWS (EC2 qc-assistant-obs).
+# E o mesmo desenho do ops/docker-compose.yml local, com tres diferencas:
+#   1. o assistente roda no ECS e manda OTLP para <ip-privado>:4318 (o SG da EC2
+#      so aceita essa porta das tasks e do runner);
+#   2. o Grafana fica atras do ALB em /grafana, COM login (anonimo desligado);
+#   3. o probe de qualidade (qc-probe) roda aqui, contra a URL publica do ALB.
+# Jaeger, Prometheus e Loki publicam so em 127.0.0.1: o aluno chega neles pelo
+# Grafana ou por SSM port-forward, nunca pela internet.
+# Versoes pinadas iguais as do stack local (sem :latest).
+name: qc-obs
+
+services:
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.164.0
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./otel-collector.yaml:/etc/otelcol/config.yaml:ro
+      # JSONL dos probes e eventos do monitor, SO LEITURA, para o receiver filelog.
+      - /opt/qc-obs/data:/var/log/qc:ro
+    ports:
+      # Todas as interfaces de proposito: quem filtra a origem e o SG (tasks e runner).
+      - "4318:4318"
+    mem_limit: 256m
+    restart: unless-stopped
+
+  jaeger:
+    image: jaegertracing/jaeger:2.22.0
+    command: ["--config=/etc/jaeger/config.yaml"]
+    volumes:
+      # Mesmo arquivo do stack local: memoria com teto de 5000 traces.
+      - ../jaeger.yaml:/etc/jaeger/config.yaml:ro
+    ports:
+      - "127.0.0.1:16686:16686"
+    mem_limit: 256m
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v3.15.1
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=6h
+      - --web.enable-lifecycle
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./alert-rules.yml:/etc/prometheus/alert-rules.yml:ro
+    ports:
+      - "127.0.0.1:9090:9090"
+    mem_limit: 384m
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:3.7.9
+    command: ["-config.file=/etc/loki/config.yaml"]
+    volumes:
+      - ../loki.yaml:/etc/loki/config.yaml:ro
+    ports:
+      - "127.0.0.1:3100:3100"
+    mem_limit: 256m
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:13.2.5
+    environment:
+      # Sub-path: o ALB encaminha /grafana/* sem reescrever, e o Grafana gera os
+      # links ja com o prefixo. GF_SERVER_ROOT_URL vem do obs.env (DNS do ALB).
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+      # Na internet, anonimo NAO: o ALB e publico. Login obrigatorio, sem cadastro.
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      # /metrics do Grafana responderia sem login pelo ALB (/grafana/metrics).
+      GF_METRICS_ENABLED: "false"
+      GF_AUTH_DISABLE_LOGIN_FORM: "false"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_USERS_ALLOW_ORG_CREATE: "false"
+      GF_SECURITY_ADMIN_USER: "admin"
+      GF_SECURITY_DISABLE_GRAVATAR: "true"
+      # ALB de laboratorio sem TLS (sem dominio no Academy): cookie nao pode ser
+      # "secure", senao o navegador nao o devolve por HTTP. Dados ficticios.
+      GF_SECURITY_COOKIE_SECURE: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: "/var/lib/grafana/dashboards/negocio-atendimento.json"
+    env_file:
+      - /opt/qc-obs/obs.env
+      # Gerado no boot a partir do SSM SecureString, chmod 600, fora do S3 e do Git.
+      - /opt/qc-obs/grafana.env
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      # Todas as interfaces: o SG so aceita a porta 3000 vinda do SG do ALB.
+      - "3000:3000"
+    # Medido na EC2 (2026-11-14, 3 dashboards abertos e refresh de 10 s):
+    # 739 MiB de 768m. 1024m da folga sem apertar a t3.medium (~2,3 GiB livres).
+    mem_limit: 1024m
+    depends_on: [prometheus, loki, jaeger]
+    restart: unless-stopped
+
+  # Probe de qualidade: perguntas ROTULADAS contra o live pelo ALB publico,
+  # com seed fixa, e o monitor de janela (n minimo, insufficient_data, critico).
+  # Perfil "probe": so sobe quando o bootstrap acha o ALB (sem alvo, nao ha o que medir).
+  qc-probe:
+    profiles: ["probe"]
+    build:
+      context: ./probe
+    image: qc-probe:local
+    working_dir: /app
+    command: ["python", "-u", "ops/cloud/probe/probe.py", "loop"]
+    env_file:
+      - /opt/qc-obs/obs.env
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318"
+      OTEL_METRIC_EXPORT_INTERVAL: "5000"
+      PYTHONDONTWRITEBYTECODE: "1"
+      QC_PROBE_DATA_DIR: "/data"
+    volumes:
+      # Codigo e golden set do bundle sincronizado do S3, so leitura.
+      - /opt/qc-obs/app:/app:ro
+      - /opt/qc-obs/data:/data
+    mem_limit: 192m
+    depends_on: [otel-collector]
+    restart: unless-stopped

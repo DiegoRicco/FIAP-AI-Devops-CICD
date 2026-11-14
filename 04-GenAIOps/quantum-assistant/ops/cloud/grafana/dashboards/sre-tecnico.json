@@ -1,0 +1,1679 @@
+{
+  "uid": "quantum-demo52",
+  "title": "Visão técnica · SRE",
+  "description": "Para Diego (AI SRE): golden signals do assistente na AWS (ECS live/candidate), latência por etapa, dependência de pedidos, qualidade dos probes e alertas.",
+  "tags": [
+    "quantum-assistente",
+    "demo-5.2",
+    "aws"
+  ],
+  "timezone": "browser",
+  "editable": false,
+  "graphTooltip": 1,
+  "refresh": "10s",
+  "liveNow": false,
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": [
+      "5s",
+      "10s",
+      "30s",
+      "1m"
+    ]
+  },
+  "schemaVersion": 41,
+  "version": 1,
+  "fiscalYearStartMonth": 0,
+  "links": [
+    {
+      "type": "dashboards",
+      "tags": [
+        "quantum-assistente"
+      ],
+      "asDropdown": false,
+      "includeVars": false,
+      "keepTime": true,
+      "title": "Outras visões",
+      "icon": "external link",
+      "targetBlank": false
+    }
+  ],
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      },
+      {
+        "name": "Alertas disparando",
+        "enable": true,
+        "iconColor": "#F04E5E",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "expr": "max by (alertname, severity) (ALERTS{alertstate=\"firing\", severity=~\"warning|critical\"}) unless max by (alertname, severity) (ALERTS{alertstate=\"firing\", severity=~\"warning|critical\"} offset 10s)",
+        "step": "10s",
+        "titleFormat": "Alerta acendeu: {{alertname}}",
+        "textFormat": "severidade {{severity}}",
+        "useValueForTime": false,
+        "hide": false
+      },
+      {
+        "name": "Corpus trocado (reload)",
+        "enable": true,
+        "iconColor": "#ED145B",
+        "datasource": {
+          "type": "loki",
+          "uid": "loki"
+        },
+        "expr": "{service_name=\"quantum-assistant\"} |= \"runtime.reload\" | json",
+        "instant": false,
+        "titleFormat": "Corpus trocado",
+        "textFormat": "corpus {{corpus_version}}",
+        "tagKeys": "",
+        "hide": false
+      },
+      {
+        "name": "Falha injetada na API de pedidos",
+        "enable": true,
+        "iconColor": "#E9A23B",
+        "datasource": {
+          "type": "loki",
+          "uid": "loki"
+        },
+        "expr": "{service_name=\"quantum-orders-api\"} |~ \"orders.faults_(updated|reset)\" | json",
+        "instant": false,
+        "titleFormat": "{{event}}",
+        "textFormat": "erro {{error_rate}} latencia {{latency_ms}} ms",
+        "tagKeys": "",
+        "hide": false
+      }
+    ]
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "environment",
+        "label": "Ambiente",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "query": {
+          "query": "label_values({__name__=~\"qc_requests_total|qc_probe_total\"}, environment)",
+          "refId": "environment"
+        },
+        "definition": "label_values({__name__=~\"qc_requests_total|qc_probe_total\"}, environment)",
+        "includeAll": false,
+        "multi": false,
+        "refresh": 2,
+        "current": {
+          "text": "live",
+          "value": "live"
+        }
+      },
+      {
+        "name": "release",
+        "label": "Release",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "query": {
+          "query": "label_values(qc_probe_total{environment=~\"$environment\"}, release_id)",
+          "refId": "release"
+        },
+        "definition": "label_values(qc_probe_total{environment=~\"$environment\"}, release_id)",
+        "includeAll": true,
+        "multi": true,
+        "refresh": 2,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "allValue": ".*"
+      },
+      {
+        "name": "scenario_id",
+        "label": "Cenário dos probes",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "query": {
+          "query": "label_values(qc_quality_status, scenario_id)",
+          "refId": "scenario_id"
+        },
+        "definition": "label_values(qc_quality_status, scenario_id)",
+        "includeAll": true,
+        "multi": false,
+        "refresh": 2,
+        "current": {
+          "text": "live_watch",
+          "value": "live_watch"
+        },
+        "allValue": ".*"
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Tráfego",
+      "description": "Requisições por segundo no assistente do ambiente escolhido (último minuto). Golden signal: taxa.",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 4,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(rate(qc_requests_total{environment=~\"$environment\", release_id=~\"$release\"}[1m]))",
+          "refId": "A",
+          "legendFormat": "req/s",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "noValue": "0 req/s",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#F1EFEC",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#F1EFEC"
+          },
+          "decimals": 2
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "textMode": "value",
+        "wideLayout": true,
+        "showPercentChange": false,
+        "orientation": "auto"
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Erros 5xx",
+      "description": "Fração das requisições do último minuto que terminaram em erro do servidor (5xx). Golden signal: erros.",
+      "gridPos": {
+        "x": 4,
+        "y": 0,
+        "w": 4,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "(sum(rate(qc_requests_total{environment=~\"$environment\", release_id=~\"$release\", status_class=~\"5..\", route!~\"/ready|/health\"}[1m])) or vector(0)) / sum(rate(qc_requests_total{environment=~\"$environment\", release_id=~\"$release\"}[1m]))",
+          "refId": "A",
+          "legendFormat": "5xx",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "noValue": "Sem amostras",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#3DBE8B",
+                "value": null
+              },
+              {
+                "color": "#E9A23B",
+                "value": 0.01
+              },
+              {
+                "color": "#F04E5E",
+                "value": 0.05
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "textMode": "value",
+        "wideLayout": true,
+        "showPercentChange": false,
+        "orientation": "auto"
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Latência p95",
+      "description": "95% das requisições do último minuto terminaram abaixo deste tempo. Golden signal: latência.",
+      "gridPos": {
+        "x": 8,
+        "y": 0,
+        "w": 4,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(qc_request_duration_seconds_bucket{environment=~\"$environment\", release_id=~\"$release\"}[1m])))",
+          "refId": "A",
+          "legendFormat": "p95",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "Sem amostras",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#3DBE8B",
+                "value": null
+              },
+              {
+                "color": "#E9A23B",
+                "value": 0.5
+              },
+              {
+                "color": "#F04E5E",
+                "value": 2
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 2
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "textMode": "value",
+        "wideLayout": true,
+        "showPercentChange": false,
+        "orientation": "auto"
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Probes corretos",
+      "description": "Pass rate dos probes rotulados (janela de 2 minutos). Abaixo de 90% com n ≥ 10 dispara QualityProbeDegraded. Sem o n mínimo do monitor, mostra 'Sem amostra suficiente'.",
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 4,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "min(qc:probe_pass_rate:2m{scenario_id=~\"$scenario_id\", environment=~\"$environment\", release_id=~\"$release\"}) and on() (sum(qc_quality_samples{scenario_id=~\"$scenario_id\", environment=~\"$environment\"}) >= on() max(qc_quality_min_samples{scenario_id=~\"$scenario_id\", environment=~\"$environment\"}))",
+          "refId": "A",
+          "legendFormat": "pass rate",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "noValue": "Sem amostra suficiente",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#F04E5E",
+                "value": null
+              },
+              {
+                "color": "#E9A23B",
+                "value": 0.9
+              },
+              {
+                "color": "#3DBE8B",
+                "value": 0.99
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "textMode": "value",
+        "wideLayout": true,
+        "showPercentChange": false,
+        "orientation": "auto"
+      }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Amostras na janela (n)",
+      "description": "Quantos probes sustentam a janela do monitor de qualidade. Abaixo do n mínimo configurado o estado é insufficient_data: pouca amostra não é evidência.",
+      "gridPos": {
+        "x": 16,
+        "y": 0,
+        "w": 4,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(qc_quality_samples{scenario_id=~\"$scenario_id\", environment=~\"$environment\"})",
+          "refId": "A",
+          "legendFormat": "n",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max(qc_quality_min_samples{scenario_id=~\"$scenario_id\", environment=~\"$environment\"})",
+          "refId": "B",
+          "legendFormat": "n mínimo",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "0",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#E9A23B",
+                "value": null
+              },
+              {
+                "color": "#F1EFEC",
+                "value": 10
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "textMode": "value_and_name",
+        "wideLayout": true,
+        "showPercentChange": false,
+        "orientation": "auto"
+      }
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Alertas disparando",
+      "description": "Regras do Prometheus em FIRING agora (sem Alertmanager: nada sai da VPC).",
+      "gridPos": {
+        "x": 20,
+        "y": 0,
+        "w": 4,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "count(ALERTS{alertstate=\"firing\", severity=~\"warning|critical\"}) or vector(0)",
+          "refId": "A",
+          "legendFormat": "firing",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "0",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#3DBE8B",
+                "value": null
+              },
+              {
+                "color": "#F04E5E",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "value",
+        "wideLayout": true,
+        "showPercentChange": false,
+        "orientation": "auto"
+      }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Latência do assistente (p50, p95, p99)",
+      "description": "Percentis da latência HTTP do assistente no último minuto. Quando a API de pedidos fica lenta, o p95/p99 sobe.",
+      "gridPos": {
+        "x": 0,
+        "y": 5,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.5, sum by (le) (rate(qc_request_duration_seconds_bucket{environment=~\"$environment\", release_id=~\"$release\"}[1m])))",
+          "refId": "A",
+          "legendFormat": "p50",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(qc_request_duration_seconds_bucket{environment=~\"$environment\", release_id=~\"$release\"}[1m])))",
+          "refId": "B",
+          "legendFormat": "p95",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(qc_request_duration_seconds_bucket{environment=~\"$environment\", release_id=~\"$release\"}[1m])))",
+          "refId": "C",
+          "legendFormat": "p99",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "showPoints": "never",
+            "spanNulls": 30000,
+            "lineInterpolation": "smooth",
+            "axisBorderShow": false,
+            "axisSoftMin": 0,
+            "thresholdsStyle": {
+              "mode": "off"
+            },
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#3DBE8B",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p50"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#B4B1AD"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p95"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#5BC8D9"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p99"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#FF5C8D"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Requisições por rota e erros 5xx",
+      "description": "Taxa de requisições por rota (área) e taxa de 5xx (linha vermelha). Golden signals de tráfego e erros juntos.",
+      "gridPos": {
+        "x": 12,
+        "y": 5,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (route) (rate(qc_requests_total{environment=~\"$environment\", release_id=~\"$release\"}[1m]))",
+          "refId": "A",
+          "legendFormat": "{{route}}",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(rate(qc_requests_total{environment=~\"$environment\", release_id=~\"$release\", status_class=~\"5..\", route!~\"/ready|/health\"}[1m])) or vector(0)",
+          "refId": "B",
+          "legendFormat": "5xx",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "gradientMode": "none",
+            "showPoints": "never",
+            "spanNulls": 30000,
+            "lineInterpolation": "smooth",
+            "axisBorderShow": false,
+            "axisSoftMin": 0,
+            "thresholdsStyle": {
+              "mode": "off"
+            },
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#3DBE8B",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "policy"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#FF5C8D"
+                }
+              },
+              {
+                "id": "displayName",
+                "value": "políticas"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "order_status"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#5BC8D9"
+                }
+              },
+              {
+                "id": "displayName",
+                "value": "status de pedido"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "faq"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#B4B1AD"
+                }
+              },
+              {
+                "id": "displayName",
+                "value": "faq"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "unsupported"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#8E8B87"
+                }
+              },
+              {
+                "id": "displayName",
+                "value": "fora do escopo"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "5xx"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "erros 5xx"
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 1
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    6,
+                    4
+                  ]
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "thresholds"
+                }
+              },
+              {
+                "id": "custom.gradientMode",
+                "value": "scheme"
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "#8E8B87",
+                      "value": null
+                    },
+                    {
+                      "color": "#F04E5E",
+                      "value": 0.001
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Qualidade da recuperação, do grafo e da citação (probes, janela 2m)",
+      "description": "Hit@k: o documento certo veio entre os k recuperados. MRR: quão no topo. Citação: citou fonte quando devia. Fonte vigente: a fonte citada vale hoje. Grafo correto: o caminho chegou à versão esperada. Hit@k pode ficar em 100% enquanto fonte vigente e grafo caem: recuperar o documento certo não garante escolher a versão certa.",
+      "gridPos": {
+        "x": 0,
+        "y": 13,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "min(qc:retrieval_hit_at_k:2m{scenario_id=~\"$scenario_id\", environment=~\"$environment\", release_id=~\"$release\"}) and on() (sum(qc_quality_samples{scenario_id=~\"$scenario_id\", environment=~\"$environment\"}) >= on() max(qc_quality_min_samples{scenario_id=~\"$scenario_id\", environment=~\"$environment\"}))",
+          "refId": "A",
+          "legendFormat": "Hit@k",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "min(qc:retrieval_mrr:2m{scenario_id=~\"$scenario_id\", environment=~\"$environment\", release_id=~\"$release\"}) and on() (sum(qc_quality_samples{scenario_id=~\"$scenario_id\", environment=~\"$environment\"}) >= on() max(qc_quality_min_samples{scenario_id=~\"$scenario_id\", environment=~\"$environment\"}))",
+          "refId": "B",
+          "legendFormat": "MRR",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "min(qc:citation_presence_rate:2m{scenario_id=~\"$scenario_id\", environment=~\"$environment\", release_id=~\"$release\"}) and on() (sum(qc_quality_samples{scenario_id=~\"$scenario_id\", environment=~\"$environment\"}) >= on() max(qc_quality_min_samples{scenario_id=~\"$scenario_id\", environment=~\"$environment\"}))",
+          "refId": "C",
+          "legendFormat": "Citação presente",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "min(qc:source_is_current_rate:2m{scenario_id=~\"$scenario_id\", environment=~\"$environment\", release_id=~\"$release\"}) and on() (sum(qc_quality_samples{scenario_id=~\"$scenario_id\", environment=~\"$environment\"}) >= on() max(qc_quality_min_samples{scenario_id=~\"$scenario_id\", environment=~\"$environment\"}))",
+          "refId": "D",
+          "legendFormat": "Fonte vigente",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "min(qc:graph_path_correct_rate:2m{scenario_id=~\"$scenario_id\", environment=~\"$environment\", release_id=~\"$release\"}) and on() (sum(qc_quality_samples{scenario_id=~\"$scenario_id\", environment=~\"$environment\"}) >= on() max(qc_quality_min_samples{scenario_id=~\"$scenario_id\", environment=~\"$environment\"}))",
+          "refId": "E",
+          "legendFormat": "Caminho do grafo correto",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "showPoints": "never",
+            "spanNulls": 30000,
+            "lineInterpolation": "smooth",
+            "axisBorderShow": false,
+            "axisSoftMin": 0,
+            "thresholdsStyle": {
+              "mode": "off"
+            },
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#3DBE8B",
+                "value": null
+              }
+            ]
+          },
+          "min": 0.5,
+          "max": 1.02
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Hit@k"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#B4B1AD"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "MRR"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#5BC8D9"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Citação presente"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#8E8B87"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Fonte vigente"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#FF5C8D"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 3
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Caminho do grafo correto"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#FF5C8D"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Latência p95 por etapa",
+      "description": "Tempo (p95, último minuto) de cada etapa dentro da requisição: entity.link, graph.traverse, vector.embed, vector.query, policy.version.filter, compose.deterministic e orders.lookup. São os mesmos nomes dos spans no Jaeger.",
+      "gridPos": {
+        "x": 12,
+        "y": 13,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.95, sum by (stage, le) (rate(qc_stage_duration_seconds_bucket{environment=~\"$environment\"}[1m])))",
+          "refId": "A",
+          "legendFormat": "{{stage}}",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "showPoints": "never",
+            "spanNulls": 30000,
+            "lineInterpolation": "smooth",
+            "axisBorderShow": false,
+            "axisSoftMin": 0,
+            "thresholdsStyle": {
+              "mode": "off"
+            },
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#3DBE8B",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "Dependência: API de pedidos (orders.lookup)",
+      "description": "Latência da chamada do assistente à API de pedidos (Lambda/API Gateway) e probes de pedido que ficaram sem status (recusa honesta). Faixa alta aqui com probes corretos estáveis = incidente técnico de dependência, não de conteúdo.",
+      "gridPos": {
+        "x": 0,
+        "y": 21,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.5, sum by (le) (rate(qc_stage_duration_seconds_bucket{environment=~\"$environment\", stage=\"orders.lookup\"}[1m])))",
+          "refId": "A",
+          "legendFormat": "p50 orders.lookup",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(qc_stage_duration_seconds_bucket{environment=~\"$environment\", stage=\"orders.lookup\"}[1m])))",
+          "refId": "B",
+          "legendFormat": "p95 orders.lookup",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(increase(qc_probe_total{scenario_id=~\"$scenario_id\", environment=~\"$environment\", release_id=~\"$release\", result=\"fallback\"}[1m])) or vector(0)",
+          "refId": "C",
+          "legendFormat": "probes sem status (fallback)",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "showPoints": "never",
+            "spanNulls": 30000,
+            "lineInterpolation": "smooth",
+            "axisBorderShow": false,
+            "axisSoftMin": 0,
+            "thresholdsStyle": {
+              "mode": "off"
+            },
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#3DBE8B",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p50 orders.lookup"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#B4B1AD"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p95 orders.lookup"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#5BC8D9"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "probes sem status (fallback)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#E9A23B"
+                }
+              },
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "custom.drawStyle",
+                "value": "bars"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 14,
+      "type": "state-timeline",
+      "title": "Estado do monitor de qualidade",
+      "description": "Estado do quality monitor por cenário ao longo do tempo: verde ok, âmbar warning, vermelho critical, cinza insufficient_data. O alerta QualityCritical acende quando a faixa fica vermelha.",
+      "gridPos": {
+        "x": 12,
+        "y": 21,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by (scenario_id) (qc_quality_status{scenario_id=~\"$scenario_id\", environment=~\"$environment\"})",
+          "refId": "A",
+          "legendFormat": "{{scenario_id}}",
+          "range": true,
+          "instant": false,
+          "interval": "10s"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#8E8B87",
+                "value": null
+              },
+              {
+                "color": "#3DBE8B",
+                "value": 0
+              },
+              {
+                "color": "#E9A23B",
+                "value": 1
+              },
+              {
+                "color": "#F04E5E",
+                "value": 2
+              }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "-1": {
+                  "text": "Amostra insuficiente",
+                  "color": "#8E8B87",
+                  "index": 0
+                },
+                "0": {
+                  "text": "Confiável",
+                  "color": "#3DBE8B",
+                  "index": 1
+                },
+                "1": {
+                  "text": "Atenção",
+                  "color": "#E9A23B",
+                  "index": 2
+                },
+                "2": {
+                  "text": "Não confiável",
+                  "color": "#F04E5E",
+                  "index": 3
+                }
+              }
+            }
+          ],
+          "custom": {
+            "fillOpacity": 80,
+            "lineWidth": 0
+          },
+          "noValue": "Sem medição no período"
+        },
+        "overrides": []
+      },
+      "options": {
+        "showValue": "never",
+        "rowHeight": 0.7,
+        "mergeValues": true,
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 11,
+      "type": "table",
+      "title": "Alertas em FIRING agora",
+      "description": "Cada linha é uma regra de ops/cloud/alert-rules.yml disparando. O runbook de cada alerta está em ops/runbook.md. Uma linha por alerta (labels viram colunas).",
+      "gridPos": {
+        "x": 0,
+        "y": 29,
+        "w": 14,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by (alertname, severity, signal, team, environment, scenario_id) (ALERTS{alertstate=\"firing\"})",
+          "refId": "A",
+          "legendFormat": "__auto",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {
+            "mode": "columns",
+            "keepLabels": [
+              "alertname",
+              "severity",
+              "signal",
+              "team",
+              "environment",
+              "scenario_id"
+            ]
+          }
+        },
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Value": true
+            },
+            "renameByName": {
+              "alertname": "Alerta",
+              "severity": "Severidade",
+              "signal": "Sinal",
+              "team": "Time",
+              "environment": "Ambiente",
+              "scenario_id": "Cenário"
+            },
+            "indexByName": {
+              "alertname": 0,
+              "severity": 1,
+              "signal": 2,
+              "team": 3,
+              "environment": 4,
+              "scenario_id": 5
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "Nenhum alerta disparando.",
+          "custom": {
+            "align": "left",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Severidade"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "critical": {
+                        "text": "crítico",
+                        "color": "#F04E5E",
+                        "index": 0
+                      },
+                      "warning": {
+                        "text": "atenção",
+                        "color": "#E9A23B",
+                        "index": 1
+                      },
+                      "info": {
+                        "text": "informativo",
+                        "color": "#B4B1AD",
+                        "index": 2
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      }
+    },
+    {
+      "id": 12,
+      "type": "text",
+      "title": "O que olhar primeiro",
+      "gridPos": {
+        "x": 14,
+        "y": 29,
+        "w": 10,
+        "h": 8
+      },
+      "transparent": false,
+      "options": {
+        "mode": "markdown",
+        "content": "1. **Alertas disparando.** Zero é o normal. Se houver, a tabela ao lado diz qual e de que time.\n2. **Erros 5xx e latência p95.** Se estão bons e os **probes corretos** caíram, o problema é de conteúdo (grafo, corpus, filtro, índice), não de servidor.\n3. **Amostras (n).** Abaixo do n mínimo, não conclua nada: o monitor fica em insufficient_data.\n4. **Latência por etapa.** Mostra onde o tempo é gasto; o nome de cada etapa é o nome do span no Jaeger.\n5. **Dependência.** Pedidos sem status com probes corretos estáveis = incidente técnico, e o assistente está recusando com honestidade.\n\nPara achar a requisição que errou e abrir o trace, use **Investigação · Incidente**.",
+        "code": {
+          "language": "plaintext",
+          "showLineNumbers": false,
+          "showMiniMap": false
+        }
+      }
+    }
+  ]
+}

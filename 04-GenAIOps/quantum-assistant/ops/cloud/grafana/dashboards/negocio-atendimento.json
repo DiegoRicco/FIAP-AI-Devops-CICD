@@ -1,0 +1,1597 @@
+{
+  "uid": "qc-negocio",
+  "title": "Visão do negócio · Atendimento",
+  "description": "Para Helena e a liderança de CX: o cliente recebeu informação correta? Assistente na AWS (ECS), medido por probes rotulados que rodam na própria AWS contra o ALB.",
+  "tags": [
+    "quantum-assistente",
+    "demo-5.2",
+    "aws"
+  ],
+  "timezone": "browser",
+  "editable": false,
+  "graphTooltip": 1,
+  "refresh": "10s",
+  "liveNow": false,
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": [
+      "5s",
+      "10s",
+      "30s",
+      "1m"
+    ]
+  },
+  "schemaVersion": 41,
+  "version": 1,
+  "fiscalYearStartMonth": 0,
+  "links": [
+    {
+      "type": "dashboards",
+      "tags": [
+        "quantum-assistente"
+      ],
+      "asDropdown": false,
+      "includeVars": false,
+      "keepTime": true,
+      "title": "Outras visões",
+      "icon": "external link",
+      "targetBlank": false
+    }
+  ],
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      },
+      {
+        "name": "Alertas disparando",
+        "enable": false,
+        "iconColor": "#F04E5E",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "expr": "max by (alertname, severity) (ALERTS{alertstate=\"firing\", severity=~\"warning|critical\"}) unless max by (alertname, severity) (ALERTS{alertstate=\"firing\", severity=~\"warning|critical\"} offset 10s)",
+        "step": "10s",
+        "titleFormat": "Alerta acendeu: {{alertname}}",
+        "textFormat": "severidade {{severity}}",
+        "useValueForTime": false,
+        "hide": true
+      }
+    ]
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "environment",
+        "label": "Ambiente",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "query": {
+          "query": "label_values({__name__=~\"qc_requests_total|qc_probe_total\"}, environment)",
+          "refId": "environment"
+        },
+        "definition": "label_values({__name__=~\"qc_requests_total|qc_probe_total\"}, environment)",
+        "includeAll": false,
+        "multi": false,
+        "refresh": 2,
+        "current": {
+          "text": "live",
+          "value": "live"
+        }
+      },
+      {
+        "name": "release",
+        "label": "Release",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "query": {
+          "query": "label_values(qc_probe_total{environment=~\"$environment\"}, release_id)",
+          "refId": "release"
+        },
+        "definition": "label_values(qc_probe_total{environment=~\"$environment\"}, release_id)",
+        "includeAll": true,
+        "multi": true,
+        "refresh": 2,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "allValue": ".*"
+      },
+      {
+        "name": "scenario_id",
+        "label": "Cenário dos probes",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "query": {
+          "query": "label_values(qc_quality_status, scenario_id)",
+          "refId": "scenario_id"
+        },
+        "definition": "label_values(qc_quality_status, scenario_id)",
+        "includeAll": true,
+        "multi": false,
+        "refresh": 2,
+        "current": {
+          "text": "live_watch",
+          "value": "live_watch"
+        },
+        "allValue": ".*"
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Confiança do assistente agora",
+      "description": "Semáforo do monitor de qualidade (contêiner qc-probe na AWS), janela deslizante real com n mínimo. Verde: n suficiente, 90% ou mais corretos e nenhuma regra dura violada. Âmbar: menos de 90% corretos. Vermelho: ao menos um caso crítico (fonte que não vale hoje, outro tenant, pedido sem autorização ou caminho de grafo errado), não importa a média. Cinza: amostra insuficiente na janela, que NÃO é verde.",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 6,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max(qc_quality_status{scenario_id=~\"$scenario_id\", environment=~\"$environment\"})",
+          "refId": "A",
+          "legendFormat": "semaforo",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "noValue": "Sem medição",
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "-1": {
+                  "text": "Amostra insuficiente",
+                  "color": "#8E8B87",
+                  "index": 0
+                },
+                "0": {
+                  "text": "Confiável",
+                  "color": "#3DBE8B",
+                  "index": 1
+                },
+                "1": {
+                  "text": "Atenção",
+                  "color": "#E9A23B",
+                  "index": 2
+                },
+                "2": {
+                  "text": "Não confiável",
+                  "color": "#F04E5E",
+                  "index": 3
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#8E8B87",
+                "value": null
+              },
+              {
+                "color": "#3DBE8B",
+                "value": 0
+              },
+              {
+                "color": "#E9A23B",
+                "value": 1
+              },
+              {
+                "color": "#F04E5E",
+                "value": 2
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background_solid",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "value",
+        "wideLayout": true,
+        "showPercentChange": false,
+        "orientation": "auto",
+        "text": {
+          "valueSize": 44
+        }
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Perguntas",
+      "description": "Perguntas atendidas. Quantas perguntas o assistente do ambiente escolhido respondeu no período (inclui os probes; health check do ALB não conta). Para o negócio: volume de atendimento sem atendente.",
+      "gridPos": {
+        "x": 6,
+        "y": 0,
+        "w": 4,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(increase(qc_requests_total{environment=~\"$environment\", release_id=~\"$release\", route!~\".*(health|ready|meta|static|favicon|metrics).*\"}[$__range]))",
+          "refId": "A",
+          "legendFormat": "perguntas",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "0",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#F1EFEC",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#F1EFEC"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "value",
+        "wideLayout": true,
+        "showPercentChange": false,
+        "orientation": "auto",
+        "text": {
+          "valueSize": 44
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Política vigente",
+      "description": "Com a política vigente. Das respostas verificadas pelos probes nos últimos 2 minutos (a mesma janela do semáforo), quantas usaram a versão de política que vale hoje. Fica vermelho abaixo de 100%: uma única política vencida já é crítica. Sem o n mínimo na janela o painel diz 'Sem amostra suficiente' em vez de mostrar 100%.",
+      "gridPos": {
+        "x": 10,
+        "y": 0,
+        "w": 5,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "(sum(increase(qc_probe_source_current_total{scenario_id=~\"$scenario_id\", environment=~\"$environment\", release_id=~\"$release\"}[2m])) / sum(increase(qc_probe_source_checked_total{scenario_id=~\"$scenario_id\", environment=~\"$environment\", release_id=~\"$release\"}[2m]))) and on() (sum(qc_quality_samples{scenario_id=~\"$scenario_id\", environment=~\"$environment\"}) >= on() max(qc_quality_min_samples{scenario_id=~\"$scenario_id\", environment=~\"$environment\"}))",
+          "refId": "A",
+          "legendFormat": "vigente",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "noValue": "Sem amostra suficiente",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#F04E5E",
+                "value": null
+              },
+              {
+                "color": "#E9A23B",
+                "value": 0.95
+              },
+              {
+                "color": "#3DBE8B",
+                "value": 0.9999
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "value",
+        "wideLayout": true,
+        "showPercentChange": false,
+        "orientation": "auto",
+        "text": {
+          "valueSize": 44
+        }
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Caminho do grafo",
+      "description": "Caminho do grafo conferido. Das respostas dos probes que passaram pelo grafo (produto → categoria → campanha → política → versão) nos últimos 2 minutos (a mesma janela do semáforo), quantas chegaram à versão de política que o gabarito espera.",
+      "gridPos": {
+        "x": 15,
+        "y": 0,
+        "w": 4,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "(sum(increase(qc_probe_graph_path_correct_total{scenario_id=~\"$scenario_id\", environment=~\"$environment\", release_id=~\"$release\"}[2m])) / sum(increase(qc_probe_graph_path_checked_total{scenario_id=~\"$scenario_id\", environment=~\"$environment\", release_id=~\"$release\"}[2m]))) and on() (sum(qc_quality_samples{scenario_id=~\"$scenario_id\", environment=~\"$environment\"}) >= on() max(qc_quality_min_samples{scenario_id=~\"$scenario_id\", environment=~\"$environment\"}))",
+          "refId": "A",
+          "legendFormat": "grafo",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "noValue": "Sem amostra suficiente",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#F04E5E",
+                "value": null
+              },
+              {
+                "color": "#E9A23B",
+                "value": 0.95
+              },
+              {
+                "color": "#3DBE8B",
+                "value": 0.9999
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "value",
+        "wideLayout": true,
+        "showPercentChange": false,
+        "orientation": "auto",
+        "text": {
+          "valueSize": 44
+        }
+      }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Pedidos sem status",
+      "description": "Pedidos sem status. Dos probes de pedido dos últimos 2 minutos (a mesma janela do semáforo), quantos ficaram sem status porque a API de pedidos não respondeu (o assistente recusou com honestidade). Sinal técnico, separado da qualidade documental.",
+      "gridPos": {
+        "x": 19,
+        "y": 0,
+        "w": 5,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "(sum(increase(qc_probe_total{scenario_id=~\"$scenario_id\", environment=~\"$environment\", release_id=~\"$release\", result=\"fallback\"}[2m])) or vector(0)) / sum(increase(qc_probe_total{scenario_id=~\"$scenario_id\", environment=~\"$environment\", release_id=~\"$release\", slice=~\"pedidos|orders\"}[2m]))",
+          "refId": "A",
+          "legendFormat": "falhas",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "noValue": "Sem amostras",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#3DBE8B",
+                "value": null
+              },
+              {
+                "color": "#E9A23B",
+                "value": 0.05
+              },
+              {
+                "color": "#F04E5E",
+                "value": 0.2
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "value",
+        "wideLayout": true,
+        "showPercentChange": false,
+        "orientation": "auto",
+        "text": {
+          "valueSize": 44
+        }
+      }
+    },
+    {
+      "id": 6,
+      "type": "table",
+      "title": "Por que o semáforo está assim",
+      "description": "Os probes que erraram nos últimos 2 minutos, agrupados pelo motivo. Tabela vazia com semáforo verde é o esperado.",
+      "gridPos": {
+        "x": 0,
+        "y": 7,
+        "w": 9,
+        "h": 9
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sort_desc(sum by (reason, release_id) (increase(qc_probe_total{scenario_id=~\"$scenario_id\", environment=~\"$environment\", release_id=~\"$release\", result=\"fail\"}[2m])) > 0)",
+          "refId": "A",
+          "legendFormat": "__auto",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "renameByName": {
+              "reason": "Motivo",
+              "release_id": "Release",
+              "Value": "Probes que erraram"
+            },
+            "indexByName": {
+              "reason": 0,
+              "release_id": 1,
+              "Value": 2
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "Nenhum probe errou nos últimos 2 minutos.",
+          "custom": {
+            "align": "left",
+            "cellOptions": {
+              "type": "auto"
+            }
+          },
+          "decimals": 0,
+          "unit": "none"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Motivo"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "stale_source_served": {
+                        "text": "Serviu uma política que não vale hoje",
+                        "index": 0
+                      },
+                      "fonte_obsoleta": {
+                        "text": "Citou uma política obsoleta",
+                        "index": 1
+                      },
+                      "wrong_graph_edge": {
+                        "text": "Caminho do grafo diferente do gabarito",
+                        "index": 2
+                      },
+                      "tenant_acl": {
+                        "text": "Mostrou documento de outro tenant ou interno",
+                        "index": 3
+                      },
+                      "acl_tenant": {
+                        "text": "Mostrou documento de outro tenant ou interno",
+                        "index": 4
+                      },
+                      "order_auth": {
+                        "text": "Status de pedido sem autorização",
+                        "index": 5
+                      },
+                      "contrato_pedido": {
+                        "text": "Status de pedido diferente da API",
+                        "index": 6
+                      },
+                      "fonte_fora_do_corpus_aprovado": {
+                        "text": "Citou documento fora do corpus aprovado",
+                        "index": 7
+                      },
+                      "citacao": {
+                        "text": "Respondeu sem citar a fonte",
+                        "index": 8
+                      },
+                      "campos_esperados": {
+                        "text": "Faltou informação esperada na resposta",
+                        "index": 9
+                      },
+                      "contrato_resposta": {
+                        "text": "Resposta fora do formato combinado",
+                        "index": 10
+                      },
+                      "extra_must_not_contain": {
+                        "text": "Resposta trouxe texto proibido",
+                        "index": 11
+                      },
+                      "texto_proibido": {
+                        "text": "Resposta trouxe texto proibido",
+                        "index": 12
+                      },
+                      "recusa_obrigatoria": {
+                        "text": "Deveria ter recusado e respondeu",
+                        "index": 13
+                      },
+                      "nao_recusou": {
+                        "text": "Recusou quando devia responder",
+                        "index": 14
+                      },
+                      "rota": {
+                        "text": "Assunto classificado errado",
+                        "index": 15
+                      },
+                      "injection": {
+                        "text": "Instrução maliciosa chegou à resposta",
+                        "index": 16
+                      },
+                      "http_error": {
+                        "text": "Erro HTTP na chamada",
+                        "index": 17
+                      },
+                      "dependency_unavailable": {
+                        "text": "API de pedidos fora (recusa honesta)",
+                        "index": 18
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.width",
+                "value": 290
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Probes que erraram"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#F04E5E"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "md",
+        "footer": {
+          "show": false
+        }
+      }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "HTTP verde não significa resposta certa",
+      "description": "Linha verde: parte das requisições que o assistente na AWS respondeu sem erro técnico (sem 5xx). Linha ciano: parte das respostas certas segundo os probes rotulados. Se a verde fica em 100% e a ciano cai abaixo da tracejada de 90%, monitorar só o HTTP esconderia o problema.",
+      "gridPos": {
+        "x": 9,
+        "y": 7,
+        "w": 15,
+        "h": 9
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "min(1 - qc:http_5xx_ratio:1m{environment=~\"$environment\"})",
+          "refId": "A",
+          "legendFormat": "Servidor respondeu sem erro (HTTP)",
+          "range": true,
+          "instant": false,
+          "interval": "10s"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "min(qc:probe_pass_rate:2m{scenario_id=~\"$scenario_id\", environment=~\"$environment\", release_id=~\"$release\"}) and on() (sum(qc_quality_samples{scenario_id=~\"$scenario_id\", environment=~\"$environment\"}) >= on() max(qc_quality_min_samples{scenario_id=~\"$scenario_id\", environment=~\"$environment\"}))",
+          "refId": "B",
+          "legendFormat": "Resposta certa (probes rotulados)",
+          "range": true,
+          "instant": false,
+          "interval": "10s"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "showPoints": "never",
+            "spanNulls": 30000,
+            "lineInterpolation": "smooth",
+            "axisBorderShow": false,
+            "axisSoftMin": 0,
+            "thresholdsStyle": {
+              "mode": "dashed"
+            },
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#E9A23B",
+                "value": null
+              },
+              {
+                "color": "#E9A23B",
+                "value": 0.9
+              }
+            ]
+          },
+          "min": 0.5,
+          "max": 1.02,
+          "decimals": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Servidor respondeu sem erro (HTTP)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#3DBE8B"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 3
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Resposta certa (probes rotulados)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#5BC8D9"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 3
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 8,
+      "type": "bargauge",
+      "title": "Perguntas por estratégia de busca",
+      "description": "Perguntas atendidas no período por estratégia de recuperação (BM25, vetor no Neo4j ou grafo). Mostra qual caminho o atendimento está usando de fato.",
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sort_desc(sum by (strategy) (increase(qc_requests_total{environment=~\"$environment\", release_id=~\"$release\", strategy=~\"bm25|vector|graph\"}[$__range])))",
+          "refId": "A",
+          "legendFormat": "{{strategy}}",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "min": 0,
+          "noValue": "Sem perguntas no período",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#FF5C8D"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#F1EFEC",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "graph"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Grafo (Neo4j)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "vector"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Vetor (Neo4j)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "bm25"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "BM25 (palavras-chave)"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "displayMode": "basic",
+        "orientation": "horizontal",
+        "showUnfilled": true,
+        "valueMode": "text",
+        "namePlacement": "top",
+        "sizing": "auto",
+        "text": {
+          "titleSize": 14,
+          "valueSize": 16
+        },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 9,
+      "type": "bargauge",
+      "title": "Acerto dos probes por assunto",
+      "description": "Os 6 assuntos com menor acerto nos últimos 2 minutos (probes rotulados, a mesma janela do semáforo). Ajuda a ver QUAL assunto está sofrendo, por exemplo só Políticas.",
+      "gridPos": {
+        "x": 12,
+        "y": 16,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "bottomk(6, sum by (slice) (increase(qc_probe_total{scenario_id=~\"$scenario_id\", environment=~\"$environment\", release_id=~\"$release\", result=\"pass\"}[2m])) / sum by (slice) (increase(qc_probe_total{scenario_id=~\"$scenario_id\", environment=~\"$environment\", release_id=~\"$release\", result=~\"pass|fail\"}[2m])))",
+          "refId": "A",
+          "legendFormat": "{{slice}}",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 0,
+          "min": 0,
+          "noValue": "Sem amostra suficiente",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#F04E5E",
+                "value": null
+              },
+              {
+                "color": "#E9A23B",
+                "value": 0.9
+              },
+              {
+                "color": "#3DBE8B",
+                "value": 0.99
+              }
+            ]
+          },
+          "max": 1
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "politicas"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Políticas"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "vigencia"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Vigência da política"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "temporal"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Datas e vigência"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "graph"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Grafo"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "graph_multi_hop"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Grafo: produto → campanha → política"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "graph_precedence"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Grafo: versão que prevalece"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "vector"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Busca vetorial"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "vector_quality"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Busca vetorial"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "tenant"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Outro tenant (parceiro)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "autorizacao"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Pedido de outro cliente"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "authorization"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Autorização"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "pedidos"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Pedidos"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "orders"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Pedidos"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "entrega"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Entrega e frete"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "faq"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Dúvidas frequentes"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "abstencao"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Perguntas sem resposta no corpus"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "abstention"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Perguntas sem resposta no corpus"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "seguranca"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Segurança (instrução maliciosa)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "adversarial"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Segurança (instrução maliciosa)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "multi_fonte"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Mais de uma fonte"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "displayMode": "basic",
+        "orientation": "horizontal",
+        "showUnfilled": true,
+        "valueMode": "text",
+        "namePlacement": "top",
+        "sizing": "auto",
+        "text": {
+          "titleSize": 14,
+          "valueSize": 16
+        },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 11,
+      "type": "table",
+      "title": "Release que está atendendo",
+      "description": "Release e corpus que os probes encontraram respondendo no ambiente escolhido (última leitura).",
+      "gridPos": {
+        "x": 0,
+        "y": 25,
+        "w": 8,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by (environment, release_id, corpus_version) (qc_probe_observed_version{environment=~\"$environment\"})",
+          "refId": "A",
+          "legendFormat": "__auto",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Value": true
+            },
+            "renameByName": {
+              "environment": "Ambiente",
+              "release_id": "Release",
+              "corpus_version": "Corpus"
+            },
+            "indexByName": {
+              "environment": 0,
+              "release_id": 1,
+              "corpus_version": 2
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "Sem medição",
+          "custom": {
+            "align": "left",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Release"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#5BC8D9"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      }
+    },
+    {
+      "id": 12,
+      "type": "stat",
+      "title": "Casos críticos na janela",
+      "description": "Probes com violação de regra dura na janela do monitor (fonte que não vale hoje, outro tenant, pedido sem autorização, caminho de grafo errado). Um único caso já deixa o semáforo vermelho.",
+      "gridPos": {
+        "x": 8,
+        "y": 25,
+        "w": 6,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(qc_quality_window_violations{scenario_id=~\"$scenario_id\", environment=~\"$environment\"})",
+          "refId": "A",
+          "legendFormat": "criticos",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "noValue": "Sem medição",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#3DBE8B",
+                "value": null
+              },
+              {
+                "color": "#F04E5E",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "value",
+        "wideLayout": true,
+        "showPercentChange": false,
+        "orientation": "auto",
+        "text": {
+          "valueSize": 44
+        }
+      }
+    },
+    {
+      "id": 13,
+      "type": "state-timeline",
+      "title": "Linha do tempo da confiança",
+      "description": "Cada faixa é o estado do monitor de qualidade ao longo do tempo: verde confiável, âmbar atenção, vermelho não confiável, cinza amostra insuficiente. Mostra quando o problema começou e quando terminou.",
+      "gridPos": {
+        "x": 14,
+        "y": 25,
+        "w": 10,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by (scenario_id) (qc_quality_status{scenario_id=~\"$scenario_id\", environment=~\"$environment\"})",
+          "refId": "A",
+          "legendFormat": "{{scenario_id}}",
+          "range": true,
+          "instant": false,
+          "interval": "10s"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#8E8B87",
+                "value": null
+              },
+              {
+                "color": "#3DBE8B",
+                "value": 0
+              },
+              {
+                "color": "#E9A23B",
+                "value": 1
+              },
+              {
+                "color": "#F04E5E",
+                "value": 2
+              }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "-1": {
+                  "text": "Amostra insuficiente",
+                  "color": "#8E8B87",
+                  "index": 0
+                },
+                "0": {
+                  "text": "Confiável",
+                  "color": "#3DBE8B",
+                  "index": 1
+                },
+                "1": {
+                  "text": "Atenção",
+                  "color": "#E9A23B",
+                  "index": 2
+                },
+                "2": {
+                  "text": "Não confiável",
+                  "color": "#F04E5E",
+                  "index": 3
+                }
+              }
+            }
+          ],
+          "custom": {
+            "fillOpacity": 80,
+            "lineWidth": 0
+          },
+          "noValue": "Sem medição no período"
+        },
+        "overrides": []
+      },
+      "options": {
+        "showValue": "never",
+        "rowHeight": 0.7,
+        "mergeValues": true,
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 10,
+      "type": "text",
+      "title": "Como ler esta tela",
+      "gridPos": {
+        "x": 0,
+        "y": 32,
+        "w": 24,
+        "h": 5
+      },
+      "transparent": false,
+      "options": {
+        "mode": "markdown",
+        "content": "**Comece pelo semáforo.** Verde quer dizer que as perguntas de teste com resposta conhecida, feitas na AWS contra o assistente **live**, estão sendo respondidas com a política que vale hoje. Âmbar ou vermelho: a tabela logo abaixo diz o motivo em uma frase. **Cinza não é verde:** ninguém mediu o suficiente na janela.\n\n**Depois, compare as duas linhas do gráfico.** O servidor pode responder rápido e sem erro (linha verde em 100%) e mesmo assim errar o conteúdo (linha ciano abaixo da tracejada de 90%). Por isso esta tela mede a resposta, e não só o servidor.\n\nOs números de qualidade vêm de **probes sintéticos** (perguntas de teste com gabarito), não de clientes reais, e não cobrem todas as perguntas humanas. Para o detalhe técnico, abra **Visão técnica · SRE** (Diego); para achar o caso que errou, **Investigação · Incidente** (links no topo).",
+        "code": {
+          "language": "plaintext",
+          "showLineNumbers": false,
+          "showMiniMap": false
+        }
+      }
+    }
+  ]
+}

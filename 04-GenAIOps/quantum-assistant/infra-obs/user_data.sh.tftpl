@@ -1,0 +1,33 @@
+#!/bin/bash
+# Primeiro boot da EC2 de observabilidade. Faz o minimo: instala a AWS CLI v2
+# (versao pinada) e entrega o controle ao bootstrap.sh versionado no S3, que e
+# o mesmo script que ops/cloud/obs.sh roda de novo via SSM em cada deploy.
+set -euo pipefail
+exec >>/var/log/qc-obs-bootstrap.log 2>&1
+echo "[user_data] inicio $(date -u +%FT%TZ)"
+
+export DEBIAN_FRONTEND=noninteractive
+apt-get update -q
+apt-get install -y -q unzip ca-certificates curl
+
+if ! command -v aws >/dev/null 2>&1; then
+  tmp=$(mktemp -d)
+  curl -fsSL -o "$tmp/awscliv2.zip" "https://awscli.amazonaws.com/awscli-exe-linux-x86_64-2.40.3.zip"
+  unzip -q "$tmp/awscliv2.zip" -d "$tmp"
+  "$tmp/aws/install"
+  rm -rf "$tmp"
+fi
+
+mkdir -p /opt/qc-obs
+echo "QC_CONFIG_BUCKET=${config_bucket}" > /opt/qc-obs/instance.env
+echo "AWS_REGION=${region}" >> /opt/qc-obs/instance.env
+
+# O bootstrap pode ainda nao estar no S3 se o apply veio antes do sync:
+# tenta por ate 10 min, depois desiste (obs.sh deploy reexecuta via SSM).
+for i in $(seq 1 60); do
+  if aws s3 cp --region "${region}" "s3://${config_bucket}/quantum-assistant/obs-config/ops/cloud/bootstrap.sh" /opt/qc-obs/bootstrap.sh; then
+    exec bash /opt/qc-obs/bootstrap.sh
+  fi
+  sleep 10
+done
+echo "[user_data] bootstrap.sh nao encontrado no S3; rode ops/cloud/obs.sh deploy"

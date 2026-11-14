@@ -1,0 +1,23 @@
+# Dependencias SO da camada web (web/app): FastAPI na 8000, admin HMAC na 8001
+# e o download opcional do data bundle no S3 (boto3).
+# Instalado JUNTO com requirements-engine.txt e requirements-ops.txt (Dockerfile.app):
+# por isso nao repete pins que ja estao no requirements-ops.txt (opentelemetry-api,
+# typing_extensions, idna, urllib3), para nao haver dois pins do mesmo pacote.
+# Versoes pinadas (pypi.org em 2026-11-14), incluindo as transitivas.
+fastapi==0.162.0
+starlette==1.10.0
+pydantic==2.14.3
+pydantic-core==2.50.4
+annotated-types==0.8.0
+annotated-doc==0.0.6
+typing-inspection==0.4.5
+anyio==4.16.0
+uvicorn==0.54.0
+click==8.5.1
+h11==0.16.0
+boto3==1.43.120
+botocore==1.43.127
+s3transfer==0.19.3
+jmespath==1.1.0
+python-dateutil==2.9.0.post0
+six==1.17.0
