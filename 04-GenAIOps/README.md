@@ -81,7 +81,7 @@ cd /home/vscode/environment/quantum-ai-assistant
 make runner
 ```
 
-> Saída esperada: `diagnostico do runner: reuse` e `Runner da EC2 pronto`. Se a EC2 estava desligada, o alvo a liga e espera o runner voltar online; por fim confere o Docker no runner (`runner-docker.sh`). Ele **nunca** registra um runner duplicado. Os scripts por baixo (`runner-preflight.sh`, `runner-recover.sh`) são os de [`shared/runner/`](shared/runner/README.md), lidos do repositório do curso via `COURSE_REPO`.
+> Saída esperada: `diagnostico do runner: reuse`, `Runner da EC2 pronto...` e as linhas `docker_installed=already` ... `docker_version=...` do `runner-docker.sh` (25 s na homologação). Se a EC2 estava desligada, o diagnóstico é `start`: o alvo a liga e espera o runner voltar online; por fim confere o Docker no runner. Ele **nunca** registra um runner duplicado. Os scripts por baixo (`runner-preflight.sh`, `runner-recover.sh`) são os de [`shared/runner/`](shared/runner/README.md), lidos do repositório do curso via `COURSE_REPO`.
 
 <details>
 <summary><b>💡 Clique para entender: reboot, stop/start, terminate, Codespaces parado e sessão do Academy expirada não são a mesma coisa</b></summary>
@@ -153,7 +153,7 @@ Tudo com prefixo **`qc-assistant-`**, tags `Project=quantum-commerce`, `Lab=05-x
 | Lambda + API Gateway + DynamoDB (pedidos) | ~US$ 0 parados | Por chamada. |
 
 > [!CAUTION]
-> Diferente da versão anterior (quase tudo serverless), **este módulo cobra por hora enquanto estiver de pé**. Entre a 5.1 e a 5.2 no mesmo dia, deixe tudo como está. Se as demos forem em dias diferentes, confirme com o professor: `make down` escala os services a zero (as tasks param de cobrar) e mantém ALB, ECR e state (volta com `make up`); `make destroy-dry-run` mostra o que a destruição completa faria <!-- CONFIRMAR-SAIDA: se make down também desliga a EC2 de observabilidade -->; desligue o runner com `stop-instances`. A limpeza completa (`scripts/cloud/cleanup.sh`) começa sempre em `--dry-run` e está no fim da Demo 5.2. A rede `fiap-lab` **nunca** é destruída: o Trabalho Final a usa.
+> Diferente da versão anterior (quase tudo serverless), **este módulo cobra por hora enquanto estiver de pé**. Entre a 5.1 e a 5.2 no mesmo dia, deixe tudo como está. Se as demos forem em dias diferentes, confirme com o professor: `make down` escala os services a zero (as tasks param de cobrar) e mantém ALB, ECR e state (volta com `make up`); `make destroy-dry-run` mostra o que a destruição completa faria; `make down` **não** toca na EC2 de observabilidade (ela é de outro state, `infra-obs/`; para ela, `bash ops/cloud/obs.sh destroy --apply`, ou `stop-instances` na instância `qc-assistant-obs`); desligue o runner com `stop-instances`. A limpeza completa (`scripts/cloud/cleanup.sh`) começa sempre em `--dry-run` e está no fim da Demo 5.2. A rede `fiap-lab` **nunca** é destruída: o Trabalho Final a usa.
 
 ## Decisões pedagógicas
 

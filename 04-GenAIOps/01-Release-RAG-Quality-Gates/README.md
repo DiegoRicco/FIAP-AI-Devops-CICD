@@ -145,11 +145,11 @@ Quatro decisões que explicam esse desenho, e que você vai ver na prática:
 
 ### Resultado esperado desta parte
 
-Um projeto GitLab **novo**, `quantum-ai-assistant`, com o código do assistente na raiz e um runner habilitado; a conta AWS com bucket de state, rede `fiap-lab`, API de pedidos, segredos no SSM, imagem no ECR, os serviços `live` e `candidate` ligados atrás do ALB; e `GET /ready` respondendo `200`. **Esta parte leva mais tempo do que a aula permite** <!-- CONFIRMAR-SAIDA: tempo total medido da Parte 0 (bootstrap → ready), em minutos --> e por isso fica fora do relógio: faça-a em casa, ou no início do dia, ou confirme que o professor a fez por você. **Ela vale para as duas demos**: a 5.2 usa o mesmo projeto e o mesmo ambiente.
+Um projeto GitLab **novo**, `quantum-ai-assistant`, com o código do assistente na raiz e um runner habilitado; a conta AWS com bucket de state, rede `fiap-lab`, API de pedidos, segredos no SSM, imagem no ECR, os serviços `live` e `candidate` ligados atrás do ALB; e `GET /ready` respondendo `200`. **Esta parte leva mais tempo do que a aula permite** e por isso fica fora do relógio: faça-a em casa, ou no início do dia, ou confirme que o professor a fez por você. **Ela vale para as duas demos**: a 5.2 usa o mesmo projeto e o mesmo ambiente.
 
 Toda a preparação na AWS passa por **um** arquivo: o `Makefile` na raiz do projeto. Cada alvo é idempotente (pode rodar de novo sem medo), descobre sozinho o que precisa (conta, bucket, rede) e diz, item a item, o que conferiu (`[PASS]`) ou o que falta (`[FAIL]`, com a correção na mesma linha).
 
-**Quanto tempo leva:** do `make bootstrap` ao `make ready`, conte com **20 a 30 minutos** de execução pura <!-- CONFIRMAR-SAIDA: tempo total medido da Parte 0 na homologação; ajustar a faixa -->, dominados pelo build da imagem (download do modelo de embeddings) e pelo cold start da task; reserve **uma hora** com folga para ler e para o `make runner` do Caminho B (que cria uma EC2 e roda Ansible, ~8 min). Se o professor preparou o ambiente na conta da turma, você faz só os passos 1, 2 e 2.1 (~10 min).
+**Quanto tempo leva:** o que domina a primeira execução é o **cold start** de cada deploy (na homologação, `cold_start_s` de **190 s** no `candidate` e **202 s** no `live`: puxar a imagem, subir o Neo4j, reconstruir o grafo e esperar o índice) e o primeiro build da imagem (download do modelo de embeddings, não cronometrado de ponta a ponta na homologação); reserve **uma hora** com folga para ler e para o `make runner` do Caminho B (que cria uma EC2 e roda Ansible, ~8 min). Rodar a Parte 0 **de novo**, com tudo já criado, é rápido: na homologação, `make preflight` 25 s, `make bootstrap` 32 s, `make runner` 25 s (Caminho A, runner ligado), `make image` 30 s (cache de build quente) e `make ready` 5 s, cerca de **2,5 minutos** de comandos. Se o professor preparou o ambiente na conta da turma, você faz só os passos 1, 2 e 2.1 (~10 min).
 
 **Seu ambiente é seu.** Cada aluno tem a própria conta do Learner Lab e o próprio projeto GitLab; ninguém mais altera o seu `live`. Quando este README diz "alguém da sala", está falando de uma conta **compartilhada** pelo professor em sala de aula; na sua conta, "alguém" é você mesmo numa tentativa anterior.
 
@@ -208,14 +208,13 @@ git push -u origin "$(git branch --show-current)"
 > ```text
 > Cloning into '/home/vscode/environment/quantum-ai-assistant'...
 > warning: You appear to have cloned an empty repository.
-> Makefile  adapters  config  containers  core  corpus  evals  graph  infra  infra-ecs  lab  ops  orders  prompts  release  scripts  tests  vector  web  ...
+> Makefile  adapters  config  containers  core  corpus  evals  graph  infra  infra-ecs  infra-obs  lab  ops  orders  prompts  pytest.ini  release  requirements-engine.txt  requirements-ops.txt  requirements-web.txt  scripts  tests  vector  web
 > [main (root-commit) <sha>] quantum-ai-assistant: codigo do assistente, grafo, vetor, infra e pipeline
 > ...
 >  * [new branch]      main -> main
 > branch 'main' set up to track 'origin/main'.
 > ```
 >
-> <!-- CONFIRMAR-SAIDA: lista real de pastas na raiz de quantum-assistant/ ao fim da implementação; o .gitlab-ci.yml fica na raiz e vale para a Demo 5.2 -->
 > O aviso `cloned an empty repository` é esperado: o projeto nasceu vazio no passo 1. O `cp -r .../quantum-assistant/.` (com o ponto no fim) copia o **conteúdo** da pasta, inclusive o `.gitlab-ci.yml` oculto, para a raiz. A branch pode se chamar `main` ou `master` conforme a configuração da sua conta; os comandos usam `$(git branch --show-current)` para não depender disso. No GitLab, o projeto agora mostra os arquivos e, em **Build → Pipelines**, um pipeline **pendente** (ainda não há runner; o passo 4 resolve).
 
 **Se falhar:** `Permission denied (publickey)` = a chave não está no GitLab (passo 1.3) ou o `ssh-add` não rodou neste terminal; repita as duas primeiras linhas. `Repository not found` = o `GITLAB_USER` está errado ou o projeto tem outro nome; confira a URL do passo 1.2. `cp: cannot stat` = repositório do curso desatualizado: `cd /workspaces/FIAP-AI-Devops-CICD && git pull origin master`.
@@ -273,7 +272,7 @@ make bootstrap
 
 **Esperado:**
 
-> Primeiro a lista de alvos, uma linha cada (o `Makefile` não tem lógica própria: cada alvo chama um script de `scripts/cloud/`, e o que você roda aqui é o mesmo que o pipeline roda):
+> Primeiro a lista de alvos, uma linha cada (o `Makefile` não tem lógica própria: cada alvo chama um script de `scripts/cloud/`, e o que você roda aqui é o mesmo que o pipeline roda). Saída real da homologação (1,8 s):
 >
 > ```text
 >   make help               Mostra os alvos
@@ -283,7 +282,6 @@ make bootstrap
 >   make runner-docker      Instala o Docker no runner (necessario para buildar a imagem)
 >   make orders-up          Implanta a API de pedidos (Lambda + DynamoDB + API Gateway) e grava a URL no SSM
 >   make secrets            Cria as senhas do Neo4j e a chave admin no SSM (nunca exibe valor)
->   make mirror-neo4j       Copia o Neo4j pinado (infra-ecs/neo4j-image.json) para o ECR
 >   make up                 Cria ECR, cluster ECS, ALB e services (Terraform, state quantum-assistant/ecs/)
 >   make image              Builda a imagem do app NO RUNNER e envia ao ECR (digest no SSM /qc-assistant/image-digest)
 >   make deploy             Implanta DIGEST (ou o ultimo make image) em ENV=live|candidate e espera /ready
@@ -297,25 +295,29 @@ make bootstrap
 >   make destroy-dry-run    Lista o que o cleanup apagaria (so o state do runtime ECS)
 > ```
 >
-> Depois o bootstrap. Ele confere ou cria, nesta ordem: o bucket, a rede, a API de pedidos (Terraform de `infra/`) e os seis segredos <!-- CONFIRMAR-SAIDA: saída real do make bootstrap na homologação -->:
+> Um alvo existe mas não aparece na lista: `make mirror-neo4j` (copia o Neo4j pinado para o ECR). O `help` só lista nomes com letras e hífen, e esse tem um dígito; você não precisa chamá-lo, o `make up` o chama sozinho.
+>
+> Depois o bootstrap. Ele confere ou cria, nesta ordem: o bucket, a rede, a API de pedidos (Terraform de `infra/`) e os seis segredos. Saída real da homologação, numa conta em que tudo já existia (32 s):
 >
 > ```text
 > Bucket do state: base-config-<SEU RM>
 > Rede fiap-lab: ok
-> ...  (terraform apply da API de pedidos; na primeira vez, ~30-40 s)
-> orders_url=https://<id>.execute-api.us-east-1.amazonaws.com
-> /qc-assistant/live/neo4j-password created
-> /qc-assistant/live/neo4j-auth created
-> /qc-assistant/live/admin-hmac created
-> /qc-assistant/candidate/neo4j-password created
-> /qc-assistant/candidate/neo4j-auth created
-> /qc-assistant/candidate/admin-hmac created
+> orders-up: empacotando o bundle da Lambda (release/build_bundle.py)
+> orders-up: terraform init/apply da API de pedidos (state s3://base-config-<SEU RM>/quantum-assistant/terraform.tfstate)
+> ...  (saída do terraform; na primeira vez cria a Lambda, a tabela e a API)
+> orders-up: smoke: Q-1001 (dona)=200 esperado 200 | Q-2001 (outro cliente)=403 esperado 403 | sem token=401 esperado 401
+> orders-up: URL gravada em /qc-assistant/orders-base-url
+> https://<id>.execute-api.us-east-1.amazonaws.com
+> /qc-assistant/live/neo4j-password exists
+> /qc-assistant/live/neo4j-auth exists
+> /qc-assistant/live/admin-hmac exists
+> /qc-assistant/candidate/neo4j-password exists
+> /qc-assistant/candidate/neo4j-auth exists
+> /qc-assistant/candidate/admin-hmac exists
 > Bootstrap ok. Proximo: make runner e depois make preflight.
 > ```
 >
-> Se a rede `fiap-lab` não existe, ele chama o `recriar-rede.sh` do repositório do curso (~1 min). Segredo que já existe aparece como `exists`, e o valor nunca é mostrado.
->
-> Se a rede não existia, o bootstrap chama o `recriar-rede.sh` do repositório do curso (leva ~1 min); se o bucket não existia, cria. A API de pedidos é a Lambda `qc-assistant-orders` + DynamoDB: o assistente a chama por `QC_ORDERS_BASE_URL`, e o status do pedido do passo 18 vem dela.
+> Na **primeira** vez os segredos aparecem como `created` (o valor nunca é mostrado), o bucket como `Criando o bucket base-config-<SEU RM>...` e, se a rede `fiap-lab` não existe, `Rede fiap-lab ausente: recriando...` seguido do `recriar-rede.sh` do repositório do curso (~1 min). A API de pedidos é a Lambda `qc-assistant-orders` + DynamoDB: o assistente a chama por `QC_ORDERS_BASE_URL`, e o status do pedido do passo 18 vem dela. Rodar o bootstrap de novo depois de um commit novo mostra `Plan: 0 to add, 3 to change, 0 to destroy` no Terraform da API (o pacote da Lambda carrega o `git_sha` do projeto, então ganha uma versão nova); nada é destruído.
 
 **Se falhar:** `Credencial AWS invalida/expirada` = refaça o [Início de aula](../../00-create-codespaces/Inicio-de-aula.md) e repita. `Nenhum bucket base-config-* na conta. Rode: make bootstrap RM=<seu-rm>` = faça exatamente isso, com o seu RM. `Nao achei o repositorio da disciplina` = o bootstrap precisa do repositório do curso (para recriar a rede e para o runner); se o seu está fora de `/workspaces/FIAP-AI-Devops-CICD`, rode `make bootstrap COURSE_REPO=/caminho/para/FIAP-AI-Devops-CICD`. `multiple EC2 VPCs matched` = duas redes `fiap-lab`; não apague nada, chame o professor. Para conferir tudo **sem criar nada** (antes da aula, por exemplo), `make preflight` imprime uma linha `[PASS]`/`[FAIL]` por item, com a correção ao lado de cada `[FAIL]`; na homologação deste lab foram 26 `[PASS]`, 0 `[FAIL]`, e a última linha `[PASS] preflight ok`.
 
@@ -325,7 +327,7 @@ make bootstrap
 
 | Comando | O que executa por baixo | Por que existe / quando usar |
 |---|---|---|
-| `make bootstrap` | No próprio Makefile: `sts get-caller-identity`; se não há bucket `base-config-*`, `s3api create-bucket base-config-$(RM)` com versionamento e bloqueio de acesso público; `ec2 describe-vpcs` (tag `Name=fiap-lab`) e, se faltar, `$COURSE_REPO/01-Terraform/scripts/recriar-rede.sh`; depois `make orders-up` (`scripts/cloud/orders-up.sh`: Terraform de `infra/` e URL no SSM `/qc-assistant/orders-base-url`) e `make secrets`. | Garante sozinho tudo o que as aulas anteriores criavam. Rode em toda sessão nova do Academy. |
+| `make bootstrap` | No próprio Makefile: `sts get-caller-identity`; se não há bucket `base-config-*`, `s3api create-bucket base-config-$(ALUNO_RM)` com versionamento (você digita `RM=<seu-rm>`; o Makefile guarda o valor em `ALUNO_RM`, porque `RM` é uma variável embutida do GNU make que vale `rm -f`) e bloqueio de acesso público; `ec2 describe-vpcs` (tag `Name=fiap-lab`) e, se faltar, `$COURSE_REPO/01-Terraform/scripts/recriar-rede.sh`; depois `make orders-up` (`scripts/cloud/orders-up.sh`: Terraform de `infra/` e URL no SSM `/qc-assistant/orders-base-url`) e `make secrets`. | Garante sozinho tudo o que as aulas anteriores criavam. Rode em toda sessão nova do Academy. |
 | `make runner` | `$COURSE_REPO/04-GenAIOps/shared/runner/runner-preflight.sh` (só leitura: diagnóstico `reuse`, `start`, `restart`, `recreate`...); se o diagnóstico não for `reuse`, `runner-recover.sh --apply` (liga a EC2 parada, reinicia o serviço, ou cria a EC2 com Terraform + Ansible e a registra com o token do SSM); por fim `make runner-docker` (`runner-docker.sh`: instala Docker no runner, se faltar, porque é lá que a imagem é construída). | Nos **dois** caminhos do passo 4: para quem já tem runner, confere e liga se preciso; para quem não tem, cria. Nunca registra runner duplicado. |
 | `make secrets` | `scripts/cloud/secrets.sh`: `aws ssm put-parameter --type SecureString` em `/qc-assistant/<env>/neo4j-password`, `.../neo4j-auth` e `.../admin-hmac` (live e candidate), valor aleatório de 32 bytes, só se não existir (`--rotate` para girar). | Com a CLI, e não com o Terraform, para a senha **nunca** entrar no state. A task lê o valor na subida (`secrets` da task definition). |
 | `make image` | `scripts/cloud/remote-build.sh`: empacota o projeto → S3 (`quantum-assistant/build-context/<sha>.tgz`) → `aws ssm send-command` no runner, que roda `scripts/cloud/build-push.sh` (`docker buildx build --platform linux/amd64`, baixa o modelo de embeddings **no build**, pré-calcula os embeddings, `docker push` ao ECR) e devolve o **digest**. | Imagem = release. Build onde o pipeline também vai construir (runner, `amd64`), sem Docker no Codespaces. |
@@ -375,7 +377,7 @@ make runner
 aws ssm put-parameter --name /fiap/gitlab-runner/token --type SecureString --overwrite --value 'glrt-...' --region us-east-1
 ```
 
-**4.6.** Suba e registre o runner (Terraform cria a EC2 na rede `fiap-lab`; Ansible, via SSM, instala e registra o `gitlab-runner` lendo o token do SSM):
+**4.6.** Suba e registre o runner (Terraform cria a EC2 na rede `fiap-lab`; Ansible, via SSM, instala e registra o `gitlab-runner` lendo o token do SSM). O Ansible fala com a EC2 pelo `session-manager-plugin`, que o devcontainer já instala (versão `1.2.896.0`); o `runner-recover.sh` confere o plugin **antes** de criar qualquer coisa e, se ele faltar, para sem ter criado a EC2:
 
 ```bash
 cd /home/vscode/environment/quantum-ai-assistant
@@ -384,23 +386,23 @@ make runner
 
 **Esperado (A ou B):**
 
-> <!-- CONFIRMAR-SAIDA: saída real de make runner (reuso de runner-preflight.sh; ~17 s quando online; ~6-8 min quando cria) -->
+> Saída real da homologação, Caminho A com o runner já ligado (25 s):
 >
 > ```text
-> ...
-> instance_state=running
-> ssm_ping=Online
-> runner_service=active
-> runner_verify=valid
-> diagnosis=reuse
-> runner=ok
+> diagnostico do runner: reuse
+> Runner da EC2 pronto. No projeto NOVO: Settings > CI/CD > Runners > habilite o runner existente (tags shell,terraform).
+> docker_installed=already
+> buildx_installed=already
+> swap=already
+> group_docker=already
+> docker_version=<versão do Docker no runner>
 > ```
 >
-> No Caminho A com o runner já ligado, as linhas acima aparecem em ~20 s. Se ele estava desligado, antes delas aparece `diagnosis=start` e o progresso do `recover` ligando a EC2 (~1-2 min). No Caminho B, o primeiro diagnóstico é `recreate`, seguido do Terraform e do Ansible criando e registrando o runner (~6-8 min), e só então o bloco acima.
+> A primeira linha é o diagnóstico do `runner-preflight.sh` (`reuse` = há um runner ligado e registrado; nada a fazer); as linhas `chave=valor` são do `runner-docker.sh`, que confere o Docker no runner (`already` = já estava instalado). Se a EC2 estava desligada, a primeira linha é `diagnostico do runner: start`, seguida de `Recuperando o runner (menor passo: start)...` e do progresso do `recover` ligando a EC2 (~1-2 min). No Caminho B, o diagnóstico é `recreate`, seguido do Terraform e do Ansible criando e registrando o runner (~6-8 min <!-- CONFIRMAR-SAIDA: Caminho B não foi cronometrado na homologação desta versão -->), e só então as linhas do Docker (`docker_installed=now`).
 >
 > No GitLab, em **Settings → CI/CD → Runners** do `quantum-ai-assistant`, o runner aparece **online** (bolinha verde) com as tags `shell` e `terraform`. O pipeline pendente do passo 2 começa a rodar sozinho; ele pode ficar **vermelho** neste momento (ainda não há ambiente na AWS para o deploy), e isso é esperado: o primeiro pipeline que importa é o da Demo 5.2, com o ambiente de pé.
 
-**Se falhar:** `diagnosis=start` = a EC2 existe mas está desligada; `make runner` já liga (ele roda o `recover --apply` quando o diagnóstico pede). `token_param=missing` = o passo 4.5 não rodou (Caminho B). Runner online no GitLab mas o job fica `stuck` = o runner está em outro projeto e **não** foi habilitado neste (Caminho A, passo 4.1). Nunca registre um segundo runner na mesma EC2: registro duplicado cria dois runners no projeto.
+**Se falhar:** `diagnostico do runner: start` = a EC2 existe mas está desligada; `make runner` já liga (ele roda o `recover --apply` quando o diagnóstico pede). `Bloqueado: leia a dica acima` com `token_param=missing` = o passo 4.5 não rodou (Caminho B). `ERRO: falta o session-manager-plugin neste terminal` (Caminho B) = o Codespaces é anterior a esta versão do devcontainer; **nada foi criado** (o `recover` confere o plugin antes do `terraform apply`), e a própria mensagem traz o comando de instalação (`curl` do pacote `.deb` oficial + `sudo dpkg -i`), ~1 min; depois repita `make runner`. Runner online no GitLab mas o job fica `stuck` = o runner está em outro projeto e **não** foi habilitado neste (Caminho A, passo 4.1). Nunca registre um segundo runner na mesma EC2: registro duplicado cria dois runners no projeto.
 
 <details>
 <summary><b>💡 Clique para entender: um runner, vários projetos, e por que o token vive no SSM</b></summary>
@@ -433,7 +435,7 @@ make image
 
 **Esperado:**
 
-> <!-- CONFIRMAR-SAIDA: saída real de make secrets (sem valores) e de make image via remote-build.sh (duração medida; linhas finais) -->
+> Saída real da homologação (o `make image` levou 30 s com o cache de build do runner quente; na primeira vez o build baixa o modelo de embeddings e demora vários minutos):
 >
 > ```text
 > /qc-assistant/live/neo4j-password exists
@@ -442,14 +444,15 @@ make image
 > /qc-assistant/candidate/neo4j-password exists
 > /qc-assistant/candidate/neo4j-auth exists
 > /qc-assistant/candidate/admin-hmac exists
-> remote-build: empacotando o projeto (sem .terraform, .venv, dist, reports) -> s3://base-config-<SEU RM>/quantum-assistant/build-context/<sha>.tgz
-> remote-build: SSM no runner i-...: baixando o pacote e rodando scripts/cloud/build-push.sh
-> build-push: docker buildx build --platform linux/amd64 ... (baixa o modelo de embeddings, pre-calcula os embeddings do corpus)
-> build-push: push para <conta mascarada>.dkr.ecr.us-east-1.amazonaws.com/qc-assistant-app ... ok
+> remote-build: contexto 448K -> s3://base-config-<SEU RM>/quantum-assistant/build-context/<sha>.tgz
+> remote-build: build no runner i-... (SSM <id do comando>); 1 a 3 min...
+> build-push: build qc-assistant-app:<tag> (linux/amd64, commit <12 hex>)...
+> build-push: build 8 s, push 1 s, tag <tag>
+> remote-build: digest gravado em /qc-assistant/image-digest
 > sha256:<64 caracteres hex>
 > ```
 >
-> As linhas `remote-build:`/`build-push:` são o progresso (inclusive o log do build, que é longo na primeira vez); o **resultado** é a última linha, só o digest.
+> As linhas `remote-build:`/`build-push:` são o progresso (`build 8 s, push 1 s` é o cache quente; na primeira vez aparece o log do build, que é longo); o **resultado** é a última linha, só o digest.
 >
 > São seis parâmetros `SecureString` (três por ambiente: a senha do Neo4j, a mesma senha no formato `neo4j/<senha>` que a imagem do banco espera, e a chave HMAC da porta administrativa). O `make bootstrap` do passo 3 já os criou, por isso aqui eles aparecem como `exists` (se você pulou o passo 3, aparecem como `created`). Rodar `make secrets` de novo é sempre seguro: parâmetro que já existe **não** é trocado (trocar a senha com a task rodando quebraria a conexão app → Neo4j); os **valores** nunca aparecem no terminal. O `image_digest` varia com o conteúdo; é o identificador do release de hoje. Guarde-o: você vai vê-lo de novo no `/ready` (passo 8) e, na Demo 5.2, no manifesto de release.
 
@@ -492,8 +495,6 @@ make ready
 
 **Esperado:**
 
-> <!-- CONFIRMAR-SAIDA: número de recursos do apply, duração do apply, cold start medido até ready=200, outputs reais -->
->
 > ```text
 > ...
 > Apply complete! Resources: 28 added, 0 changed, 0 destroyed.
@@ -513,7 +514,7 @@ make ready
 > HTTP 200
 > ```
 >
-> O `apply` lista 28 recursos e os outputs (entre eles `app_url` e um `cost_warning`). As linhas `deploy: t=...` são o progresso (a cada 10 s: estado do rollout do ECS, targets saudáveis no ALB, código do `/ready` e o digest que respondeu); o JSON do `deploy` é o resultado, e `cold_start_s` é o tempo real da task nova até o `/ready` 200. O `make ready` imprime o JSON do `/ready` e `HTTP 200` na última linha. Na homologação deste lab, a task levou **78 s** até `RUNNING` com o Neo4j saudável e **108 s** até o target do ALB ficar `healthy` com `/ready` 200; conte com **2 a 5 minutos**, porque varia por execução (puxar a imagem, subir o Neo4j, reconstruir o grafo, esperar o índice), e o `READY_TIMEOUT` do script é de 10 minutos. Copie o `app_url` do `apply` (ou a `url` do JSON do deploy): é o endereço da Central de Evidências para a aula inteira. Se perder, `terraform -chdir=infra-ecs output -raw app_url` (passo 2.1) o devolve.
+> O `apply` lista 28 recursos e os outputs (entre eles `app_url` e um `cost_warning`). As linhas `deploy: t=...` são o progresso (a cada 10 s: estado do rollout do ECS, targets saudáveis no ALB, código do `/ready` e o digest que respondeu); o JSON do `deploy` é o resultado, e `cold_start_s` é o tempo real da task nova até o `/ready` 200. O `make ready` imprime o JSON do `/ready` e `HTTP 200` na última linha. Na homologação deste lab, o `cold_start_s` dos deploys ficou entre **190 s** (`candidate`) e **202 s** (`live`), do `update-service` ao `/ready` 200 servido pelo digest novo; conte com **3 a 5 minutos** por deploy, porque varia por execução (puxar a imagem, subir o Neo4j, reconstruir o grafo, esperar o índice, aquecer as consultas), e o `READY_TIMEOUT` do script é de 10 minutos. O `make ready` levou 5 s. Copie o `app_url` do `apply` (ou a `url` do JSON do deploy): é o endereço da Central de Evidências para a aula inteira. Se perder, `terraform -chdir=infra-ecs output -raw app_url` (passo 2.1) o devolve.
 
 **Se falhar:** `the ECS service linked role could not be assumed` = a service-linked role do ECS ainda não existia na conta nova; **rode `make up` de novo** (o guia do Learner Lab documenta exatamente isso). `Error: creating ECS Service ... PassRole` ou `not authorized to perform: elasticloadbalancing:CreateLoadBalancer` = a conta não permite; **pare e avise o professor** (não tente criar role). `deploy: ... NAO ficou pronto em 600s` (`"ok": false`) = abra o bloco abaixo; `make diagnose` mostra por quê. `ParameterNotFound: /qc-assistant/image-digest` = o `make image` não terminou; rode-o de novo. `No changes` no `apply` e `mirror-neo4j: ... ja no ECR` = você já tinha rodado o `make up`; é esperado e seguro.
 
@@ -591,14 +592,14 @@ cd /home/vscode/environment/quantum-ai-assistant
 terraform -chdir=infra-ecs output -raw app_url; echo
 ```
 
-**Esperado:** a página **Quantum Commerce · Central de Evidências do AI Customer Assistant**, em fundo escuro, com: um campo de pergunta, o seletor **Data simulada da pergunta** (`14/11/2026` selecionado), o seletor de **tenant** (`quantum`), o painel **Mesma pergunta, três estratégias** ainda vazio e, no rodapé, a faixa de versões (`release`, `corpus`, `graph`, `vector_index`, `embedding`, `model=none`). <!-- CONFIRMAR-SAIDA: nomes exatos dos elementos da UI entregue pelo agente FRONT -->
+**Esperado:** a aba do navegador diz **LIVE · Central de Evidências · Quantum Commerce**. No cabeçalho: **Quantum Commerce / Central de Evidências do AI Customer Assistant** e, à direita, **Ambiente** (selo `LIVE` em magenta), **Release**, **Imagem** (digest curto) e **/ready** (`pronto (200)`). Logo abaixo, uma linha recolhida **+ Versões deste release**: ao abrir, todas as versões (`release_id`, `image_digest`, `git_sha`, `corpus_version`, `graph_version`, `graph_seed_version`, `embedding_model_id`, `model_version`...) e o bloco **Checks de /ready**. Depois, o título **Mesma pergunta, três estratégias**, o grupo **Perguntas do roteiro** (botões prontos: *Fone de ouvido · troca*, *Black Friday · fone*, *Black Friday · sem produto*, *Política antiga · 15 dias*, *Parceiro X*, *Manual interno de reembolso*, *Cashback*, *Injeção no documento*, *Pedido Q-1001 · token da Ana*, *Pedido Q-2001 · token da Ana*), o campo **Pergunta**, o seletor **Data simulada da pergunta (não é o relógio do sistema)** com três botões (**14/11/2026 regular**, selecionado; **26/11/2027 Black Friday 2027**; **06/12/2027 após a campanha**), **Tenant** (`quantum`/`parceiro-x`), **Papel** (`customer · cliente`/`agent · atendente`) e **Pedido (opcional)**. O painel **Resultado lado a lado** tem três colunas (**BM25**, **Vetorial (Neo4j)**, **Grafo (Neo4j)**), vazias até a primeira consulta. No fim da página, a seção **Release & Health** repete as versões por ambiente; o rodapé lembra: *"Sem modelo gerativo. model_version=none: o texto vem de templates."*
 
-<!-- NOVA-IMAGEM: img/central-evidencias-inicial.png | capturar: a Central de Evidências recém-aberta, com o seletor de data em 14/11/2026, tenant quantum, painel das três estratégias vazio e a faixa de versões no rodapé | FONTE REAL já capturada: /tmp/qc18/evid/5.1/screenshots/alb-publicado-1920-01-topo.png (e alb-publicado-1920-04-health.png para a faixa de versões) | depois de salvar o arquivo, descomente a linha abaixo -->
-<!-- ![Central de Evidências recém-aberta: campo de pergunta, data simulada 14/11/2026, tenant quantum, três colunas vazias (BM25, Vetorial, Grafo) e a faixa de versões com model=none](img/central-evidencias-inicial.png) -->
+<!-- NOVA-IMAGEM: img/central-evidencias-inicial.png | capturar: a Central de Evidências recém-aberta, com o seletor de data em 14/11/2026, tenant quantum e o painel das três estratégias vazio | FONTE REAL já capturada (live R3, pelo ALB): /tmp/qc18/evid/5.1/screenshots/r3/central-evidencias-inicial-1920.png (versão 1366 ao lado; release-health-1920.png para a seção Release & Health) | depois de salvar o arquivo, descomente a linha abaixo -->
+<!-- ![Central de Evidências recém-aberta: cabeçalho com ambiente LIVE, release, imagem e /ready; campo de pergunta, data simulada 14/11/2026, tenant quantum e três colunas vazias (BM25, Vetorial, Grafo)](img/central-evidencias-inicial.png) -->
 
 **Se falhar:** página não carrega = o ALB ainda está registrando a task (espere 1 min) ou a URL está sem `http://`. `503 Service Temporarily Unavailable` vindo do ALB = nenhuma task saudável; volte ao `⚠` do passo 6.
 
-A data no seletor é a **data simulada da pergunta**, não a data do seu computador: o sistema responde "como se" a pergunta tivesse sido feita naquele dia. Hoje começamos em 14/11/2026, o dia da reclamação.
+A data no seletor é a **data simulada da pergunta**, não a data do seu computador (o próprio rótulo avisa): o sistema responde "como se" a pergunta tivesse sido feita naquele dia. Hoje começamos em 14/11/2026, o dia da reclamação.
 
 ---
 
@@ -650,7 +651,7 @@ curl -s "$APP/ready" | python3 -m json.tool
 > }
 > ```
 
-Três coisas para anotar no caderno, porque a Parte 5 e a Demo 5.2 vão compará-las: **`graph_version`**, **`graph_seed_version`** e **`image_digest`**. Hoje `graph_version` e `graph_seed_version` são **iguais entre si** (na homologação, `c07dde5b8806`; se o catálogo mudar numa turma futura, o valor muda, e o que importa é a igualdade): o grafo em memória é exatamente o que veio na imagem. `corpus_version` é `72532257bea3` e `index_version` é `4f0ea92022d2`, os **mesmos** hashes das aulas anteriores: o conteúdo das políticas e o índice BM25 não mudaram; o que mudou foi o que há **além** deles (`vector_index_version`, `graph_seed_version`). O `cold_start_s: 16.5` é quanto esta task levou, do início do processo ao `/ready` pronto, para carregar o modelo, reconstruir o grafo e esperar o índice: 16,5 s de boot da aplicação (o resto dos ~100 s até o ALB considerar a task saudável é Fargate puxando a imagem e subindo o Neo4j). Os valores de digest e `release_id` acima são os da homologação; os seus mudam se a imagem foi reconstruída. Repare também em `model_version: "none"`: não há modelo gerativo. O que há é um **modelo de embeddings**, identificado à parte (`embedding_model_id`, `embedding_model_revision`, `embedding_dim`). São coisas diferentes, e o 💡 do passo 10 explica por quê.
+Três coisas para anotar no caderno, porque a Parte 5 e a Demo 5.2 vão compará-las: **`graph_version`**, **`graph_seed_version`** e **`image_digest`**. Hoje `graph_version` e `graph_seed_version` são **iguais entre si** (na homologação, `c07dde5b8806`; se o catálogo mudar numa turma futura, o valor muda, e o que importa é a igualdade): o grafo em memória é exatamente o que veio na imagem. `corpus_version` é `72532257bea3` e `index_version` é `4f0ea92022d2`, os **mesmos** hashes das aulas anteriores: o conteúdo das políticas e o índice BM25 não mudaram; o que mudou foi o que há **além** deles (`vector_index_version`, `graph_seed_version`). O `cold_start_s` é quanto esta task levou, do início do processo ao `/ready` pronto, para carregar o modelo, reconstruir o grafo e esperar o índice (na homologação, 16,5 s numa task e 25,5 s em outra: varia por execução); o resto dos ~200 s do deploy é o Fargate puxando a imagem e subindo o Neo4j. Os valores de digest e `release_id` acima são os da homologação; os seus mudam se a imagem foi reconstruída. Repare também em `model_version: "none"`: não há modelo gerativo. O que há é um **modelo de embeddings**, identificado à parte (`embedding_model_id`, `embedding_model_revision`, `embedding_dim`). São coisas diferentes, e o 💡 do passo 10 explica por quê.
 
 **Se falhar:** `"ready": false` = volte ao `⚠` do passo 6. `command not found: terraform` = você está fora do devcontainer; abra o terminal do Codespaces.
 
@@ -700,22 +701,24 @@ A pergunta da cliente respondida pelo BM25 e pelo vetorial, com os trechos recup
 
 **Onde:** navegador.
 **Por quê:** é o ponto de partida de toda a aula: a pergunta real, na data real, no tenant real.
-**Execute:** no campo de pergunta, digite `Qual o prazo para trocar um fone de ouvido?`, mantenha a data em `14/11/2026` e o tenant `quantum`, e clique em **Comparar** <!-- CONFIRMAR-SAIDA: rótulo real do botão na UI --> (é o único botão do formulário; os passos seguintes o chamam só de **Comparar**).
+**Execute:** no campo **Pergunta**, digite `Qual o prazo para trocar um fone de ouvido?` (ou clique no botão pronto **Fone de ouvido · troca**, que preenche *"Comprei um fone de ouvido bluetooth. Em quantos dias posso trocar?"*; as duas dão o mesmo resultado), mantenha **14/11/2026 regular** e o tenant `quantum`, e clique em **Comparar as três** (ou `Ctrl`/`Cmd`+`Enter`; enquanto consulta, o botão mostra *Consultando…*). Os passos seguintes chamam esse botão só de **Comparar**.
 
 **Esperado:** as três colunas se preenchem, e **não dizem a mesma coisa**. Na homologação deste lab (mesma pergunta, 14/11/2026, tenant `quantum`, pelo ALB), foi assim:
 
 | Coluna | O que respondeu | Fonte citada |
 |---|---|---|
-| **BM25** | *"Todo eletrônico vendido pela Quantum Commerce tem garantia de 90 dias contra defeitos..."* | `politica-garantia-eletronicos@v1#garantia-legal` |
+| **BM25** | Junta **dois** trechos: a seção *"Troca de presente"* da política de trocas e *"Todo eletrônico vendido pela Quantum Commerce tem garantia de 90 dias contra defeitos..."* | `politica-trocas@v3` **e** `politica-garantia-eletronicos@v1#garantia-legal` |
 | **Vetorial** | **Abstém**: *"Nao encontrei essa informacao nas politicas vigentes..."* (`insufficient_evidence`) | nenhuma |
 | **Grafo** | *"Você tem até 30 dias corridos, contados a partir da data de recebimento, para trocar qualquer produto..."* | `politica-trocas@v3#prazo-para-troca` |
 
-**Isso é intencional, e é a aula inteira em uma tela.** O BM25 achou um trecho **parecido** (fala de fone, eletrônico, dias, prazo) e respondeu com confiança sobre **garantia**, que não é o que a cliente perguntou. Repare: a garantia **passou no filtro** (está vigente, é da Quantum, é pública: perfeitamente aplicável a fones); ela não foi barrada, ela **venceu o ranking** por palavras. A `politica-trocas@v3` também passou no filtro, e ficou em 2º. O vetorial achou trechos de significado próximo (entrega, prazos), também todos permitidos pelo filtro, mas nenhum passou do mínimo de evidência, e preferiu recusar. Só o grafo, que **partiu do fone** e percorreu as relações até a política de trocas, chegou à resposta **aplicável**: 30 dias. Nenhuma das três mentiu; duas delas não sabiam que "fone" é um produto da categoria áudio, à qual a política de trocas se aplica. Em cada coluna há: a lista de trechos recuperados com um **score e o tipo do score** (`bm25`, `cosine` ou `graph-hops`), a **citação** escolhida (`doc_id`, `chunk_id`, versão), a lista **Bloqueados pelo filtro** (documentos que a busca encontrou mas que não podiam responder, com o **motivo** e **sem o texto**) e a **latência por etapa** em milissegundos.
+Acima das colunas, a faixa-resumo diz, na homologação: *"As estratégias divergiram: BM25 politica-trocas@v3 · Vetorial absteve-se (insufficient_evidence) · Grafo politica-trocas@v3. Abra “Por que esta fonte?” em cada coluna."* (Quando as três concordam, a faixa diz *"Concordar não prova que está certo; confira a versão e a data."*)
 
-<!-- NOVA-IMAGEM: img/tres-estrategias-fone-2026.png | capturar: o painel Mesma pergunta, três estratégias preenchido para a pergunta do fone em 14/11/2026: BM25 respondendo garantia de 90 dias, Vetorial abstendo e Grafo respondendo 30 dias com politica-trocas@v3, com os blocos de bloqueados visíveis | FONTE REAL já capturada: /tmp/qc18/evid/5.1/screenshots/alb-publicado-1920-02-comparar-d0.png (e a versão 1366) | depois de salvar o arquivo, descomente a linha abaixo -->
-<!-- ![Painel das três estratégias para a pergunta do fone em 14/11/2026: BM25 responde garantia de 90 dias citando politica-garantia-eletronicos, Vetorial abstém por falta de evidência e só o Grafo responde 30 dias citando politica-trocas@v3; cada coluna lista trechos com score, a citação e os documentos bloqueados com motivo](img/tres-estrategias-fone-2026.png) -->
+**Isso é intencional, e é a aula inteira em uma tela.** O BM25 achou trechos **parecidos** (falam de fone, eletrônico, dias, prazo) e compôs uma resposta que mistura a seção errada da política certa (*Troca de presente*) com a **garantia**, que não é o que a cliente perguntou; ao clicar em **Por que esta fonte?**, a coluna explica: *"A resposta juntou 2 trechos: palavras em comum bastam para o BM25, mesmo quando o trecho fala de outra regra."* Repare: a garantia **passou no filtro** (está vigente, é da Quantum, é pública: perfeitamente aplicável a fones); ela não foi barrada, ela **venceu o ranking** por palavras. A `politica-trocas@v3` também passou no filtro, e ficou em 2º. O vetorial achou trechos de significado próximo (entrega, prazos), também todos permitidos pelo filtro, mas nenhum passou do mínimo de evidência, e preferiu recusar. Só o grafo, que **partiu do fone** e percorreu as relações até a política de trocas, chegou à resposta **aplicável**: 30 dias. Nenhuma das três mentiu; duas delas não sabiam que "fone" é um produto da categoria áudio, à qual a política de trocas se aplica. Em cada coluna há, nesta ordem: a caixa da resposta (ou *"Absteve-se · <motivo> · <explicação>"*); **Citações** (`doc_id@vN`); **Trechos considerados**, uma tabela com **Fonte e motivo | Score | Situação** (`citada` ou `candidata`, e abaixo *versão vigente*/*versão obsoleta*; a unidade do score aparece junto: *"BM25, sem teto"*, *"cosseno, −1 a 1"*, *"saltos"*); **Bloqueados** (`doc@vN` + motivo, por exemplo *"versão não vigente (status)"*, *"ainda não vigente nesta data (future)"*, *"pertence a outro tenant (tenant)"*, **sem o texto**); **Latência medida no backend** (embedding, banco, filtros, composição, total, em ms) com os ids (`source`, `index_name`, `cypher_query_id`, `path_hops`, `trace_id`, `request_id`); e o botão **Por que esta fonte?**. Ao lado do título **Resultado lado a lado**: *"Data simulada 14/11/2026 · tenant quantum · papel customer · rota knowledge · trace_id … · NN ms ida e volta, medido no navegador"*.
 
-**Se falhar:** colunas vazias com uma faixa vermelha = o `/ready` caiu (task reiniciando); espere e repita. BM25 respondendo garantia e vetorial abstendo **não é falha**: é o resultado esperado desta pergunta (veja acima). Resposta `15 dias` na coluna **Grafo** = o grafo em memória está alterado (o cenário da Demo 5.2 ficou ativo de uma tentativa anterior); rode `bash ops/cloud/incident.sh state --env live` e, se `drift=yes`, o `restore` do passo 22 com o cenário que `active_scenarios` indicar.
+<!-- NOVA-IMAGEM: img/tres-estrategias-fone-2026.png | capturar: Resultado lado a lado para a pergunta do fone em 14/11/2026, com a faixa-resumo As estratégias divergiram, BM25 juntando troca de presente + garantia, Vetorial abstendo e Grafo respondendo 30 dias, com os blocos Bloqueados visíveis | FONTE REAL já capturada (live R3): /tmp/qc18/evid/5.1/screenshots/r3/tres-estrategias-30-dias-1920.png (e a versão 1366; conferir que é a pergunta do fone em 14/11/2026) | depois de salvar o arquivo, descomente a linha abaixo -->
+<!-- ![Painel das três estratégias para a pergunta do fone em 14/11/2026: BM25 junta dois trechos (troca de presente + garantia de 90 dias) citando politica-trocas@v3 e politica-garantia-eletronicos, Vetorial abstém por falta de evidência e só o Grafo responde 30 dias pelo trecho certo de politica-trocas@v3; cada coluna lista trechos com score, a citação e os documentos bloqueados com motivo](img/tres-estrategias-fone-2026.png) -->
+
+**Se falhar:** colunas vazias com uma faixa vermelha = o `/ready` caiu (task reiniciando); espere e repita. BM25 respondendo garantia e vetorial abstendo **não é falha**: é o resultado esperado desta pergunta (veja acima). Resposta `15 dias` na coluna **Grafo** = o grafo em memória está alterado (o cenário da Demo 5.2 ficou ativo de uma tentativa anterior); rode `bash ops/cloud/incident.sh state --env live` e, se `"in_sync": false`, o `restore` do passo 22 com o cenário que `active_mutations` indicar.
 
 > 🤔 **Pare e pense (R1):** três estratégias, três respostas diferentes para a mesma pergunta, todas em HTTP 200 e duas com fonte citada. Se o `live` usasse o BM25 como padrão, a cliente teria recebido "90 dias de garantia" como resposta a "quantos dias para trocar". Que informação a busca por texto **não tinha** e o grafo tinha? E o que faria as três errarem **juntas**?
 
@@ -754,25 +757,27 @@ print("trace_id:", r["trace_id"], "| graph_version:", r["versions"]["graph_versi
 PY
 ```
 
-**Esperado** (saída real da homologação pelo ALB; os scores numéricos variam um pouco e estão marcados):
+**Esperado** (saída real da homologação pelo ALB, live R3; os scores e as latências variam um pouco entre execuções):
 
 > ```text
-> == bm25  fonte=bm25-inmemory  abstained=False  latencia_total_ms=<n>
+> == bm25  fonte=bm25-inmemory  abstained=False  latencia_total_ms=1.48
 >    resposta: Todo eletrônico vendido pela Quantum Commerce tem garantia de 90 dias contra defeitos, contada a partir do rec ...
 >    citacao : [('politica-garantia-eletronicos', '1')]
->    selected bm25   <score>  politica-garantia-eletronicos@v1#garantia-legal  ...
->    allowed  bm25   <score>  politica-trocas@v3#...  ...
->    allowed  bm25   <score>  politica-trocas@v3#...  ...
+>    active   bm25   4.6405   politica-garantia-eletronicos@v1#garantia-legal  BM25 sobre trechos permitidos pelo filtro
+>    active   bm25   3.7597   politica-trocas@v3#prazo-para-troca  BM25 sobre trechos permitidos pelo filtro
+>    active   bm25   2.3858   politica-trocas@v3#troca-de-presente  BM25 sobre trechos permitidos pelo filtro
 >    bloqueados: [('politica-trocas', '2', 'status'), ('parceiro-x-trocas', '1', 'tenant'), ('campanha-black-friday', '1', 'future')]
-> == vector  fonte=neo4j-vector  abstained=True  latencia_total_ms=<n>
+> == vector  fonte=neo4j-vector  abstained=True  latencia_total_ms=29.26
 >    resposta: Nao encontrei essa informacao nas politicas vigentes da Quantum Commerce, entao prefiro nao responder do que ar ...
 >    citacao : []
->    allowed  cosine <0.xx>  politica-entrega-frete@v2#...  ...
->    allowed  cosine <0.xx>  politica-entrega-frete@v2#...  ...
->    allowed  cosine <0.xx>  status-do-pedido@v1#...  ...
+>    active   cosine 0.4531   politica-entrega-frete@v2#atraso-na-entrega  vizinho mais proximo no indice vetorial, permitido pelo filtro
+>    active   cosine 0.4059   politica-entrega-frete@v2#prazos-de-entrega  vizinho mais proximo no indice vetorial, permitido pelo filtro
+>    active   cosine 0.3865   status-do-pedido@v1#entregue  vizinho mais proximo no indice vetorial, permitido pelo filtro
 >    bloqueados: [('politica-trocas', '2', 'status'), ('campanha-black-friday', '1', 'future')]
 > trace_id: <32 hex> | graph_version: c07dde5b8806
 > ```
+>
+> A primeira coluna de cada linha de `results` é o **`status` do documento no front matter** (`active` em todos: só o que passou no filtro entra em `results`; o que não passou está em `bloqueados`). O script pede os 4 primeiros, mas cada estratégia devolveu 3. Na coluna BM25, a `politica-trocas@v3` aparece em 2º e 3º, atrás da garantia.
 
 Leia as duas colunas com atenção ao que **difere**:
 
@@ -786,7 +791,7 @@ Leia as duas colunas com atenção ao que **difere**:
 
 Esse é o ponto de Diego, duas vezes. Primeiro: a v2 aparece em `blocked` nas duas buscas, porque é **similar** à pergunta; não é **aplicável**, porque o metadado `status` diz `obsolete` e a v3 a supersede. Se o filtro falhar, a v2 pode vencer; a Demo 5.2 mostra isso acontecendo. Segundo, e mais sutil: o BM25 **não errou por causa da v2**. Ele errou escolhendo a garantia, um documento vigente, da loja certa, público, perfeitamente aplicável a fones... só que a pergunta era sobre **troca**. Nenhum filtro de metadado pega isso. O que pega é saber que "fone" é um produto, que produtos têm categoria, e que a política de trocas se aplica à categoria: **relações**, que é a Parte 3.
 
-No JSON enviado, `user_role: "customer"` diz que quem pergunta é um cliente (só documentos `public`); o canal público do assistente **fixa** esse valor no servidor, e o `/lab/compare` o aceita só para você poder comparar com `internal` em laboratório. Repare também em `latency_ms`: a coluna vetorial tem um estágio `embed` (gerar o vetor da pergunta, em CPU) que o BM25 não tem. É custo real, medido agora, não um número de slide. Na homologação, 30 chamadas ao `/lab/compare` pelo ALB, a partir do Codespaces: **p50 318 ms, p95 407 ms** de ida e volta, dos quais o servidor gastou **p50 27 ms, p95 49 ms** na estratégia mais lenta; o resto é rede até `us-east-1`.
+No JSON enviado, `user_role: "customer"` diz que quem pergunta é um cliente (só documentos `public`); o canal público do assistente **fixa** esse valor no servidor, e o `/lab/compare` o aceita só para você poder comparar com `internal` em laboratório. Repare também em `latency_ms`: a coluna vetorial tem um estágio `embed` (gerar o vetor da pergunta, em CPU) que o BM25 não tem. É custo real, medido agora, não um número de slide. Na homologação, 20 chamadas ao `/lab/compare` pelo ALB, a partir do Codespaces: **p50 312 ms, p95 402 ms** de ida e volta, dos quais o servidor gastou **p50 21 ms, p95 28 ms**; o resto é rede até `us-east-1`.
 
 **Se falhar:** `KeyError: 'vector'` = o índice vetorial não está `ONLINE`; confira o `/ready`. `abstained=True` com `insufficient_evidence` nas duas = o `as_of_date` ou o `tenant` estão errados no JSON; compare com o bloco.
 
@@ -865,27 +870,28 @@ O caminho **Produto → Categoria → (Campanha) → Política → Versão → D
 
 **Onde:** navegador.
 **Por quê:** a visualização existe para você **ler** a decisão do sistema: por que esta política, por que esta versão, por qual caminho. Cada nó e cada aresta vieram da resposta do banco a esta pergunta; não é uma figura pronta.
-**Execute:** na coluna **Grafo** do painel do passo 9, clique em **Ver caminho** <!-- CONFIRMAR-SAIDA: rótulo real --> . Passe o mouse (ou toque) em cada nó e em cada aresta: aparece a **procedência** (`provenance`) da relação, isto é, de onde ela veio (seed do catálogo, front matter do corpus...).
+**Execute:** role até a seção **Caminho no grafo**, abaixo das três colunas. A aba **Caminho desta resposta** (padrão) já desenha o caminho real da coluna Grafo da última comparação; a outra aba, **Explorar um produto**, deixa escolher produto, data e tenant e clicar em **Ver relações** (é o passo 14, pela tela). Passe o mouse em cada nó e aresta: o tooltip mostra o tipo/id e `provenance: <valor>`, de onde a relação veio (semente do catálogo ou front matter do corpus); clique para abrir **Detalhe do item selecionado** com todas as propriedades. Os controles **+**, **−** e **Ajustar** (recentraliza) ficam no canto do desenho; o layout é fixo em colunas, Tenant → Produto → Categoria/Campanha → Política → Versão → Documento → Trecho, então nada se sobrepõe.
 
 **Esperado:** um desenho com nós coloridos por tipo e arestas rotuladas, algo como:
 
 > ```text
-> Product(fone-bluetooth-qc) ─BELONGS_TO→ Tenant(quantum)
-> Product(fone-bluetooth-qc) ─IN_CATEGORY→ Category(audio)
->   Policy(politica-trocas) ─APPLIES_TO→ Category(audio)
->   Policy(politica-trocas) ─HAS_VERSION→ PolicyVersion(politica-trocas@v3, status=active, effective_date=2026-01-01)
->   PolicyVersion(@v3) ─SUPERSEDES→ PolicyVersion(@v2, status=obsolete)   [em cinza: existe, mas não é a vigente]
->   PolicyVersion(@v3) ─DOCUMENTED_BY→ Document(trocas-v3.md) ─CONTAINS→ Chunk(prazo-para-troca)
-> Product(fone-bluetooth-qc) ─PARTICIPATES_IN→ Campaign(black-friday-2027)   [esmaecida: fora da vigência]
+> fone-bluetooth-qc ─BELONGS_TO→ quantum                                  (sólido)
+> fone-bluetooth-qc ─IN_CATEGORY→ audio                                   (sólido)
+>   politica-trocas ─APPLIES_TO→ audio                                     (sólido)
+>   politica-trocas ─HAS_VERSION→ politica-trocas@v3                       (sólido)
+>   politica-trocas@v3 ─DOCUMENTED_BY→ trocas-v3.md                        (sólido)
+>   trocas-v3.md ─CONTAINS→ politica-trocas@v3#prazo-para-troca            (sólido)
+>   politica-trocas ─HAS_VERSION→ politica-trocas@v2 · bloqueado           (tracejado, esmaecido)
+>   politica-trocas@v3 ─SUPERSEDES→ politica-trocas@v2 · bloqueado         (tracejado)
+> fone-bluetooth-qc ─PARTICIPATES_IN→ black-friday-2027 · bloqueado        (tracejado; todo o ramo da campanha idem)
 > ```
 >
-> <!-- CONFIRMAR-SAIDA: quais arestas a UI destaca e como marca as esmaecidas -->
-> A **Campanha** `black-friday-2027` aparece ligada **diretamente ao fone** (no catálogo fictício, quatro produtos entram na campanha por nome e a categoria `informatica` entra inteira), mas **esmaecida**, com o motivo `fora da vigência em 2026-11-14`. O caminho destacado tem **pelo menos duas arestas semânticas** antes de chegar ao documento: não é um lookup por `doc_id` disfarçado de grafo.
+> O caminho escolhido sai em **traço sólido**; nós e arestas bloqueados saem **tracejados e esmaecidos**, e na lista **Relações percorridas, em texto**, ao lado do desenho, cada relação bloqueada termina em *· bloqueado*. A legenda abaixo do desenho nomeia os tipos (Tenant, Produto, Categoria, Campanha, Política, Versão da política, Documento, Trecho). O caminho sólido tem `path_hops = 6`, percorridos pela consulta `graph.policy_for_product.v1` (o id aparece na legenda acima do desenho). A **Campanha** `black-friday-2027` aparece ligada **diretamente ao fone** (no catálogo fictício, quatro produtos entram na campanha por nome e a categoria `informatica` entra inteira), mas **tracejada**; o motivo não fica no desenho, fica na coluna Grafo, em **Bloqueados**: *"campanha-black-friday@v1 ainda não vigente nesta data (future)"* e *"politica-trocas@v2 versão não vigente (status)"*. O caminho destacado tem **pelo menos duas arestas semânticas** antes de chegar ao documento: não é um lookup por `doc_id` disfarçado de grafo.
 
-<!-- NOVA-IMAGEM: img/grafo-caminho-fone-2026.png | capturar: o painel do grafo (Cytoscape) com o caminho Product → Category → Policy → PolicyVersion v3 → Document → Chunk destacado, a v2 em cinza como superseded e a campanha Black Friday esmaecida por vigência | FONTE REAL já capturada: /tmp/qc18/evid/5.1/screenshots/alb-publicado-1920-03-grafo-d0.png (e a versão 1366) | depois de salvar o arquivo, descomente a linha abaixo -->
-<!-- ![Caminho do grafo para o fone em 14/11/2026: produto, categoria áudio, política de trocas, versão 3 vigente (a versão 2 aparece em cinza como superseded), documento e trecho; a campanha Black Friday 2027 aparece esmaecida por estar fora da vigência](img/grafo-caminho-fone-2026.png) -->
+<!-- NOVA-IMAGEM: img/grafo-caminho-fone-2026.png | capturar: o painel do grafo (Cytoscape) com o caminho Product → Category → Policy → PolicyVersion v3 → Document → Chunk destacado, a v2 em cinza como superseded e a campanha Black Friday esmaecida por vigência | FONTE REAL já capturada (live R3): /tmp/qc18/evid/5.1/screenshots/r3/grafo-caminho-fone-2026-1920.png (e a versão 1366) | depois de salvar o arquivo, descomente a linha abaixo -->
+<!-- ![Caminho do grafo para o fone em 14/11/2026: produto, categoria áudio, política de trocas, versão 3 vigente (a versão 2 aparece tracejada e esmaecida, bloqueada por status), documento e trecho; a campanha Black Friday 2027 aparece tracejada por estar fora da vigência](img/grafo-caminho-fone-2026.png) -->
 
-**Se falhar:** desenho vazio com a mensagem `nenhuma entidade reconhecida na pergunta` = a estratégia por grafo **abstém** quando não acha um produto ou categoria na pergunta (é comportamento esperado para perguntas genéricas; veja o 💡 do passo 13). Nós sobrepostos = clique em **Reorganizar** <!-- CONFIRMAR-SAIDA: rótulo real --> .
+**Se falhar:** desenho vazio com a legenda *"A estratégia de grafo não percorreu relações para esta pergunta (absteve-se: entity_not_found). Isso também é evidência: sem entidade ou caminho, não há o que mostrar."* = a estratégia por grafo **abstém** quando não acha um produto ou categoria na pergunta (a coluna Grafo explica: *"nenhum produto ou categoria do catalogo foi reconhecido; sem entidade a travessia nao comeca"*); é comportamento esperado para perguntas genéricas, veja o 💡 do passo 13. Desenho fora do enquadramento = **Ajustar**.
 
 ---
 
@@ -894,10 +900,15 @@ O caminho **Produto → Categoria → (Campanha) → Política → Versão → D
 **13. Leia a consulta Cypher parametrizada**
 
 **Onde:** navegador.
-**Por quê:** "o grafo decidiu" não é explicação. A explicação é a **consulta**: ela diz quais relações foram percorridas, em qual ordem, com quais filtros, e com quais **parâmetros** (nunca com texto do usuário colado dentro). Ler Cypher não exige saber programar: leia como uma frase.
-**Execute:** na coluna do grafo, clique em **Ver consulta** <!-- CONFIRMAR-SAIDA: rótulo real --> . O painel mostra a consulta (somente leitura) e os parâmetros usados nesta pergunta.
+**Por quê:** "o grafo decidiu" não é explicação. A explicação é a **consulta**: ela diz quais relações foram percorridas, em qual ordem, e com quais **parâmetros** (nunca com texto do usuário colado dentro). Ler Cypher não exige saber programar: leia como uma frase.
+**Execute:** a Central mostra **qual** consulta rodou (o `cypher_query_id`, no bloco de ids da coluna Grafo e na legenda do desenho: *"Nós e arestas devolvidos por graph.policy_for_product.v1 para a data simulada … e o tenant …"*). A partir do release que inclui esta versão da Central, a coluna Grafo traz também o painel recolhível **Cypher parametrizado (somente leitura)**, com o texto da consulta e os nomes dos parâmetros (o `/lab/compare` passa a devolver `cypher` e `cypher_params`, só nomes, nunca valores) <!-- CONFIRMAR-SAIDA: o painel Cypher parametrizado depende do release R4 (b374f52); conferir pelo ALB depois que o R4 for promovido -->. A fonte continua sendo o código versionado, e é lá que você lê a consulta inteira. No Codespaces:
 
-**Esperado:** a consulta `graph.policy_for_product.v1` (o id aparece no JSON como `cypher_query_id` e no trace), nesta forma:
+```bash
+cd /home/vscode/environment/quantum-ai-assistant
+sed -n '/^POLICY_FOR_PRODUCT = {/,/^}$/p' graph/queries.py
+```
+
+**Esperado:** 26 linhas, do `POLICY_FOR_PRODUCT = {` ao `}` que fecha o dicionário. O texto no arquivo é um f-string do Python: `{{` e `}}` são chaves escapadas (viram `{` e `}` no Cypher enviado ao banco), e `{_TAIL}` é o trecho comum aos três caminhos, `(pol:Policy)-[:HAS_VERSION]->(pv:PolicyVersion)-[:DOCUMENTED_BY]->(d:Document) WHERE $topic IN pol.topics`, definido logo acima no mesmo arquivo. Com isso expandido, a consulta `graph.policy_for_product.v1` (o id aparece no JSON como `cypher_query_id` e no trace) é esta:
 
 > ```cypher
 > MATCH tp = (p:Product {id: $product_id})-[:BELONGS_TO]->(:Tenant {id: $tenant})
@@ -922,7 +933,7 @@ O caminho **Produto → Categoria → (Campanha) → Política → Versão → D
 > LIMIT 50
 > ```
 >
-> (É um recorte legível; o texto completo está em `graph/queries.py`, `POLICY_FOR_PRODUCT`.)
+> (Recorte legível, já com `{_TAIL}` expandido e as chaves desescapadas; a parte do `WITH` está resumida.)
 >
 > **Parâmetros:** `product_id = "fone-bluetooth-qc"`, `tenant = "quantum"`, `topic = "troca"`.
 
@@ -930,7 +941,7 @@ Leia como frase: *"pegue o produto com este id, que pertence a este tenant; a pa
 
 Repare nos `$`: são **parâmetros**. A pergunta do cliente nunca é colada dentro da consulta; o sistema extrai a entidade (`fone-bluetooth-qc`, pelos sinônimos do catálogo: "fone", "headphone"...) e o assunto (`troca`), valida contra listas fechadas e passa como valor. É a mesma regra de `prepared statements` em SQL, e é o que impede "injeção de Cypher". `LIMIT 50`, a profundidade fixa dos padrões (no máximo 7 arestas) e um timeout de 3 s por transação limitam o custo: ninguém consegue pedir "o grafo inteiro".
 
-**Se falhar:** o painel mostra `cypher_query_id` mas não a consulta = a UI não achou o texto da consulta para este id; no Codespaces, `curl -s "$(terraform -chdir=infra-ecs output -raw app_url)/lab/meta" | python3 -m json.tool | head -60` (dentro de `/home/vscode/environment/quantum-ai-assistant`) lista o que o servidor expõe. <!-- CONFIRMAR-SAIDA: confirmar se /lab/meta expõe o texto das queries -->
+**Se falhar:** `sed` sem saída = o arquivo tem outro nome de constante; `grep -n 'id": "graph' graph/queries.py` lista as quatro consultas (`graph.policy_for_product.v1`, `graph.policy_for_category.v1`, `graph.chunks_for_version.v1` e, para o vetorial, `vector.chunk_knn.v1`). O `GET /lab/meta` expõe só esses ids, em `query_ids`, não o texto.
 
 <details>
 <summary><b>💡 Clique para entender: expansão por grafo × similaridade semântica, e por que nenhuma estratégia é "a melhor"</b></summary>
@@ -980,30 +991,36 @@ PY
 
 **Esperado:**
 
-> <!-- CONFIRMAR-SAIDA: saída real de /lab/meta e /lab/graph/product -->
+> Saída real da homologação (live, 14/11/2026, tenant `quantum`):
 >
 > ```text
 > produtos conhecidos: ['fone-bluetooth-qc', 'caixa-som-qc', 'notebook-qc14', 'smartphone-qc-x', 'smartwatch-qc-fit', 'camiseta-basica', 'calca-jeans-slim', 'jaqueta-corta-vento', 'tenis-corrida-qc', 'mochila-urbana-qc', 'relogio-parceiro-x']
-> policy_version escolhida: politica-trocas@v3 | motivo: active, vigente em 2026-11-14, tenant quantum, public
-> nos: <n> | arestas: <n>
->   fone-bluetooth-qc                  -BELONGS_TO-> quantum                            prov=graph/seed/catalog.json
->   fone-bluetooth-qc                  -IN_CATEGORY-> audio                              prov=graph/seed/catalog.json
->   fone-bluetooth-qc                  -PARTICIPATES_IN-> black-friday-2027                prov=graph/seed/catalog.json (ofertas do time comercial)
->   politica-trocas                    -APPLIES_TO-> audio                                prov=graph/seed/catalog.json + trocas-v3.md
->   politica-trocas                    -HAS_VERSION-> politica-trocas@v3                prov=corpus/trocas-v3.md (front matter)
->   politica-trocas@v3                 -SUPERSEDES-> politica-trocas@v2                prov=corpus/trocas-v3.md (supersedes:)
->   politica-trocas@v3                 -DOCUMENTED_BY-> trocas-v3.md                   prov=corpus
->   trocas-v3.md                       -CONTAINS-> politica-trocas@v3#prazo-para-troca prov=corpus
->   ...
+> policy_version escolhida: politica-trocas@v3 | motivo: via category
+> nos: 13 | arestas: 13
+>   fone-bluetooth-qc        -BELONGS_TO-> quantum                       prov=seed:graph/seed/catalog.json#products[fone-bluetooth-qc].tenant
+>   fone-bluetooth-qc        -PARTICIPATES_IN-> black-friday-2027       prov=seed:graph/seed/catalog.json#campaigns[black-friday-2027].participants.products
+>   campanha-black-friday    -APPLIES_TO-> black-friday-2027            prov=seed:graph/seed/catalog.json#policies[campanha-black-friday].applies_to.campaigns
+>   campanha-black-friday    -HAS_VERSION-> campanha-black-friday@v1    prov=corpus:black-friday-2027.md#front_matter.doc_id+version
+>   campanha-black-friday@v1 -DOCUMENTED_BY-> black-friday-2027.md     prov=corpus:black-friday-2027.md#front_matter.version
+>   fone-bluetooth-qc        -IN_CATEGORY-> audio                        prov=seed:graph/seed/catalog.json#products[fone-bluetooth-qc].category
+>   politica-trocas          -APPLIES_TO-> audio                         prov=seed:graph/seed/catalog.json#policies[politica-trocas].applies_to.categories
+>   politica-trocas          -HAS_VERSION-> politica-trocas@v2          prov=corpus:trocas-v2.md#front_matter.doc_id+version
+>   politica-trocas@v2       -DOCUMENTED_BY-> trocas-v2.md              prov=corpus:trocas-v2.md#front_matter.version
+>   politica-trocas@v3       -SUPERSEDES-> politica-trocas@v2           prov=corpus:trocas-v3.md#front_matter.supersedes
+>   politica-trocas          -HAS_VERSION-> politica-trocas@v3          prov=corpus:trocas-v3.md#front_matter.doc_id+version
+>   politica-trocas@v3       -DOCUMENTED_BY-> trocas-v3.md              prov=corpus:trocas-v3.md#front_matter.version
+>   trocas-v3.md             -CONTAINS-> politica-trocas@v3#prazo-para-troca   prov=corpus:trocas-v3.md#secao:Prazo para troca
 > ```
+>
+> O JSON traz também `blocked: [campanha-black-friday@v1 (future), politica-trocas@v2 (status)]`, `cypher_query_id: graph.policy_for_product.v1`, `graph_version: c07dde5b8806` e cada aresta com `role: selected` ou `blocked` (é o que o desenho usa para traço sólido ou tracejado). Pela tela, o mesmo resultado está na aba **Explorar um produto** da seção **Caminho no grafo**: escolha o fone, a data e o tenant e clique em **Ver relações**.
 
-Cada aresta tem **procedência**: as relações produto → categoria e produto → campanha vieram da semente do catálogo (`graph/seed/catalog.json`, um JSON legível com um campo `evidence` explicando cada decisão); o `status`, a vigência e o `supersedes` vieram do **front matter do corpus**, que é a mesma fonte única que o BM25 e o vetorial usam para filtrar; a janela da campanha também vem do corpus (`window_from_doc: campanha-black-friday`). O grafo não inventa metadado: ele **materializa** o que já estava nos documentos, mais as relações de catálogo que texto nenhum tinha.
+Cada aresta tem **procedência**, e ela aponta para a **linha de origem**: `seed:graph/seed/catalog.json#products[fone-bluetooth-qc].category` (a semente do catálogo, um JSON legível com um campo `evidence` explicando cada decisão) ou `corpus:trocas-v3.md#front_matter.supersedes` (o front matter do documento). O `status`, a vigência e o `supersedes` vieram do **front matter do corpus**, que é a mesma fonte única que o BM25 e o vetorial usam para filtrar; a janela da campanha também vem do corpus (`window_from_doc: campanha-black-friday`). O grafo não inventa metadado: ele **materializa** o que já estava nos documentos, mais as relações de catálogo que texto nenhum tinha.
 
 **Se falhar:** `422 Unprocessable` = o `product_id` não está na lista de produtos conhecidos (a rota valida por lista; não aceita texto livre). `nos: 0` = a data ou o tenant não deixaram nenhuma versão passar; confira o `reason`.
 
 ### Checkpoint
 
-- a coluna Grafo desenhou um caminho com **≥ 2 arestas semânticas** até o trecho, com a v2 marcada como superseded e a campanha esmaecida por vigência
+- a seção **Caminho no grafo** desenhou o caminho sólido de 6 saltos até o trecho, com a v2 e o ramo da campanha **tracejados** (bloqueados por status e por vigência)
 - você leu a consulta Cypher como frase, identificou os `$parâmetros`, e sabe que ela traz **candidatos** (todas as versões) e que a aplicabilidade é decidida depois, por `check_access`, a mesma regra das três estratégias
 - a API devolveu `nodes` e `edges` com `provenance`, e a `policy_version` escolhida foi `politica-trocas@v3`
 
@@ -1029,7 +1046,7 @@ A mesma pergunta respondida em 2026, dentro da Black Friday de 2027 e depois del
 
 **Esperado** (resultado real da homologação, pelo ALB, em 26/11/2027): na coluna **Grafo**, a aresta `Product(fone-bluetooth-qc) ─PARTICIPATES_IN→ Campaign(black-friday-2027)` **acende**, e a política escolhida passa a ser a da campanha (`campanha-black-friday@v1#trocas-na-black-friday`): *"Produtos comprados durante a Black Friday podem ser trocados até 10 de janeiro..."*. A `politica-trocas@v3` continua no grafo, mas não é a escolhida: a regra de campanha tem precedência **enquanto vigente**. Nas colunas **BM25** e **Vetorial**, o documento da Black Friday **sai** de `blocked` (`reason=future` desapareceu) e passa a disputar; com a pergunta exatamente igual à do passo 9, o BM25 segue respondendo **garantia de 90 dias** e o vetorial segue **abstendo**: a vigência mudou, a similaridade não. Se você reescrever a pergunta como `Qual o prazo para trocar um fone de ouvido comprado na Black Friday?`, as três colunas passam a citar a Black Friday, mas BM25 e vetorial escolhem a seção **errada** da campanha (`#prazos-de-entrega-na-black-friday`, *"acréscimo de até 5 dias úteis"* na **entrega**), enquanto o grafo escolhe `#trocas-na-black-friday`. Mesmo documento, seção errada: similaridade de novo.
 
-<!-- NOVA-IMAGEM: img/grafo-black-friday-2027.png | capturar: a Central com a data 26/11/2027, o nó Campaign black-friday-2027 aceso no caminho do grafo e a resposta citando a regra Trocas na Black Friday (até 10 de janeiro) | FONTE REAL candidata: /tmp/qc18/evid/5.1/screenshots/alb-ui-atual-1920-02-comparar-d1.png e alb-ui-atual-1920-03-grafo-d1.png (conferir se d1 = 2027-11-26) | depois de salvar o arquivo, descomente a linha abaixo -->
+<!-- NOVA-IMAGEM: img/grafo-black-friday-2027.png | capturar: a Central com a data 26/11/2027, o nó Campaign black-friday-2027 aceso no caminho do grafo e a resposta citando a regra Trocas na Black Friday (até 10 de janeiro) | FONTE REAL já capturada (live R3): /tmp/qc18/evid/5.1/screenshots/r3/grafo-black-friday-2027-1920.png (grafo) e grafo-black-friday-2027-comparar-1920.png (colunas); versões 1366 ao lado | depois de salvar o arquivo, descomente a linha abaixo -->
 <!-- ![Central em 26/11/2027: o caminho do grafo passa por Campaign black-friday-2027, agora vigente, e a resposta cita as regras da Black Friday (troca até 10 de janeiro, arrependimento de 7 dias inalterado)](img/grafo-black-friday-2027.png) -->
 
 **Se falhar:** a campanha continua esmaecida = a data não mudou (confira o seletor) ou o seletor não enviou `as_of_date` (abra a aba Rede do navegador; o POST deve ter `"as_of_date":"2027-11-26"`).
@@ -1075,7 +1092,7 @@ r = json.load(open("/tmp/compare-tenant.json"))
 for name, s in r["strategies"].items():
     em_resposta = "parceiro" in s["answer"].lower() or "60 dias" in s["answer"]
     em_results  = [x["chunk_id"] for x in s["results"] if "parceiro-x" in x["doc_id"] and x["status"] != "blocked"]
-    em_path     = [n["id"] for n in s.get("path", {}).get("nodes", []) if "parceiro" in n["id"]]
+    em_path     = [n["id"] for n in (s.get("path") or {}).get("nodes", []) if "parceiro" in n["id"]]
     bloqueado   = [(b["doc_id"], b["reason"]) for b in s["blocked"] if "parceiro-x" in b["doc_id"]]
     print(f"{name:<7} na_resposta={em_resposta} em_results_permitidos={em_results} no_caminho={em_path} bloqueado={bloqueado}")
 PY
@@ -1085,13 +1102,13 @@ PY
 
 > ```text
 > bm25    na_resposta=False em_results_permitidos=[] no_caminho=[] bloqueado=[('parceiro-x-trocas', 'tenant')]
-> vector  na_resposta=False em_results_permitidos=[] no_caminho=[] bloqueado=[('parceiro-x-trocas', 'tenant')]
+> vector  na_resposta=False em_results_permitidos=[] no_caminho=[] bloqueado=[]
 > graph   na_resposta=False em_results_permitidos=[] no_caminho=[] bloqueado=[]
 > ```
 >
-> (Na homologação, o motivo registrado em `blocked` é a palavra curta `tenant`; a pergunta que mais provoca o Parceiro X, `Qual o prazo de troca do parceiro-x? São 60 dias?`, deu exatamente isto: BM25 respondeu os **30 dias** da Quantum, o vetorial respondeu **prazo de entrega** (similaridade de novo), e o grafo absteve por `entity_not_found`, porque "parceiro-x" não é um produto.)
+> (Saída real da homologação, live R3. O motivo registrado em `blocked` é a palavra curta `tenant`. Para **esta** pergunta, o vetorial nem trouxe o Parceiro X entre os vizinhos mais próximos (o top-k dele é entrega e status do pedido, como no passo 10), por isso `bloqueado=[]`; com `Posso desistir da compra depois de receber?` ou `Como funciona o programa de cashback?`, o vetorial traz `('parceiro-x-trocas', 'tenant')` em `blocked`, medido. A pergunta que mais provoca o Parceiro X, `Qual o prazo de troca do parceiro-x? São 60 dias?`, deu: BM25 respondeu os **30 dias** da Quantum, o vetorial respondeu **prazo de entrega** (similaridade de novo), e o grafo absteve por `entity_not_found`, porque "parceiro-x" não é um produto.)
 
-Nas buscas por texto, o Parceiro X **foi encontrado** (ele é similar) e **bloqueado** pelo tenant: a evidência registra `doc_id`, `version` e o motivo, **sem o texto**. No grafo, ele nem aparece em `blocked`: a consulta começa por `(p)-[:BELONGS_TO]->(:Tenant {id: $tenant})`, então o caminho **nunca atravessa** outro tenant. Dois mecanismos, o mesmo resultado, e uma única regra de autorização (`check_access`) compartilhada pelas três.
+Na busca por palavras, o Parceiro X **foi encontrado** (ele é similar) e **bloqueado** pelo tenant: a evidência registra `doc_id`, `version` e o motivo, **sem o texto**. Na vetorial o mesmo filtro vale, e aparece em `blocked` quando o documento entra no top-k. No grafo, ele nem aparece em `blocked`: a consulta começa por `(p)-[:BELONGS_TO]->(:Tenant {id: $tenant})`, então o caminho **nunca atravessa** outro tenant. Dois mecanismos, o mesmo resultado, e uma única regra de autorização (`check_access`) compartilhada pelas três.
 
 <details>
 <summary><b>💡 Se sobrar tempo: o inverso, perguntar como o Parceiro X</b></summary>
@@ -1222,10 +1239,10 @@ bash ops/cloud/incident.sh state --env live
 
 > ```text
 > incident: live: POST /admin/graph/scenario via runner i-... -> task 10.0.x.x:8001
-> {"environment": "live", "action": "apply", "scenario": "remove_campaign_edge", ..., "graph_version_before": "c07dde5b8806", "graph_version": "<12 hex, DIFERENTE>", "graph_seed_version": "c07dde5b8806", "in_sync": false, "active_mutations": ["remove_campaign_edge"], "diff": {..., "edges_missing": ["(fone-bluetooth-qc)-[:PARTICIPATES_IN]->(black-friday-2027)"], ...}, "counts": {"nodes": 79, "edges": 108, "chunks": 31}}
+> {"environment": "live", "action": "apply", "scenario": "remove_campaign_edge", "started_at": "...Z", "finished_at": "...Z", "graph_version_before": "c07dde5b8806", "graph_version": "38e59be10549", "graph_seed_version": "c07dde5b8806", "in_sync": false, "active_mutations": ["remove_campaign_edge"], "diff": {"node_props_changed": [], "nodes_missing": [], "nodes_extra": [], "edges_missing": ["(fone-bluetooth-qc)-[:PARTICIPATES_IN]->(black-friday-2027)"], "edges_extra": []}, "counts": {"nodes": 79, "edges": 108, "chunks": 31}}
 > ```
 >
-> <!-- CONFIRMAR-SAIDA: graph_version real sob remove_campaign_edge e contagem de arestas (108?) -->
+> Saída real da homologação (cada chamada do `incident.sh` leva 15 a 25 s, é o `send-command` via runner): 109 arestas viraram **108**, o `graph_version` mudou de `c07dde5b8806` para `38e59be10549`, e o `diff` diz exatamente qual aresta falta. O `/health` pelo ALB passa a mostrar `graph_version 38e59be10549` com `graph_seed_version c07dde5b8806`.
 
 O `graph_version` **mudou** (`in_sync: false`); o `graph_seed_version` **não**; e o `diff` diz exatamente qual aresta falta. A imagem continua a mesma; o que está atendendo, não. É exatamente a assinatura que a Demo 5.2 vai ensinar a procurar.
 
@@ -1239,14 +1256,14 @@ O `graph_version` **mudou** (`in_sync: false`); o `graph_seed_version` **não**;
 
 **Onde:** navegador.
 **Por quê:** a prova de que a relação importava é a resposta mudar **só** onde ela era necessária.
-**Execute:** na Central, com a data em `14/11/2026`, compare de novo. Depois mude para `26/11/2027` e compare de novo.
+**Execute:** na Central, clique no botão pronto **Black Friday · fone** (preenche *"Comprei um fone de ouvido na Black Friday. Até quando posso trocar?"*; o outro, **Black Friday · sem produto**, faz o grafo se abster, porque não há entidade). Com a data em **14/11/2026 regular**, **Comparar as três**. Depois mude para **26/11/2027 Black Friday 2027** e compare de novo.
 
-**Esperado:** <!-- CONFIRMAR-SAIDA: comportamento real --> em `14/11/2026`, **nada muda** nas três colunas (a campanha já estava fora da vigência; a aresta que sumiu não participava do caminho). Em `26/11/2027`, a coluna **Grafo** muda: o nó `Campaign(black-friday-2027)` **não aparece mais** no caminho, e a resposta volta a `politica-trocas@v3`, **30 dias**, mesmo dentro da Black Friday. As colunas BM25 e Vetorial **não mudam** entre o passo 15 e agora: elas não usam o grafo. A faixa de versões no rodapé mostra o `graph_version` novo, em destaque. <!-- CONFIRMAR-SAIDA: se a UI destaca drift graph_version != graph_seed_version -->
+**Esperado** (real, no live com a aresta removida): em `14/11/2026`, **nada muda** nas três colunas (BM25 `politica-trocas@v3`, Vetorial abstém, Grafo `politica-trocas@v3`): a campanha já estava fora da vigência, e no desenho só some o ramo **tracejado** da campanha. Em `26/11/2027`, a coluna **Grafo** muda: antes da mutação ela citava `campanha-black-friday@v1` (*"...podem ser trocados até 10 de janeiro"*, via campanha); agora o nó **Black Friday 2027** e o ramo da campanha **somem do desenho**, o caminho sólido fica `Quantum Commerce ← Fone de ouvido Bluetooth QC Sound → Audio e fones ← politica-trocas → politica-trocas v3 · active → trocas-v3.md → Prazo para troca`, e a resposta volta a `politica-trocas@v3`, **30 dias**, mesmo dentro da Black Friday. A faixa-resumo diz: *"As estratégias divergiram: BM25 campanha-black-friday@v1 · Vetorial campanha-black-friday@v1 · Grafo politica-trocas@v3."* As colunas BM25 e Vetorial **não mudam** entre o passo 15 e agora: elas não usam o grafo. E a Central denuncia o drift sem dar o diagnóstico de bandeja: o painel **Versões deste release** abre sozinho com o selo âmbar *"grafo em runtime difere da imagem"* e `graph_version 38e59be10549` / `graph_seed_version c07dde5b8806` em âmbar; no quadro **LIVE** de **Release & Health**, os dois valores em âmbar e a caixa *"graph_version em runtime é diferente do graph_seed_version da imagem deste release"* (o quadro **CANDIDATE** segue com `c07dde5b8806` nos dois, sem caixa: a mutação foi só no live); e a **Linha do tempo desta sessão** registra o `graph_version` de cada resposta e, se você repetir a pergunta de 2027, *"mesma pergunta e data, resultado diferente: ..."*. A página relê o `/health` a cada 15 s (**Verificar de novo** força).
 
-<!-- NOVA-IMAGEM: img/grafo-sem-aresta-campanha.png | capturar: a Central em 26/11/2027 com a aresta PARTICIPATES_IN removida: o caminho do grafo sem o nó Campaign, resposta 30 dias, e o rodapé mostrando graph_version diferente de graph_seed_version | depois de salvar o arquivo, descomente a linha abaixo -->
-<!-- ![Central em 26/11/2027 depois da remoção da aresta: o caminho do grafo vai direto da categoria à política de trocas v3 (30 dias), sem passar pela campanha; no rodapé, graph_version diverge de graph_seed_version](img/grafo-sem-aresta-campanha.png) -->
+<!-- NOVA-IMAGEM: img/grafo-sem-aresta-campanha.png | capturar: a Central em 26/11/2027 com a aresta PARTICIPATES_IN removida: o caminho do grafo sem o nó Campaign, resposta 30 dias, e o selo âmbar de drift no cabeçalho | FONTE REAL já capturada: /tmp/qc18/evid/5.1/screenshots/r3/grafo-sem-aresta-campanha-1920.png (grafo 2027), -cabecalho-1920.png (selo de drift), -health-1920.png (Release & Health), -comparar-1920.png (colunas 2027), -2026-1920.png (grafo 2026); versões 1366 ao lado | depois de salvar o arquivo, descomente a linha abaixo -->
+<!-- ![Central em 26/11/2027 depois da remoção da aresta: o caminho do grafo vai da categoria à política de trocas v3 (30 dias) sem passar pela campanha, que sumiu do desenho; no cabeçalho, o selo âmbar indica que graph_version diverge de graph_seed_version](img/grafo-sem-aresta-campanha.png) -->
 
-**Se falhar:** o grafo ainda mostra a campanha em 2027 = o navegador reaproveitou a resposta anterior; recarregue a página (`F5`) e compare de novo.
+**Se falhar:** o grafo ainda mostra a campanha em 2027 = compare de novo (a Central não guarda resposta antiga; se o desenho não mudou, o `apply` do passo 20 não pegou: confira `in_sync: false`).
 
 > 🤔 **Pare e pense (R6):** essa resposta (30 dias dentro da Black Friday) está **errada** em relação ao que a empresa aprovou, mas é **coerente** com o grafo que está em memória, e veio em HTTP 200 com fonte citada. Que sinal técnico acusaria isso? Qual sinal **de negócio** acusaria?
 
@@ -1270,12 +1287,12 @@ bash ops/cloud/incident.sh state --env live
 
 > ```text
 > incident: live: POST /admin/graph/scenario via runner i-... -> task 10.0.x.x:8001
-> {"environment": "live", "action": "restore", "scenario": "remove_campaign_edge", ..., "graph_version_before": "<o do passo 20>", "graph_version": "c07dde5b8806", "graph_seed_version": "c07dde5b8806", "in_sync": true, "active_mutations": [], "diff": {"node_props_changed": [], "nodes_missing": [], "nodes_extra": [], "edges_missing": [], "edges_extra": []}, "counts": {"nodes": 79, "edges": 109, "chunks": 31}}
+> {"environment": "live", "action": "restore", "scenario": "remove_campaign_edge", "started_at": "...Z", "finished_at": "...Z", "graph_version_before": "38e59be10549", "graph_version": "c07dde5b8806", "graph_seed_version": "c07dde5b8806", "in_sync": true, "active_mutations": [], "diff": {"node_props_changed": [], "nodes_missing": [], "nodes_extra": [], "edges_missing": [], "edges_extra": []}, "counts": {"nodes": 79, "edges": 109, "chunks": 31}}
 > ```
 >
-> (Saída real da homologação para o `restore` deste cenário, via `--teacher-reset`: 11 s, `in_sync: true`.)
+> Saída real da homologação: 109 arestas de volta, `diff` vazio, `in_sync: true`. Na Central, em `26/11/2027`, o Grafo volta a citar `campanha-black-friday@v1` (via campanha) e o selo âmbar desaparece.
 
-Na Central, em `26/11/2027`, a campanha volta ao caminho. **O `graph_version` voltou ao valor original porque o conteúdo voltou ao original**: é um hash do grafo, não um contador.
+**O `graph_version` voltou ao valor original porque o conteúdo voltou ao original**: é um hash do grafo, não um contador (`c07dde5b8806` → `38e59be10549` → `c07dde5b8806`).
 
 **Se falhar:** `in_sync: false` depois do restore = algum outro cenário continua ativo; `active_mutations` diz qual. Se persistir, há um caminho mais drástico, discutido na Demo 5.2: reiniciar a task reconstrói o grafo da imagem (`aws ecs update-service --cluster qc-assistant --service qc-assistant-live --force-new-deployment`), ao custo de alguns minutos de `503` no `/ready`. Não é a correção certa para hoje; o `restore` é.
 
@@ -1347,7 +1364,7 @@ A sua resposta à pergunta de Helena por escrito, a escolha (justificada) de est
 **Onde:** leitura.
 **Por quê:** a Central mostra **evidência**. Ela não **impede** uma mudança ruim de ser publicada, nem **percebe** uma mudança feita por fora. Essas duas coisas são a segunda metade da aula.
 
-> Diego, apontando para a faixa de versões: *— "Vocês acabaram de mexer no grafo com um script de laboratório, e o `graph_version` denunciou na hora **porque vocês estavam olhando**. Às 23h ninguém está olhando. E antes disso: quem garante que a próxima imagem que for para o `live` tem o grafo certo? O pipeline da Aula 4 testava BM25 contra um corpus. Ele não sabe o que é uma aresta."*
+> Diego, apontando para o painel **Versões deste release**: *— "Vocês acabaram de mexer no grafo com um script de laboratório, e o `graph_version` denunciou na hora **porque vocês estavam olhando**. Às 23h ninguém está olhando. E antes disso: quem garante que a próxima imagem que for para o `live` tem o grafo certo? O pipeline da Aula 4 testava BM25 contra um corpus. Ele não sabe o que é uma aresta."*
 >
 > Helena: *— "Então, depois do intervalo, eu quero duas coisas. Um pipeline que fique **vermelho** se alguém ligar um produto à política errada. E um painel que fique **vermelho** se isso acontecer depois, sem commit. HTTP verde não me serve mais."*
 
@@ -1361,8 +1378,7 @@ Prossiga para a **[Demo 5.2: O dashboard estava verde. O cliente, errado.](../02
 > bash scripts/cloud/cleanup.sh --dry-run
 > ```
 >
-> <!-- CONFIRMAR-SAIDA: nome/sintaxe real do script de cleanup do agente INFRA e forma da saída -->
-> Três comandos, três alcances, todos sem destruir nada por padrão. **`make down`** só desliga as tasks (escala os serviços a zero; ALB, ECR e state ficam; `make start` religa a mesma revisão em minutos). **`make destroy-dry-run`** (= `bash scripts/cloud/cleanup.sh --dry-run`) mostra o plano de destruição do runtime ECS (state `quantum-assistant/ecs/`): cluster, serviços, ALB, target groups, security groups, log groups, repositório ECR e as revisões de task definition, e termina com `--dry-run: nada foi destruido`; ele **aborta sozinho** se o plano tocar VPC, subnet, runner ou bucket, e **nunca** toca na API de pedidos do `infra/`. Só com `--apply` (e a confirmação digitada `destruir runtime ecs`) ele destrói; `--with-secrets` apaga também os seis `SecureString`. A observabilidade da 5.2 tem o próprio `ops/cloud/obs.sh destroy [--apply]`, e deve ser removida **antes** (a regra `/grafana` dela fica pendurada no ALB deste runtime). Entre aulas, o que custa é o runner (desligue com `aws ec2 stop-instances --instance-ids <id do runner> --region us-east-1`; o `make runner` liga de volta) e as tasks Fargate + ALB; se a 5.2 for em outro dia, `make down` ao sair e `make start` ao voltar.
+> Três comandos, três alcances, todos sem destruir nada por padrão. **`make down`** só desliga as tasks (escala os serviços a zero; ALB, ECR e state ficam; `make start` religa a mesma revisão em minutos). **`make destroy-dry-run`** (= `bash scripts/cloud/cleanup.sh --dry-run`) mostra o plano de destruição do runtime ECS (state `quantum-assistant/ecs/`): cluster, serviços, ALB, target groups, security groups, log groups, repositório ECR e as revisões de task definition, e termina com `cleanup: --dry-run: nada foi destruido. Para destruir: bash scripts/cloud/cleanup.sh --apply` (saída real; 31 s); ele **aborta sozinho** se o plano tocar VPC, subnet, runner ou bucket, e **nunca** toca na API de pedidos do `infra/`. Só com `--apply` (e a confirmação digitada `destruir runtime ecs`) ele destrói; `--with-secrets` apaga também os seis `SecureString`. A observabilidade da 5.2 tem o próprio `ops/cloud/obs.sh destroy [--apply]`, e deve ser removida **antes** (a regra `/grafana` dela fica pendurada no ALB deste runtime). Entre aulas, o que custa é o runner (desligue com `aws ec2 stop-instances --instance-ids <id do runner> --region us-east-1`; o `make runner` liga de volta) e as tasks Fargate + ALB; se a 5.2 for em outro dia, `make down` ao sair e `make start` ao voltar.
 
 ### Checkpoint
 
