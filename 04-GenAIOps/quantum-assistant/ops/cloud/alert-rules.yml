@@ -1,0 +1,180 @@
+# Regras do Prometheus da Demo 5.2 na AWS (EC2 qc-assistant-obs).
+# Mesma ideia do ops/alert-rules.yml local, agora com as metricas do runtime ECS
+# (qc_requests_total, qc_request_duration_seconds) e do contêiner qc-probe
+# (qc_probe_*, qc_quality_*).
+#
+# Janela de 2 minutos e `for` curto: escolha DIDATICA para o alerta aparecer
+# durante a aula. Em producao, janelas de 30-60 min e n dimensionado pelo erro
+# aceitavel. Os limiares (0,90; n >= 10; 5%; 2 s) sao configuracao de exercicio,
+# nao numeros universais.
+#
+# Sobre "proxy sintetico": as taxas de qualidade vem de PROBES ROTULADOS
+# (perguntas com resposta conhecida) que o qc-probe faz contra o ALB, nao de
+# trafego humano. Elas medem se os contratos conhecidos continuam valendo, nao a
+# qualidade de toda conversa real.
+#
+# Sem Alertmanager neste stack: o alerta aparece como FIRING no Prometheus e nos
+# paineis do Grafana (tabela de ALERTS). Nenhuma notificacao sai da VPC.
+groups:
+  - name: qc-quality-recording
+    rules:
+      # n (amostras julgadas) por cenario/ambiente/release. result="fallback"
+      # (API de pedidos fora + recusa honesta) fica fora: e sinal TECNICO e nao
+      # pode derrubar nem inflar a taxa de qualidade documental.
+      - record: qc:probe_n:2m
+        expr: sum by (scenario_id, environment, release_id) (increase(qc_probe_total{result=~"pass|fail"}[2m]))
+      - record: qc:probe_pass_rate:2m
+        expr: |
+          sum by (scenario_id, environment, release_id) (increase(qc_probe_total{result="pass"}[2m]))
+          / sum by (scenario_id, environment, release_id) (increase(qc_probe_total{result=~"pass|fail"}[2m]))
+      # Taxas como razao de contadores (e nao gauge pronto): uma taxa nao se soma
+      # entre processos nem diz quantas amostras a sustentam. Com o denominador
+      # zerado o resultado e NaN/ausente, e o painel mostra "Sem amostra", nao 100%.
+      - record: qc:source_is_current_rate:2m
+        expr: |
+          sum by (scenario_id, environment, release_id) (increase(qc_probe_source_current_total[2m]))
+          / sum by (scenario_id, environment, release_id) (increase(qc_probe_source_checked_total[2m]))
+      - record: qc:retrieval_hit_at_k:2m
+        expr: |
+          sum by (scenario_id, environment, release_id) (increase(qc_probe_retrieval_hits_total[2m]))
+          / sum by (scenario_id, environment, release_id) (increase(qc_probe_retrieval_cases_total[2m]))
+      - record: qc:retrieval_mrr:2m
+        expr: |
+          sum by (scenario_id, environment, release_id) (increase(qc_probe_retrieval_rr_sum_total[2m]))
+          / sum by (scenario_id, environment, release_id) (increase(qc_probe_retrieval_cases_total[2m]))
+      - record: qc:citation_presence_rate:2m
+        expr: |
+          sum by (scenario_id, environment, release_id) (increase(qc_probe_citation_present_total[2m]))
+          / sum by (scenario_id, environment, release_id) (increase(qc_probe_citation_required_total[2m]))
+      # Caminho de grafo correto: o probe confere se a versao de politica que o
+      # Neo4j devolveu no path e a que o gabarito espera. Hit@k pode ficar em 100%
+      # enquanto esta taxa cai: recuperar o documento certo nao garante escolher a
+      # VERSAO certa.
+      - record: qc:graph_path_correct_rate:2m
+        expr: |
+          sum by (scenario_id, environment, release_id) (increase(qc_probe_graph_path_correct_total[2m]))
+          / sum by (scenario_id, environment, release_id) (increase(qc_probe_graph_path_checked_total[2m]))
+
+  - name: qc-technical-recording
+    rules:
+      # Sinal tecnico do runtime ECS (todas as requisicoes de cliente, nao so probes).
+      # /ready e /health ficam FORA: o health check do ALB bate no /ready a cada
+      # poucos segundos, e um 503 de readiness durante um deploy do candidate nao
+      # e erro servido a cliente (no ensaio, foi o que acendeu um falso 5xx).
+      # O `or ... * 0` garante 0% de 5xx quando nao houve erro nenhum, em vez de
+      # a serie sumir e o painel ficar mudo justamente no dia bom.
+      - record: qc:http_requests:n_1m
+        expr: sum by (environment) (increase(qc_requests_total{route!~"/ready|/health"}[1m]))
+      - record: qc:http_5xx_ratio:1m
+        expr: |
+          (
+            sum by (environment) (rate(qc_requests_total{status_class=~"5..", route!~"/ready|/health"}[1m]))
+            or sum by (environment) (rate(qc_requests_total{route!~"/ready|/health"}[1m])) * 0
+          )
+          / sum by (environment) (rate(qc_requests_total{route!~"/ready|/health"}[1m]))
+      - record: qc:http_p95_seconds:1m
+        expr: histogram_quantile(0.95, sum by (environment, le) (rate(qc_request_duration_seconds_bucket[1m])))
+
+  - name: qc-alerts
+    rules:
+      # O quality monitor (dentro do qc-probe) ja aplica janela real, n minimo e
+      # a regra critica. Este alerta so traduz o estado dele (2 = critical) em
+      # FIRING, para aparecer na mesma tabela dos alertas tecnicos.
+      - alert: QualityCritical
+        expr: max by (scenario_id, environment) (qc_quality_status) == 2
+        labels:
+          severity: critical
+          team: ai-quality
+          signal: quality
+        annotations:
+          summary: "Monitor de qualidade em CRITICAL"
+          description: "O quality monitor do cenario {{ $labels.scenario_id }} ({{ $labels.environment }}) viu violacao de regra dura na janela. Ver runbook: ops/runbook.md#qualitycritical"
+
+      # Regras duras: UM caso basta. Sem `for` e sem media que compense, porque
+      # um cliente que recebeu o prazo errado ja foi prejudicado.
+      - alert: StaleSourceServed
+        expr: sum by (scenario_id, environment, release_id) (increase(qc_probe_stale_source_served_total[2m])) > 0
+        labels:
+          severity: critical
+          team: ai-quality
+          signal: quality
+        annotations:
+          summary: "Assistente serviu fonte nao vigente"
+          description: "{{ $value | printf \"%.0f\" }} probe(s) com fonte nao vigente em {{ $labels.environment }} (release {{ $labels.release_id }}, cenario {{ $labels.scenario_id }}). Ver runbook: ops/runbook.md#stalesourceserved"
+
+      - alert: TenantAclViolation
+        expr: sum by (scenario_id, environment, release_id) (increase(qc_probe_tenant_acl_violation_total[2m])) > 0
+        labels:
+          severity: critical
+          team: ai-quality
+          signal: quality
+        annotations:
+          summary: "Probe de ACL/tenant violado"
+          description: "Documento de outro tenant ou interno foi servido em {{ $labels.environment }} (release {{ $labels.release_id }}). Ver runbook: ops/runbook.md#qualityaclviolation"
+
+      - alert: OrderAuthViolation
+        expr: sum by (scenario_id, environment, release_id) (increase(qc_probe_order_auth_violation_total[2m])) > 0
+        labels:
+          severity: critical
+          team: ai-quality
+          signal: quality
+        annotations:
+          summary: "Status de pedido devolvido sem autorizacao"
+          description: "Pedido de outro cliente ou sem token recebeu status em {{ $labels.environment }} (release {{ $labels.release_id }}). Ver runbook: ops/runbook.md#orderauthviolation"
+
+      - alert: WrongGraphEdge
+        expr: sum by (scenario_id, environment, release_id) (increase(qc_probe_wrong_graph_edge_total[2m])) > 0
+        labels:
+          severity: critical
+          team: ai-quality
+          signal: quality
+        annotations:
+          summary: "Caminho do grafo diferente do gabarito"
+          description: "{{ $value | printf \"%.0f\" }} probe(s) receberam um caminho de grafo que nao bate com o gabarito em {{ $labels.environment }} (release {{ $labels.release_id }}). Ver runbook: ops/runbook.md#wronggraphedge"
+
+      - alert: QualityProbeDegraded
+        # So dispara com amostra minima: 3 falhas em 5 probes nao sao evidencia.
+        expr: qc:probe_pass_rate:2m < 0.90 and qc:probe_n:2m >= 10
+        for: 30s
+        labels:
+          severity: warning
+          team: ai-quality
+          signal: quality
+        annotations:
+          summary: "Probes rotulados abaixo de 90% (proxy sintetico)"
+          description: "pass_rate={{ $value | printf \"%.2f\" }} no cenario {{ $labels.scenario_id }}, ambiente {{ $labels.environment }}, release {{ $labels.release_id }}. Ver runbook: ops/runbook.md#qualityprobedegraded"
+
+      - alert: QualityInsufficientData
+        # Ausencia de probes NAO e sucesso: sem amostra, o painel verde e mudo.
+        # absent() cobre o caso extremo de o qc-probe nem ter subido.
+        expr: (max by (scenario_id, environment) (qc_quality_status) == -1) or absent(qc_quality_status)
+        for: 1m
+        labels:
+          severity: info
+          team: ai-quality
+          signal: insufficient_data
+        annotations:
+          summary: "Amostra insuficiente para julgar a qualidade"
+          description: "insufficient_data: a janela do monitor nao tem o n minimo de probes. O sinal de qualidade nao pode ser avaliado. Ver runbook: ops/runbook.md#qualitynodata"
+
+      - alert: AssistantHigh5xx
+        # Sinal TECNICO: quem recebe e o SRE. n >= 20 evita alarme com 1 erro em 3.
+        expr: qc:http_5xx_ratio:1m > 0.05 and qc:http_requests:n_1m >= 20
+        labels:
+          severity: warning
+          team: sre
+          signal: technical
+        annotations:
+          summary: "Assistente devolvendo 5xx acima de 5%"
+          description: "{{ $value | humanizePercentage }} de 5xx em {{ $labels.environment }} no ultimo minuto. Ver runbook: ops/runbook.md#assistanthigh5xx"
+
+      - alert: AssistantLatencyP95High
+        expr: qc:http_p95_seconds:1m > 2
+        for: 1m
+        labels:
+          severity: warning
+          team: sre
+          signal: technical
+        annotations:
+          summary: "Latencia p95 do assistente acima de 2 s"
+          description: "p95={{ $value | printf \"%.2f\" }} s em {{ $labels.environment }}. Ver runbook: ops/runbook.md#assistantlatencyp95high"

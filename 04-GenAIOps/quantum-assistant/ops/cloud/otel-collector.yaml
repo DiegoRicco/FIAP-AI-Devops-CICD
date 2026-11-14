@@ -1,0 +1,78 @@
+# Collector da AWS: recebe OTLP HTTP do app no ECS (e dos jobs do runner) e
+# separa os sinais, como no stack local:
+#   traces   -> Jaeger (OTLP gRPC interno do compose)
+#   metricas -> endpoint Prometheus :8889, raspado pelo Prometheus
+#   logs     -> Loki (OTLP nativo do Loki 3)
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+
+  # Logs do probe e do monitor: o qc-probe ESCREVE o JSONL no disco da EC2
+  # (/opt/qc-obs/data) e o Collector so LE. Se o Collector cair, o resultado
+  # continua no arquivo, e o replay pode ser auditado com `tail`.
+  file_log/qc:
+    include:
+      - /var/log/qc/results/*.jsonl
+      - /var/log/qc/monitor/*.jsonl
+    start_at: beginning
+    include_file_path: true
+    operators:
+      # 1o rotula, depois parseia: o json_parser substitui os attributes pelos
+      # campos da linha e o log.file.path some (no ensaio, tudo virou
+      # unknown_service no Loki). O caminho diz quem escreveu a linha.
+      - type: add
+        if: 'attributes["log.file.path"] matches "/results/"'
+        field: resource["service.name"]
+        value: qc-probe
+      - type: add
+        if: 'attributes["log.file.path"] matches "/monitor/"'
+        field: resource["service.name"]
+        value: qc-quality-monitor
+      - type: json_parser
+        on_error: send_quiet
+        timestamp:
+          parse_from: attributes.ts
+          layout_type: gotime
+          layout: "2006-01-02T15:04:05.999Z07:00"
+      - type: remove
+        field: attributes
+
+processors:
+  # Uma t3.medium com seis conteineres: melhor recusar um lote do que o
+  # Collector crescer ate o mem_limit e ser morto (o app nao sente: o envio e
+  # assincrono e com timeout).
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 200
+    spike_limit_mib: 50
+  batch:
+    timeout: 1s
+
+exporters:
+  otlp_grpc/jaeger:
+    endpoint: jaeger:4317
+    tls:
+      insecure: true
+  otlp_http/loki:
+    endpoint: http://loki:3100/otlp
+  prometheus:
+    endpoint: 0.0.0.0:8889
+    # Mantem os nomes como o codigo os declara (qc_requests_total, ..._bucket).
+    translation_strategy: UnderscoreEscapingWithoutSuffixes
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlp_grpc/jaeger]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [prometheus]
+    logs:
+      receivers: [otlp, file_log/qc]
+      processors: [memory_limiter, batch]
+      exporters: [otlp_http/loki]
