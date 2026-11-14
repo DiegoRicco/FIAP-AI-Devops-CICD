@@ -1,4 +1,4 @@
-# Runner do GitLab: conferir e recuperar antes da aula
+# Runner do GitLab: conferir e recuperar no início da aula
 
 Entre uma aula e outra, a EC2 do runner pode ter sido desligada, a sessão do AWS Academy pode ter expirado ou o serviço pode ter parado. Estes três scripts respondem, na ordem, a três perguntas: **o runner ainda serve?**, **qual o menor passo para ele voltar?** e **ele executa um job de verdade?**.
 
