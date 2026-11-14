@@ -43,7 +43,7 @@ TF_ECS := terraform -chdir=infra-ecs
 # nem lock no repositorio do aluno.
 export TF_DATA_DIR := $(HOME)/.cache/qc-assistant/tf-ecs
 
-.PHONY: down-dry-run help bootstrap preflight runner runner-docker orders-up secrets mirror-neo4j up image deploy deploy-live deploy-candidate ready diagnose down start plan destroy-dry-run course-repo
+.PHONY: links down-dry-run help bootstrap preflight runner runner-docker orders-up secrets mirror-neo4j up image deploy deploy-live deploy-candidate ready diagnose down start plan destroy-dry-run course-repo
 
 help: ## Mostra os alvos
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-18s %s\n", $$1, $$2}'
@@ -108,6 +108,9 @@ deploy-live: ## Atalho: make deploy ENV=live
 
 deploy-candidate: ## Atalho: make deploy ENV=candidate
 	@$(MAKE) --no-print-directory deploy ENV=candidate
+
+links: ## Imprime os links ja montados: projeto, pipelines e runners no GitLab; Central e Grafana
+	@bash scripts/cloud/links.sh
 
 ready: ## GET /ready do ambiente ENV pelo ALB
 	@u=$$(aws ssm get-parameter --name /qc-assistant/ecs/alb-url --query Parameter.Value --output text); \

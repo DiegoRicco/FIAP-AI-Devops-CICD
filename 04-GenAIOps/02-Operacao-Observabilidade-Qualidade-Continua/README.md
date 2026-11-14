@@ -265,15 +265,14 @@ aws s3 ls "s3://$BUCKET/quantum-assistant/releases-ecs/"
 >
 > Os valores acima são os da homologação deste lab, em que um pipeline verde já tinha publicado o `live` (por isso há manifesto). **Na sua aula é diferente, e isso é esperado:** o que está no ar é o release que o `make deploy-live` da Parte 1 da 5.1 publicou há pouco, direto do terminal, sem pipeline e sem manifesto. O `release_id` tem a forma `rel-infra-live-…` (na homologação, `rel-infra-0346`), e a lista de manifestos vem **vazia**. Isso é informação: é um release **sem registro**, e **esse é o seu R1**. O primeiro pipeline verde do dia, o da Parte 4, é quem grava o primeiro arquivo em `releases-ecs/` (`history/`, `candidate.json`, `live.json` e um `<release_id>.json` por release publicado); a partir dali, o que está em `live.json` é sempre o release no ar.
 
-Pegue a URL e a senha do Grafana no Codespaces (a senha só aparece no seu terminal, nunca vai para arquivo):
+Pegue os links prontos e a senha do Grafana no Codespaces (a senha só aparece no seu terminal, nunca vai para arquivo):
 
 ```bash
-cd /home/vscode/environment/quantum-ai-assistant
-bash ops/cloud/obs.sh url
+cd /home/vscode/environment/quantum-ai-assistant && make links
 aws ssm get-parameter --name /qc-assistant/obs/grafana-admin --with-decryption --query Parameter.Value --output text
 ```
 
-Abra a URL no navegador e entre com usuário `admin` e a senha que o segundo comando imprimiu. Depois, menu **Dashboards**, e abra **Visão do negócio · Atendimento** (o painel da Helena). Ajuste o intervalo para **Last 15 minutes**. O semáforo **Confiança do assistente agora** deve dizer **Confiável** (verde), com **Política vigente** e **Caminho do grafo** em 100% e **Casos críticos na janela** em 0 (todos sobre os últimos 2 min, a mesma janela do semáforo). O `n` da janela fica no painel do Diego, **Amostras na janela (n)**, e precisa estar ≥ 20. Se ainda for baixo, o probe acabou de subir; espere 2 min.
+**Ctrl+clique** (Cmd+clique no Mac) no link `painel-helena`, entre com usuário `admin` e a senha que o segundo comando imprimiu, e o Grafana abre direto na **Visão do negócio · Atendimento** (o painel da Helena). Os links `painel-diego` e `painel-investigacao` abrem os outros dois painéis do mesmo jeito; deixe o terminal à mão. Ajuste o intervalo para **Last 15 minutes**. O semáforo **Confiança do assistente agora** deve dizer **Confiável** (verde), com **Política vigente** e **Caminho do grafo** em 100% e **Casos críticos na janela** em 0 (todos sobre os últimos 2 min, a mesma janela do semáforo). O `n` da janela fica no painel do Diego, **Amostras na janela (n)**, e precisa estar ≥ 20. Se ainda for baixo, o probe acabou de subir; espere 2 min.
 
 <!-- NOVA-IMAGEM: img/grafana-helena-baseline.png | capturar: dashboard da Helena no baseline: semáforo Confiável, Perguntas / Política vigente / Caminho do grafo / Pedidos sem status em 100%, Release que está atendendo visível, rodapé dizendo que os números vêm de probes sintéticos | FONTE REAL já capturada (R3, títulos curtos): /tmp/qc18/evid/5.2/screenshots/r3/01-helena-baseline-1920.png (versão 1366 ao lado) | depois de salvar o arquivo, descomente a linha abaixo -->
 <!-- ![Dashboard da Helena no baseline: semáforo Confiável, Política vigente e Caminho do grafo em 100%, zero casos críticos na janela e o release que está atendendo](img/grafana-helena-baseline.png) -->
@@ -336,7 +335,7 @@ A estratégia padrão do `live` é `graph` (`QC_DEFAULT_STRATEGY`), e hoje ela r
 
 **Onde:** navegador, Grafana.
 **Por quê:** a tese da demo em uma tela: o painel de **engenharia** (Diego) e o de **negócio** (Helena) medem coisas diferentes, de fontes diferentes, e um não substitui o outro.
-**Execute:** abra **Visão técnica · SRE** (o painel do Diego) e **Visão do negócio · Atendimento** (o painel da Helena) lado a lado (duas abas), intervalo **Last 15 minutes**, refresh 10 s. O terceiro dashboard, **Investigação · Incidente**, fica para a Parte 6.
+**Execute:** abra os links `painel-diego` (**Visão técnica · SRE**) e `painel-helena` (**Visão do negócio · Atendimento**) do `make links`, lado a lado (duas abas), intervalo **Last 15 minutes**, refresh 10 s. O terceiro dashboard, **Investigação · Incidente**, fica para a Parte 6.
 
 **Esperado:**
 
@@ -505,7 +504,7 @@ eval $(ssh-agent -s) >/dev/null && ssh-add -k /home/vscode/.ssh/gitlab
 git push origin "$(git branch --show-current)"
 ```
 
-**Esperado:** o push termina com `<branch> -> <branch>` e, em [`https://gitlab.com/SEU-USUARIO/quantum-ai-assistant/-/pipelines`](https://gitlab.com/SEU-USUARIO/quantum-ai-assistant/-/pipelines) (com o seu usuário no lugar de `SEU-USUARIO`; é **Build → Pipelines**), um pipeline novo em execução.
+**Esperado:** o push termina com `<branch> -> <branch>` e, no link `pipelines` do `make links` (é **Build → Pipelines**), um pipeline novo em execução.
 
 **Se falhar:** `Permission denied (publickey)` = repita o `ssh-add`. `nothing to commit` = o passo 7 não alterou nada (`git diff --stat -- corpus/`).
 
@@ -517,7 +516,7 @@ git push origin "$(git branch --show-current)"
 
 **Onde:** GitLab (navegador) e Codespaces.
 **Por quê:** a prova de que um gate funciona não é o job vermelho; é o **`deploy-candidate` sem rodar** e o cliente continuar em R1. A reprovação chega em pouco mais de **1 minuto e meio** depois que o runner pega o job (na homologação: `preflight` 27 s, `security-gate` 36 s, `api-contract-gate` 13 s, e os três gates do `evaluate` reprovando em 4 a 5 s cada); enquanto espera, leia a tabela do passo 6 de novo.
-**Execute:** abra [`https://gitlab.com/SEU-USUARIO/quantum-ai-assistant/-/pipelines`](https://gitlab.com/SEU-USUARIO/quantum-ai-assistant/-/pipelines) (troque `SEU-USUARIO` pelo seu usuário; é **Build → Pipelines**) e clique no pipeline mais recente (a linha de cima). A página do pipeline mostra os jobs em colunas, uma por stage. Quando os jobs do stage `evaluate` terminarem, clique na aba **Tests** (ao lado de **Pipeline** e **Jobs**, no topo da página): ela lista uma **suíte** por job que publicou relatório JUnit (um arquivo XML com um resultado por teste; é o que o GitLab desenha ali). Clique na suíte `graph-policy-gate` e depois no teste em vermelho para ler a mensagem.
+**Execute:** abra o link `pipelines` (se fechou o terminal: `cd /home/vscode/environment/quantum-ai-assistant && make links`; é **Build → Pipelines**) e clique no pipeline mais recente (a linha de cima). A página do pipeline mostra os jobs em colunas, uma por stage. Quando os jobs do stage `evaluate` terminarem, clique na aba **Tests** (ao lado de **Pipeline** e **Jobs**, no topo da página): ela lista uma **suíte** por job que publicou relatório JUnit (um arquivo XML com um resultado por teste; é o que o GitLab desenha ali). Clique na suíte `graph-policy-gate` e depois no teste em vermelho para ler a mensagem.
 
 **Esperado:**
 
@@ -878,7 +877,7 @@ O trace da resposta errada aberto no Jaeger, o span onde a versão errada foi es
 
 **Onde:** navegador, Grafana: dashboard **Investigação · Incidente** (logs do Loki com link para o trace, e o painel **Linha do tempo do incidente**) ou **Explore → datasource Jaeger**. O Jaeger não está no ALB; você o lê **através** do Grafana (datasource `Jaeger`, provisionado).
 **Por quê:** o alerta diz **que** a qualidade caiu; o trace diz **onde**. Sem isso, a mitigação é chute.
-**Execute:** no Grafana, menu **Dashboards → Investigação · Incidente**. Leia o painel **Como investigar** e a **Linha do tempo do incidente** (a marca do drift e a faixa de fonte obsoleta). Depois abra o trace, por um de dois caminhos:
+**Execute:** abra o link `painel-investigacao` do `make links` (é **Dashboards → Investigação · Incidente**). Leia o painel **Como investigar** e a **Linha do tempo do incidente** (a marca do drift e a faixa de fonte obsoleta). Depois abra o trace, por um de dois caminhos:
 
 **16.1. Pelo log (um clique).** No topo do dashboard, a variável **Buscar no log (caso, motivo)** filtra o painel **Logs dos probes e do monitor de qualidade**: digite `stale_source_served` (ou `fail`); clique numa linha para expandi-la; ao lado do campo `trace_id` aparece o link **Ver este trace (Jaeger) no painel**, que preenche a variável `trace_id` e abre a faixa recolhida **Trace da requisição escolhida**, logo abaixo dos logs (o segundo link, **Abrir no Jaeger (via SSM port-forward 16686)**, só funciona com um túnel SSM aberto no seu terminal; ignore-o em aula). Uma nota honesta sobre esses logs: o Loki recebe só os do `qc-probe` (uma linha JSON por probe, com caso, resultado, motivo, `trace_id`, release e `graph_version`) e os do monitor de qualidade; os logs da **aplicação** vão para o CloudWatch Logs, grupo `/qc-assistant/ecs`, onde você os acha pelo `trace_id` (`aws logs filter-log-events --log-group-name /qc-assistant/ecs --filter-pattern '"<trace_id>"' --max-items 5 --region us-east-1`).
 
@@ -1348,7 +1347,7 @@ cd /workspaces/FIAP-AI-Devops-CICD/02-Ansible/01-provisionando-gitlab-runner/ter
 terraform destroy -auto-approve
 ```
 
-**Esperado:** `stopping` (desligar) ou `Destroy complete! Resources: 3 destroyed.` (destruir). No GitLab, o runner fica offline; pode removê-lo em [`https://gitlab.com/SEU-USUARIO/quantum-ai-assistant/-/settings/ci_cd#js-runners-settings`](https://gitlab.com/SEU-USUARIO/quantum-ai-assistant/-/settings/ci_cd#js-runners-settings) (com o seu usuário; **Settings → CI/CD → Runners**).
+**Esperado:** `stopping` (desligar) ou `Destroy complete! Resources: 3 destroyed.` (destruir). No GitLab, o runner fica offline; pode removê-lo no link `runners` do `make links` (**Settings → CI/CD → Runners**).
 
 **Se falhar:** `0 to destroy` no plano = o `init` apontou para um state vazio: ou o bucket está errado, ou o seu runner **não** foi criado por este Terraform (por exemplo, pelo `subir-runner.sh` de outra turma). Não rode o destroy; **desligue** com o primeiro bloco e avise o professor. `Error acquiring the state lock` = outro `terraform` aberto.
 

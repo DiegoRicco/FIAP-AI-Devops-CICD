@@ -171,7 +171,7 @@ Somando: cerca de **9 minutos de comandos** (Caminho A) e **25 minutos de relóg
 **1.1. Crie o projeto em branco.** Acesse [Novo projeto](https://gitlab.com/projects/new) e clique em **Create blank project**. Preencha a tela **um campo por vez**, na ordem em que ela mostra:
 
 - **Project name**: `quantum-ai-assistant`.
-- **Project URL**: no seletor ao lado de `https://gitlab.com/`, escolha o **seu nome de usuário** (o seu nick, não um grupo nem outro workspace). É ele que aparece na URL SSH do 1.2 (`git@gitlab.com:SEU-USUARIO/...`).
+- **Project URL**: no seletor ao lado de `https://gitlab.com/`, escolha o **seu nome de usuário** (o seu nick, não um grupo nem outro workspace). É ele que entra na URL SSH (`git@gitlab.com:<seu-usuario>/quantum-ai-assistant.git`), que o passo 2 monta sozinho.
 - **Project slug**: fica `quantum-ai-assistant` sozinho.
 - **Project deployment target (optional)**: deixe em branco.
 - **Visibility Level**: **Private**.
@@ -181,7 +181,7 @@ Somando: cerca de **9 minutos de comandos** (Caminho A) e **25 minutos de relóg
 <!-- NOVA-IMAGEM: img/gitlab-create-blank-project.png | capturar: a tela Create blank project preenchida, com o Project URL mostrando o usuário selecionado no seletor de namespace e a opção Initialize repository with a README DESMARCADA | depois de salvar o arquivo, descomente a linha abaixo -->
 <!-- ![Tela Create blank project do GitLab: Project name quantum-ai-assistant, Project URL com o usuário selecionado, Visibility Private e Initialize repository with a README desmarcado](img/gitlab-create-blank-project.png) -->
 
-**1.2. Confirme o endereço SSH do projeto.** Na página do projeto recém-criado (`https://gitlab.com/SEU-USUARIO/quantum-ai-assistant`, com o seu usuário no lugar de `SEU-USUARIO`), clique em **Code** (botão azul) e copie a URL que começa com `git@gitlab.com:`. Ela tem a forma `git@gitlab.com:SEU-USUARIO/quantum-ai-assistant.git`.
+**1.2. Nada para copiar.** O endereço SSH do projeto é `git@gitlab.com:<seu-usuario>/quantum-ai-assistant.git`, e o passo 2 o **monta sozinho**: descobre o seu usuário a partir da chave SSH, como no módulo 02. Você não precisa abrir o botão **Code** nem copiar URL.
 
 **1.3. Garanta uma chave SSH no GitLab.** O `git push` precisa provar ao GitLab que é você: em vez de senha, usa um par de chaves (uma **privada**, que fica só no seu Codespaces, e uma **pública**, que você cadastra no GitLab). Se você já cadastrou a chave `/home/vscode/.ssh/gitlab` numa aula anterior, pule para o passo 2. Se não, no terminal do Codespaces (o `test -f ... ||` não sobrescreve uma chave que já exista; o comando de criação é o mesmo do módulo 02):
 
@@ -204,11 +204,12 @@ Copie a linha inteira que começa com `ssh-rsa` (termina em `gitlab key`). Se a 
 
 **Onde:** Codespaces.
 **Por quê:** o código vive no repositório do curso, em `04-GenAIOps/quantum-assistant/`; o seu produto é uma **cópia** dele na raiz do projeto novo. A partir daqui, tudo roda em `/home/vscode/environment/quantum-ai-assistant`.
-**Execute:** troque `SEU-USUARIO` pelo seu usuário do GitLab na primeira linha (é a única coisa a editar). As linhas `eval $(ssh-agent -s)` e `ssh-add` carregam a sua chave privada na memória deste terminal (é preciso repetir sempre que abrir um terminal novo):
+**Execute:** copie o bloco inteiro, sem editar nada. As linhas `eval $(ssh-agent -s)` e `ssh-add` carregam a sua chave privada na memória deste terminal (repita sempre que abrir um terminal novo); a linha do `GITLAB_USER` **descobre o seu usuário do GitLab pela chave** (o GitLab responde *Welcome to GitLab, @seu-usuario!*), o mesmo truque do módulo 02, e o `echo` mostra o que achou:
 
 ```bash
-export GITLAB_USER="SEU-USUARIO"
 eval $(ssh-agent -s) >/dev/null && ssh-add -k /home/vscode/.ssh/gitlab
+export GITLAB_USER=$(ssh -o StrictHostKeyChecking=accept-new -T git@gitlab.com 2>&1 | sed -n 's/.*@\([A-Za-z0-9._-]*\)!.*/\1/p')
+echo "usuario do GitLab: $GITLAB_USER"
 mkdir -p /home/vscode/environment
 git clone "git@gitlab.com:$GITLAB_USER/quantum-ai-assistant.git" /home/vscode/environment/quantum-ai-assistant
 cp -r /workspaces/FIAP-AI-Devops-CICD/04-GenAIOps/quantum-assistant/. /home/vscode/environment/quantum-ai-assistant/
@@ -233,7 +234,7 @@ git push -u origin "$(git branch --show-current)"
 >
 > O aviso `cloned an empty repository` é esperado: o projeto nasceu vazio no passo 1. O `cp -r .../quantum-assistant/.` (com o ponto no fim) copia o **conteúdo** da pasta, inclusive o `.gitlab-ci.yml` oculto, para a raiz. A branch pode se chamar `main` ou `master` conforme a configuração da sua conta; os comandos usam `$(git branch --show-current)` para não depender disso. No GitLab, o projeto agora mostra os arquivos e, em **Build → Pipelines**, um pipeline **pendente** (ainda não há runner; o passo 4 resolve).
 
-**Se falhar:** `Permission denied (publickey)` = a chave não está no GitLab (passo 1.3) ou o `ssh-add` não rodou neste terminal; repita as duas primeiras linhas. `Repository not found` = o `GITLAB_USER` está errado ou o projeto tem outro nome; confira a URL do passo 1.2. `cp: cannot stat` = repositório do curso desatualizado: `cd /workspaces/FIAP-AI-Devops-CICD && git pull origin master`.
+**Se falhar:** `Permission denied (publickey)` = a chave não está no GitLab (passo 1.3) ou o `ssh-add` não rodou neste terminal; repita as duas primeiras linhas. `usuario do GitLab:` vazio = a chave não foi carregada neste terminal ou não está no GitLab; refaça o passo 1.3 e rode o bloco de novo. `Repository not found` = o projeto foi criado com outro nome ou em outro namespace (passo 1.1). `cp: cannot stat` = repositório do curso desatualizado: `cd /workspaces/FIAP-AI-Devops-CICD && git pull origin master`.
 
 **2.1. Ligue o terminal ao state da AWS.** Os comandos da aula leem a URL do assistente com `terraform -chdir=infra-ecs output`; para isso o Terraform precisa conhecer o state que fica no bucket `base-config-<SEU RM>` da **sua** conta. O comando abaixo só **lê** o state (não cria nem altera nada) e é seguro repetir, inclusive em todo terminal novo:
 
@@ -352,6 +353,7 @@ make bootstrap
 | `make ready` | Um `curl` em `GET /ready` pelo ALB (`ENV=candidate` para `/candidate/ready`), com o código HTTP na última linha. | Conferência rápida; a espera está no `make deploy`. |
 | `make down` / `make start` | `scripts/cloud/stop.sh all` / `start.sh $(ENV)` (`scale.sh 0|1`): só muda o `desired_count` dos services. | Desligar ao fim da aula e ligar no começo da próxima custa minutos de boot, não um deploy: a **mesma** revisão volta. |
 | `make diagnose` | `scripts/cloud/diagnose.sh $(ENV)`. | Quando o `/ready` não chega a 200. |
+| `make links` | `scripts/cloud/links.sh`: monta, com o seu usuário do GitLab (descoberto pela chave SSH) e o endereço do ALB (lido do SSM), os links do projeto, de `pipelines`, de `runners`, da Central (`live` e `candidate`) e dos três painéis do Grafana. | Sempre que precisar abrir uma tela: em vez de navegar por menus ou trocar usuário em URL. |
 | `make plan` / `make destroy-dry-run` | `terraform plan` do runtime (deve dizer `No changes` depois do `up`) / `scripts/cloud/cleanup.sh --dry-run`. | Conferir drift; ver o que a limpeza faria. |
 | `make preflight` | `scripts/cloud/preflight.sh`, só leitura: ferramentas; `sts get-caller-identity` (conta mascarada, role `voclabs`/`LabRole`, região); `head-bucket`; `describe-vpcs`/`describe-subnets` da `fiap-lab`; `iam get-role LabRole` (confia em `ecs-tasks`?); `ecs list-clusters`, `ecr describe-repositories`, `elbv2 describe-load-balancers`; quota de vCPU Fargate; EC2 do runner `running` e `Online` no SSM, e o SG dela; `GET /orders/Q-1001` na API de pedidos; existência dos seis segredos (sem ler o valor); oferta de `t3.medium` na região (é o tamanho da EC2 de observabilidade da Demo 5.2; o runner é `t3.small`). Sai `[PASS]`/`[FAIL]` por item e exit 0/1. | Para conferir o ambiente sem mexer em nada, no início de cada sessão. Falha de credencial aparece em segundos, não no minuto 8 disfarçada de outro erro. |
 
@@ -372,9 +374,15 @@ make bootstrap
 
 **Execute (Caminho A):**
 
-**4.1.** Abra a página de runners do projeto: [`https://gitlab.com/SEU-USUARIO/quantum-ai-assistant/-/settings/ci_cd#js-runners-settings`](https://gitlab.com/SEU-USUARIO/quantum-ai-assistant/-/settings/ci_cd#js-runners-settings) (troque `SEU-USUARIO` pelo seu usuário na barra de endereço; é o mesmo que **Settings → CI/CD → Runners**). Em **Other available runners** (ou **Project runners** de outros projetos), localize o runner com as tags `shell` e `terraform` (criado na Aula 3) e clique em **Enable for this project**.
+**4.1.** Pegue o link pronto da página de runners do **seu** projeto (o `make links` monta todos os links da aula com o seu usuário, a partir da chave SSH):
 
-**4.2.** Se ele **não aparece** na lista: abra os runners do projeto antigo, `https://gitlab.com/SEU-USUARIO/primeiro-projeto/-/settings/ci_cd#js-runners-settings` (**Settings → CI/CD → Runners**), clique no lápis do runner e **desmarque** *Lock to current projects*. Salve e volte ao 4.1.
+```bash
+cd /home/vscode/environment/quantum-ai-assistant && make links
+```
+
+Abra o link da linha `runners` (é o mesmo que **Settings → CI/CD → Runners**). Tenha esse terminal à mão: os links de `pipelines`, da Central e do Grafana saem do mesmo comando. Em **Other available runners** (ou **Project runners** de outros projetos), localize o runner com as tags `shell` e `terraform` (criado na Aula 3) e clique em **Enable for this project**.
+
+**4.2.** Se ele **não aparece** na lista: abra os runners do projeto antigo com `PROJECT_SLUG=primeiro-projeto make links` (linha `runners`; **Settings → CI/CD → Runners**), clique no lápis do runner e **desmarque** *Lock to current projects*. Salve e volte ao 4.1.
 
 **4.3.** No Codespaces, confira que a EC2 do runner está ligada e online; se estiver desligada entre aulas, o alvo a liga e espera (nada é criado nem registrado de novo):
 
@@ -385,7 +393,7 @@ make runner
 
 **Execute (Caminho B):**
 
-**4.4.** Abra direto a criação de runner do projeto: [`https://gitlab.com/SEU-USUARIO/quantum-ai-assistant/-/runners/new`](https://gitlab.com/SEU-USUARIO/quantum-ai-assistant/-/runners/new) (troque `SEU-USUARIO` pelo seu usuário; é o mesmo que **Settings → CI/CD → Runners → New project runner**). Em **Tags**, digite `shell, terraform`; marque **Run untagged jobs**; clique em **Create runner**. A tela seguinte mostra um token que começa com `glrt-`: copie-o **agora** (ele não aparece de novo).
+**4.4.** Abra o link da linha `novo-runner` do `make links` (é a criação de runner do seu projeto, o mesmo que **Settings → CI/CD → Runners → New project runner**). Em **Tags**, digite `shell, terraform`; marque **Run untagged jobs**; clique em **Create runner**. A tela seguinte mostra um token que começa com `glrt-`: copie-o **agora** (ele não aparece de novo).
 
 **4.5.** No Codespaces, guarde o token no **SSM Parameter Store** (o cofre de parâmetros da AWS; `SecureString` = guardado criptografado). Troque `glrt-...` pelo seu; o token **não** vai para nenhum arquivo:
 
@@ -416,7 +424,7 @@ make runner
 >
 > A primeira linha é o diagnóstico do `runner-preflight.sh` (`reuse` = há um runner ligado e registrado; nada a fazer); as linhas `chave=valor` são do `runner-docker.sh`, que confere o Docker no runner (`already` = já estava instalado). Se a EC2 estava desligada, a primeira linha é `diagnostico do runner: start`, seguida de `Recuperando o runner (menor passo: start)...` e do progresso do `recover` ligando a EC2 (~1-2 min). No Caminho B, o diagnóstico é `recreate`, seguido do Terraform e do Ansible criando e registrando o runner (~6-8 min <!-- CONFIRMAR-SAIDA: Caminho B não foi cronometrado na homologação desta versão -->), e só então as linhas do Docker (`docker_installed=now`).
 >
-> Em [`https://gitlab.com/SEU-USUARIO/quantum-ai-assistant/-/settings/ci_cd#js-runners-settings`](https://gitlab.com/SEU-USUARIO/quantum-ai-assistant/-/settings/ci_cd#js-runners-settings) (com o seu usuário), o runner aparece **online** (bolinha verde) com as tags `shell` e `terraform`. O pipeline pendente do passo 2 começa a rodar sozinho; ele pode ficar **vermelho** neste momento (ainda não há ambiente na AWS para o deploy), e isso é esperado: o primeiro pipeline que importa é o da Demo 5.2, com o ambiente de pé.
+> No link `runners` do `make links`, o runner aparece **online** (bolinha verde) com as tags `shell` e `terraform`. O pipeline pendente do passo 2 começa a rodar sozinho; ele pode ficar **vermelho** neste momento (ainda não há ambiente na AWS para o deploy), e isso é esperado: o primeiro pipeline que importa é o da Demo 5.2, com o ambiente de pé.
 
 **Se falhar:** `diagnostico do runner: start` = a EC2 existe mas está desligada; `make runner` já liga (ele roda o `recover --apply` quando o diagnóstico pede). `Bloqueado: leia a dica acima` com `token_param=missing` = o passo 4.5 não rodou (Caminho B). `ERRO: falta o session-manager-plugin neste terminal` (Caminho B) = o Codespaces é anterior a esta versão do devcontainer; **nada foi criado** (o `recover` confere o plugin antes do `terraform apply`), e a própria mensagem traz o comando de instalação (`curl` do pacote `.deb` oficial + `sudo dpkg -i`), ~1 min; depois repita `make runner`. Runner online no GitLab mas o job fica `stuck` = o runner está em outro projeto e **não** foi habilitado neste (Caminho A, passo 4.1). Nunca registre um segundo runner na mesma EC2: registro duplicado cria dois runners no projeto.
 
@@ -621,12 +629,13 @@ A Central de Evidências aberta no navegador, e você sabendo **exatamente** o q
 
 **Onde:** navegador.
 **Por quê:** é a tela que a sala inteira vai olhar pelos próximos 60 minutos. Abra-a agora e deixe aberta.
-**Execute:** cole a `app_url` do passo 6 na barra de endereço. Se não a tem à mão, no Codespaces:
+**Execute:** no Codespaces, imprima os links prontos e abra o da linha `central-live` (o `make links` lê o endereço do ALB direto do SSM; não precisa copiar nada do log do passo 6):
 
 ```bash
-cd /home/vscode/environment/quantum-ai-assistant
-terraform -chdir=infra-ecs output -raw app_url; echo
+cd /home/vscode/environment/quantum-ai-assistant && make links
 ```
+
+No terminal do Codespaces, **Ctrl+clique** (ou **Cmd+clique** no Mac) no link abre o navegador direto. A linha `central-candidate` é a mesma tela no ambiente candidate; você vai usá-la na Demo 5.2.
 
 **Esperado:** a aba do navegador diz **LIVE · Central de Evidências · Quantum Commerce**. No cabeçalho: **Quantum Commerce / Central de Evidências do AI Customer Assistant** e, à direita, **Ambiente** (selo `LIVE` em magenta), **Release**, **Imagem** (digest curto) e **/ready** (`pronto (200)`). Logo abaixo, uma linha recolhida **+ Versões deste release**: ao abrir, todas as versões (`release_id`, `image_digest`, `git_sha`, `corpus_version`, `graph_version`, `graph_seed_version`, `embedding_model_id`, `model_version`...) e o bloco **Checks de /ready**. Depois, o título **Mesma pergunta, três estratégias**, o grupo **Perguntas do roteiro** (botões prontos: *Fone de ouvido · troca*, *Black Friday · fone*, *Black Friday · sem produto*, *Política antiga · 15 dias*, *Parceiro X*, *Manual interno de reembolso*, *Cashback*, *Injeção no documento*, *Pedido Q-1001 · token da Ana*, *Pedido Q-2001 · token da Ana*), o campo **Pergunta**, o seletor **Data simulada da pergunta (não é o relógio do sistema)** com três botões (**14/11/2026 regular**, selecionado; **26/11/2027 Black Friday 2027**; **06/12/2027 após a campanha**), **Tenant** (`quantum`/`parceiro-x`), **Papel** (`customer · cliente`/`agent · atendente`) e **Pedido (opcional)**. O painel **Resultado lado a lado** tem três colunas (**BM25**, **Vetorial (Neo4j)**, **Grafo (Neo4j)**), vazias até a primeira consulta. No fim da página, a seção **Release & Health** repete as versões por ambiente; o rodapé lembra: *"Sem modelo gerativo. model_version=none: o texto vem de templates."*
 
