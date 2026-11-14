@@ -154,13 +154,20 @@ make ready | tail -1
 bash ops/cloud/incident.sh state --env live
 ```
 
-**Esperado:** `HTTP 200` e, no JSON, `"in_sync": true` com `"active_mutations": []` (sem drift):
+**Esperado:** `HTTP 200` e, no JSON, `"in_sync": true` com `"active_mutations": []` (sem drift).
 
-> ```text
-> HTTP 200
-> incident: live: GET /admin/graph/state via runner i-... -> task 10.0.x.x:8001
-> {"environment": "live", "action": "state", "scenario": null, "started_at": "...Z", "finished_at": "...Z", "graph_version_before": null, "graph_version": "c07dde5b8806", "graph_seed_version": "c07dde5b8806", "in_sync": true, "active_mutations": [], "diff": {"node_props_changed": [], "nodes_missing": [], "nodes_extra": [], "edges_missing": [], "edges_extra": []}, "counts": {"nodes": 79, "edges": 109, "chunks": 31}}
-> ```
+<details>
+<summary><b>📋 Saída completa esperada</b></summary>
+<blockquote>
+
+```text
+HTTP 200
+incident: live: GET /admin/graph/state via runner i-... -> task 10.0.x.x:8001
+{"environment": "live", "action": "state", "scenario": null, "started_at": "...Z", "finished_at": "...Z", "graph_version_before": null, "graph_version": "c07dde5b8806", "graph_seed_version": "c07dde5b8806", "in_sync": true, "active_mutations": [], "diff": {"node_props_changed": [], "nodes_missing": [], "nodes_extra": [], "edges_missing": [], "edges_extra": []}, "counts": {"nodes": 79, "edges": 109, "chunks": 31}}
+```
+
+</blockquote>
+</details>
 
 <details>
 <summary><b>💡 Clique para entender: a saída do estado e os comandos que esta demo usa além dos da 5.1</b></summary>
@@ -220,28 +227,44 @@ cd /home/vscode/environment/quantum-ai-assistant
 bash ops/cloud/obs.sh up
 ```
 
+**Esperado:** a última linha é a URL do Grafana. Enquanto roda (2 a 7 min), abra o ⏳ abaixo e responda à pergunta que o passo 5 cobra.
+
+<details>
+<summary><b>📋 Saída completa esperada</b></summary>
+<blockquote>
+
+Saída real da homologação, com a pilha já de pé: 125 s.
+
+```text
+obs: /qc-assistant/obs/grafana-admin ja existe (nao alterado)
+obs: enviando configuracao e codigo do probe para s3://base-config-<SEU RM>/quantum-assistant/obs-config/
+aws_security_group.obs: Refreshing state... [id=sg-...]
+aws_instance.obs: Refreshing state... [id=i-...]
+No changes. Your infrastructure matches the configuration.
+Apply complete! Resources: 0 added, 0 changed, 0 destroyed.
+obs: /qc-assistant/obs/otlp-endpoint = http://10.0.x.x:4318 (o app le no proximo deploy/restart da task)
+obs: rodando o bootstrap na i-... via SSM (primeira vez: ~4 min de docker pull)
+[bootstrap] fim 2026-11-14T12:04:12Z
+http://qc-assistant-alb-<id>.us-east-1.elb.amazonaws.com/grafana/
+```
+
+</blockquote>
+</details>
+
+<details>
+<summary><b>⏳ Enquanto o <code>obs.sh up</code> roda (2 a 7 min): a pergunta que o passo 5 cobra</b></summary>
+<blockquote>
+
 **Enquanto o `obs.sh up` roda** (125 s na homologação com a pilha já de pé; na primeira vez, a sua, cerca de 7 min: o `apply` cria 9 recursos, o Grafana responde pelo ALB ~2 min depois e o bootstrap faz ~4 min de `docker pull`), abra a [arquitetura da demo](img/arquitetura-5-2.png) e siga duas setas: a tracejada **OTLP**, que sai das tasks `live` e `candidate` e chega à EC2 `qc-assistant-obs` (é para lá que os spans e as métricas vão), e a dos **probes rotulados**, que sai dessa EC2 e volta ao ALB (é ela que faz perguntas com gabarito ao `live`). Depois responda no caderno: dos dois painéis que você vai abrir no passo 3 (o do Diego, de engenharia, e o da Helena, de negócio), **qual deles deveria mudar de cor** quando o assistente responder um prazo errado com HTTP 200? O passo 5 cobra a resposta. Você sabe que o comando terminou quando a última linha é a URL do Grafana.
 
-**Esperado:** a última linha é a URL do Grafana (saída real da homologação, com a pilha já de pé: 125 s):
-
-> ```text
-> obs: /qc-assistant/obs/grafana-admin ja existe (nao alterado)
-> obs: enviando configuracao e codigo do probe para s3://base-config-<SEU RM>/quantum-assistant/obs-config/
-> aws_security_group.obs: Refreshing state... [id=sg-...]
-> aws_instance.obs: Refreshing state... [id=i-...]
-> No changes. Your infrastructure matches the configuration.
-> Apply complete! Resources: 0 added, 0 changed, 0 destroyed.
-> obs: /qc-assistant/obs/otlp-endpoint = http://10.0.x.x:4318 (o app le no proximo deploy/restart da task)
-> obs: rodando o bootstrap na i-... via SSM (primeira vez: ~4 min de docker pull)
-> [bootstrap] fim 2026-11-14T12:04:12Z
-> http://qc-assistant-alb-<id>.us-east-1.elb.amazonaws.com/grafana/
-> ```
-
-Na primeira execução a primeira linha é `/qc-assistant/obs/grafana-admin created` e o Terraform mostra `Plan: 9 to add`. Usuário `admin`; a senha **não aparece** (mora no SSM) e o passo 3 mostra como lê-la.
+</blockquote>
+</details>
 
 <details>
 <summary><b>💡 Clique para entender: o que o <code>obs.sh up</code> cria, e por que o Grafana tem login</b></summary>
 <blockquote>
+
+Na primeira execução a primeira linha é `/qc-assistant/obs/grafana-admin created` e o Terraform mostra `Plan: 9 to add`. Usuário `admin`; a senha **não aparece** (mora no SSM) e o passo 3 mostra como lê-la.
 
 O `obs.sh up` faz quatro coisas, todas idempotentes: cria a senha do Grafana no SSM (se faltar, sem mostrar), envia a configuração e o código do probe para o S3, aplica o Terraform de `infra-obs/` (EC2 `qc-assistant-obs`, regra `/grafana` no ALB, SG) e roda o bootstrap na EC2 **via SSM, sem SSH** (instala Docker pinado, baixa a configuração do S3 e sobe o compose: Collector, Jaeger, Prometheus, Loki, Grafana e o `qc-probe`). O endpoint OTLP vai para o SSM, de onde as tasks ECS o lêem. Tudo na mesma VPC; Jaeger, Prometheus, Loki e Collector **não** ficam acessíveis pela internet.
 
@@ -289,7 +312,7 @@ O compose ainda está baixando as imagens; `bash ops/cloud/obs.sh status` mostra
 
 **3. Registre o baseline R1**
 
-No Codespaces e no navegador (Grafana). "R1" é o nome que a aula dá ao release que está no ar agora: anote o seu digest e veja o painel de qualidade **verde com `n` suficiente**, senão nenhuma comparação de hoje tem referência.
+No Codespaces e no navegador (Grafana). "R1" é o release que está no ar agora: anote o digest e confira o painel de qualidade **verde com `n` suficiente**.
 
 ```bash
 cd /home/vscode/environment/quantum-ai-assistant
@@ -299,37 +322,59 @@ BUCKET=$(aws s3 ls | awk '{print $3}' | grep '^base-config' | head -1)
 aws s3 ls "s3://$BUCKET/quantum-assistant/releases-ecs/"
 ```
 
-**Esperado:** as três linhas `R1 ...` e a lista de manifestos (valores da homologação; na sua aula o `release_id` e a lista mudam, veja o 💡):
+**Esperado:** as três linhas `R1 ...` (na sua aula a lista de manifestos vem **vazia**, veja o 💡).
 
-> ```text
-> R1 release_id : rel-b8aa56f8-df18cb90
-> R1 digest     : sha256:df18cb90cf4e0d6637baaa52e911b0e624d8146bc63f923b84dd91d48fbf977b
-> R1 graph_seed : c07dde5b8806
->                            PRE history/
-> 2026-11-14 ...        candidate.json
-> 2026-11-14 ...        live.json
-> 2026-11-14 ...        rel-b8aa56f8-df18cb90.json
-> ```
+<details>
+<summary><b>📋 Saída completa esperada</b></summary>
+<blockquote>
+
+Valores da homologação; na sua aula o `release_id` e a lista mudam.
+
+```text
+R1 release_id : rel-b8aa56f8-df18cb90
+R1 digest     : sha256:df18cb90cf4e0d6637baaa52e911b0e624d8146bc63f923b84dd91d48fbf977b
+R1 graph_seed : c07dde5b8806
+                           PRE history/
+2026-11-14 ...        candidate.json
+2026-11-14 ...        live.json
+2026-11-14 ...        rel-b8aa56f8-df18cb90.json
+```
+
+</blockquote>
+</details>
 
 <details>
 <summary><b>💡 Clique para entender: por que o seu R1 é um release sem registro</b></summary>
 <blockquote>
+
+"R1" é o nome que a aula dá ao release que está no ar agora; sem ele, nenhuma comparação de hoje tem referência.
 
 Os valores acima são os da homologação deste lab, em que um pipeline verde já tinha publicado o `live` (por isso há manifesto). **Na sua aula é diferente, e isso é esperado:** o que está no ar é o release que o `make deploy-live` da Parte 1 da 5.1 publicou há pouco, direto do terminal, sem pipeline e sem manifesto. O `release_id` tem a forma `rel-infra-live-…` (na homologação, `rel-infra-0346`), e a lista de manifestos vem **vazia**. Isso é informação: é um release **sem registro**, e **esse é o seu R1**. O primeiro pipeline verde do dia, o da Parte 4, é quem grava o primeiro arquivo em `releases-ecs/` (`history/`, `candidate.json`, `live.json` e um `<release_id>.json` por release publicado); a partir dali, o que está em `live.json` é sempre o release no ar.
 
 </blockquote>
 </details>
 
-**3.1. Abra o painel da Helena.** Pegue os links prontos e a senha do Grafana no Codespaces (a senha só aparece no seu terminal, nunca vai para arquivo):
+**3.1. Abra o painel da Helena.** Pegue os links prontos e a senha do Grafana (a senha só aparece no seu terminal, nunca vai para arquivo):
 
 ```bash
 cd /home/vscode/environment/quantum-ai-assistant && make links
 aws ssm get-parameter --name /qc-assistant/obs/grafana-admin --with-decryption --query Parameter.Value --output text
 ```
 
-**Ctrl+clique** (Cmd+clique no Mac) no link `painel-helena`, entre com usuário `admin` e a senha que o segundo comando imprimiu, e o Grafana abre direto na **Visão do negócio · Atendimento** (o painel da Helena). Os links `painel-diego` e `painel-investigacao` abrem os outros dois painéis do mesmo jeito; deixe o terminal à mão. Ajuste o intervalo para **Last 15 minutes**.
+**Ctrl+clique** (Cmd+clique no Mac) no link `painel-helena`, entre com `admin` e a senha impressa, e ajuste o intervalo para **Last 15 minutes**.
 
-**Esperado:** o semáforo **Confiança do assistente agora** diz **Confiável** (verde), com **Política vigente** e **Caminho do grafo** em 100% e **Casos críticos na janela** em 0 (todos sobre os últimos 2 min, a mesma janela do semáforo). O `n` da janela fica no painel do Diego, **Amostras na janela (n)**, e precisa estar ≥ 20. Se ainda for baixo, o probe acabou de subir; espere 2 min.
+**Esperado:** o semáforo **Confiança do assistente agora** em **Confiável** (verde), e **Amostras na janela (n)** ≥ 20 no painel do Diego.
+
+<details>
+<summary><b>📋 Leitura completa esperada do painel</b></summary>
+<blockquote>
+
+O Grafana abre direto na **Visão do negócio · Atendimento** (o painel da Helena). Os links `painel-diego` e `painel-investigacao` abrem os outros dois painéis do mesmo jeito; deixe o terminal à mão.
+
+O semáforo **Confiança do assistente agora** diz **Confiável** (verde), com **Política vigente** e **Caminho do grafo** em 100% e **Casos críticos na janela** em 0 (todos sobre os últimos 2 min, a mesma janela do semáforo). O `n` da janela fica no painel do Diego, **Amostras na janela (n)**, e precisa estar ≥ 20. Se ainda for baixo, o probe acabou de subir; espere 2 min.
+
+</blockquote>
+</details>
 
 <!-- NOVA-IMAGEM: img/grafana-helena-baseline.png | capturar: dashboard da Helena no baseline: semáforo Confiável, Perguntas / Política vigente / Caminho do grafo / Pedidos sem status em 100%, Release que está atendendo visível, rodapé dizendo que os números vêm de probes sintéticos | FONTE REAL já capturada (R3, títulos curtos): /tmp/qc18/evid/5.2/screenshots/r3/01-helena-baseline-1920.png (versão 1366 ao lado) | depois de salvar o arquivo, descomente a linha abaixo -->
 <!-- ![Dashboard da Helena no baseline: semáforo Confiável, Política vigente e Caminho do grafo em 100%, zero casos críticos na janela e o release que está atendendo](img/grafana-helena-baseline.png) -->
@@ -385,14 +430,21 @@ curl -s -X POST "$APP/assistant/ask" -H 'content-type: application/json' \
 | python3 -c 'import json,sys; r=json.load(sys.stdin); print("strategy:", r.get("strategy"), "| release:", r["release_id"], "| env:", r["environment"]); print("citacao :", [(c["doc_id"], c["version"]) for c in r["citations"]]); print("answer  :", r["answer"][:110], "...")'
 ```
 
-**Esperado:** HTTP 200, `strategy: graph` e a citação `('politica-trocas', '3')`:
+**Esperado:** HTTP 200, `strategy: graph` e a citação `('politica-trocas', '3')`.
 
-> ```text
-> GET /health -> HTTP 200 em 0.29s
-> strategy: graph | release: rel-b8aa56f8-df18cb90 | env: live
-> citacao : [('politica-trocas', '3')]
-> answer  : Você tem até 30 dias corridos, contados a partir da data de recebimento, para trocar ...
-> ```
+<details>
+<summary><b>📋 Saída completa esperada</b></summary>
+<blockquote>
+
+```text
+GET /health -> HTTP 200 em 0.29s
+strategy: graph | release: rel-b8aa56f8-df18cb90 | env: live
+citacao : [('politica-trocas', '3')]
+answer  : Você tem até 30 dias corridos, contados a partir da data de recebimento, para trocar ...
+```
+
+</blockquote>
+</details>
 
 Guarde o `release_id`: é R1.
 
@@ -429,19 +481,28 @@ Incidente já ativo (alguém pulou para a Parte 5); rode o `restore` do passo 18
 
 **5. Leia os dois painéis e escreva o que cada um prova**
 
-No navegador, Grafana. A tese da demo em uma tela: o painel de **engenharia** (Diego) e o de **negócio** (Helena) medem coisas diferentes, de fontes diferentes, e um não substitui o outro.
+No navegador, Grafana. O painel de **engenharia** (Diego) e o de **negócio** (Helena) medem coisas diferentes; um não substitui o outro.
 
-Abra os links `painel-diego` (**Visão técnica · SRE**) e `painel-helena` (**Visão do negócio · Atendimento**) do `make links`, lado a lado (duas abas), intervalo **Last 15 minutes**, refresh 10 s. O terceiro dashboard, **Investigação · Incidente**, fica para a Parte 6.
+Abra os links `painel-diego` e `painel-helena` do `make links` em duas abas, intervalo **Last 15 minutes**, refresh 10 s.
 
-**Esperado:** os dois painéis verdes, com estes blocos:
+**Esperado:** os dois painéis verdes: no do Diego, **Erros 5xx** 0,0% e **Probes corretos** 100%; no da Helena, **Confiável**.
 
-> | Visão técnica · SRE (Diego) | Visão do negócio · Atendimento (Helena, proxy sintético) |
-> |---|---|
-> | Linha de cima: **Tráfego** · **Erros 5xx** 0,0% · **Latência p95** · **Probes corretos** 100% · **Amostras na janela (n)** ≥ 20 (com o `n` mínimo ao lado) · **Alertas disparando** 0 | **Confiança do assistente agora**: **Confiável** (verde) |
-> | **Latência do assistente (p50, p95, p99)** e **Requisições por rota e erros 5xx** | **Perguntas** · **Política vigente** 100% · **Caminho do grafo** 100% · **Pedidos sem status** 0 (últimos 2 min, a janela do semáforo) |
-> | **Qualidade da recuperação, do grafo e da citação (probes, janela 2m)**: Hit@k, MRR, Citação presente, Fonte vigente, Caminho do grafo correto | **Por que o semáforo está assim**: tabela vazia (Motivo · Release · Probes que erraram) |
-> | **Latência p95 por etapa** (os spans: `auth.tenant`, `intent.route`, `entity.link`, `graph.traverse`, `vector.embed`, `db.query`, `policy.version.filter`, `compose.deterministic`, `orders.lookup`) · **Dependência: API de pedidos (orders.lookup)** | **HTTP verde não significa resposta certa**: a linha verde (servidor sem erro) e a ciano (resposta certa) juntas em 100%, a tracejada é o SLO de 90% |
-> | **Estado do monitor de qualidade**: `ok` (não `insufficient_data`) · **Alertas em FIRING agora**: tabela vazia | **Perguntas por estratégia de busca** · **Acerto dos probes por assunto**: todos em 100% · **Release que está atendendo** · **Casos críticos na janela** 0 · **Linha do tempo da confiança** |
+<details>
+<summary><b>📋 Leitura completa esperada dos dois painéis</b></summary>
+<blockquote>
+
+Os links abrem a **Visão técnica · SRE** (Diego) e a **Visão do negócio · Atendimento** (Helena). O terceiro dashboard, **Investigação · Incidente**, fica para a Parte 6. Os dois painéis verdes, com estes blocos:
+
+| Visão técnica · SRE (Diego) | Visão do negócio · Atendimento (Helena, proxy sintético) |
+|---|---|
+| Linha de cima: **Tráfego** · **Erros 5xx** 0,0% · **Latência p95** · **Probes corretos** 100% · **Amostras na janela (n)** ≥ 20 (com o `n` mínimo ao lado) · **Alertas disparando** 0 | **Confiança do assistente agora**: **Confiável** (verde) |
+| **Latência do assistente (p50, p95, p99)** e **Requisições por rota e erros 5xx** | **Perguntas** · **Política vigente** 100% · **Caminho do grafo** 100% · **Pedidos sem status** 0 (últimos 2 min, a janela do semáforo) |
+| **Qualidade da recuperação, do grafo e da citação (probes, janela 2m)**: Hit@k, MRR, Citação presente, Fonte vigente, Caminho do grafo correto | **Por que o semáforo está assim**: tabela vazia (Motivo · Release · Probes que erraram) |
+| **Latência p95 por etapa** (os spans: `auth.tenant`, `intent.route`, `entity.link`, `graph.traverse`, `vector.embed`, `db.query`, `policy.version.filter`, `compose.deterministic`, `orders.lookup`) · **Dependência: API de pedidos (orders.lookup)** | **HTTP verde não significa resposta certa**: a linha verde (servidor sem erro) e a ciano (resposta certa) juntas em 100%, a tracejada é o SLO de 90% |
+| **Estado do monitor de qualidade**: `ok` (não `insufficient_data`) · **Alertas em FIRING agora**: tabela vazia | **Perguntas por estratégia de busca** · **Acerto dos probes por assunto**: todos em 100% · **Release que está atendendo** · **Casos críticos na janela** 0 · **Linha do tempo da confiança** |
+
+</blockquote>
+</details>
 
 <!-- NOVA-IMAGEM: img/grafana-diego-baseline.png | capturar: dashboard do Diego no baseline: Tráfego, 0% 5xx, p95, Probes corretos 100%, n, Alertas disparando 0 e a latência p95 por etapa | FONTE REAL já capturada (R3): /tmp/qc18/evid/5.2/screenshots/r3/02-diego-baseline-1920.png (versão 1366 ao lado) | depois de salvar o arquivo, descomente a linha abaixo -->
 <!-- ![Dashboard do Diego no baseline: tráfego, zero erros 5xx, latência p95, probes corretos em 100%, amostras na janela e nenhum alerta disparando; abaixo, a latência p95 por etapa do pipeline de recuperação](img/grafana-diego-baseline.png) -->
@@ -480,7 +541,7 @@ Um commit real que liga um produto à versão **obsoleta** da política, um pipe
 
 **6. Leia o pipeline por stage, com o gate novo**
 
-No Codespaces. Você vai confiar neste arquivo para barrar erros; precisa saber **em que stage** cada decisão acontece e **se ela barra**. O arquivo está na **raiz** do seu projeto.
+No Codespaces. Antes de confiar no pipeline para barrar erros, veja **em que stage** cada decisão acontece. O arquivo está na **raiz** do projeto.
 
 ```bash
 cd /home/vscode/environment/quantum-ai-assistant
@@ -488,27 +549,38 @@ grep -n '^  - ' .gitlab-ci.yml | head -12
 grep -n '^  QC_TARGET_RUNTIME\|^graph-policy-gate:\|graph_gate_ci' .gitlab-ci.yml
 ```
 
-**Esperado:** os dez stages, de `preflight` a `rollback`, e as três linhas do gate de grafo (os números de linha são os da versão atual do arquivo; se o seu projeto vier de um commit posterior, podem deslocar um pouco):
+**Esperado:** os dez stages, de `preflight` a `rollback`, e as três linhas do gate de grafo.
 
-> ```text
->   - preflight
->   - validate
->   - test
->   - evaluate
->   - package
->   - approve
->   - deploy
->   - postdeploy
->   - promote
->   - rollback
-> 41:  QC_TARGET_RUNTIME: "ecs"
-> 244:graph-policy-gate:
-> 251:      bash scripts/release-ecs/graph_gate_ci.sh
-> ```
+<details>
+<summary><b>📋 Saída completa esperada</b></summary>
+<blockquote>
+
+Os números de linha são os da versão atual do arquivo; se o seu projeto vier de um commit posterior, podem deslocar um pouco.
+
+```text
+  - preflight
+  - validate
+  - test
+  - evaluate
+  - package
+  - approve
+  - deploy
+  - postdeploy
+  - promote
+  - rollback
+41:  QC_TARGET_RUNTIME: "ecs"
+244:graph-policy-gate:
+251:      bash scripts/release-ecs/graph_gate_ci.sh
+```
+
+</blockquote>
+</details>
 
 <details>
 <summary><b>💡 Clique para entender: o que cada stage decide e se barra</b></summary>
 <blockquote>
+
+Você vai confiar neste arquivo para barrar erros; precisa saber **em que stage** cada decisão acontece e **se ela barra**.
 
 | Stage | Job(s) | O que decide | Barra? |
 |---|---|---|---|
@@ -567,7 +639,9 @@ A Demo 5.1 terminou na terceira linha. Esta demo percorre as cinco.
 
 **7. Faça a mudança "inocente" e preveja o que o gate vai dizer**
 
-No Codespaces. A mudança não toca em código: a pedido do atendimento, alguém "sincroniza o catálogo" com a versão antiga da política de trocas, marca a v2 como vigente e a faz **substituir** a v3. **Antes de rodar o gate, escreva:** qual job vai reprovar? Qual regra dura? O BM25 vai perceber? A edição é guiada (dois `sed`, um por arquivo), e o `git diff` mostra o resultado antes de qualquer commit:
+No Codespaces. Sem tocar em código, alguém "sincroniza o catálogo": marca a v2 como vigente e a faz **substituir** a v3.
+
+**Antes de rodar o gate, escreva:** qual job vai reprovar? Qual regra dura? O BM25 vai perceber?
 
 ```bash
 cd /home/vscode/environment/quantum-ai-assistant
@@ -580,29 +654,40 @@ mkdir -p reports
 python3 evals/graph_gate.py --target seed --out reports/graph-gate.json --junit reports/junit-graph.xml; echo "exit code: $?"
 ```
 
-**Esperado:** o diff de quatro linhas, os três achados do seed, `== VEREDITO: FAIL` e `exit code: 1`:
+**Esperado:** `== VEREDITO: FAIL` e `exit code: 1`.
 
-> ```text
->  corpus/trocas-v2.md | 3 ++-
->  corpus/trocas-v3.md | 1 -
->  2 files changed, 2 insertions(+), 2 deletions(-)
-> -status: obsolete
-> +status: active
-> +supersedes: politica-trocas@v3
-> -supersedes: politica-trocas@v2
-> == graph-policy-gate | alvo=seed | set=golden_graph_v1 | seed=42
->    seed/front matter: 3 achado(s)
->    SEED [wrong_graph_edge_count] supersedes_invertido: politica-trocas@v2 SUPERSEDES politica-trocas@v3: a versao antiga substitui a nova (corpus:trocas-v2.md#front_matter.supersedes)
->    SEED [stale_source_served_count] substituida_ativa: politica-trocas@v3 esta como status: active em corpus/trocas-v3.md, mas e substituida por ['politica-trocas@v2']
->    SEED [stale_source_served_count] duas_versoes_ativas: politica-trocas (quantum): politica-trocas@v2 e politica-trocas@v3 active com vigencia sobreposta
->    REPROVADO seed.consistencia: 3 achado(s) no seed/front matter
-> == VEREDITO: FAIL
-> exit code: 1
-> ```
+<details>
+<summary><b>📋 Saída completa esperada</b></summary>
+<blockquote>
+
+O diff de quatro linhas, os três achados do seed, `== VEREDITO: FAIL` e `exit code: 1`:
+
+```text
+ corpus/trocas-v2.md | 3 ++-
+ corpus/trocas-v3.md | 1 -
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+-status: obsolete
++status: active
++supersedes: politica-trocas@v3
+-supersedes: politica-trocas@v2
+== graph-policy-gate | alvo=seed | set=golden_graph_v1 | seed=42
+   seed/front matter: 3 achado(s)
+   SEED [wrong_graph_edge_count] supersedes_invertido: politica-trocas@v2 SUPERSEDES politica-trocas@v3: a versao antiga substitui a nova (corpus:trocas-v2.md#front_matter.supersedes)
+   SEED [stale_source_served_count] substituida_ativa: politica-trocas@v3 esta como status: active em corpus/trocas-v3.md, mas e substituida por ['politica-trocas@v2']
+   SEED [stale_source_served_count] duas_versoes_ativas: politica-trocas (quantum): politica-trocas@v2 e politica-trocas@v3 active com vigencia sobreposta
+   REPROVADO seed.consistencia: 3 achado(s) no seed/front matter
+== VEREDITO: FAIL
+exit code: 1
+```
+
+</blockquote>
+</details>
 
 <details>
 <summary><b>💡 Clique para entender: por que quatro linhas de front matter reprovam o gate</b></summary>
 <blockquote>
+
+A mudança não toca em código: a pedido do atendimento, alguém "sincroniza o catálogo" com a versão antiga da política de trocas, marca a v2 como vigente e a faz **substituir** a v3. A edição é guiada (dois `sed`, um por arquivo), e o `git diff` mostra o resultado antes de qualquer commit.
 
 São duas linhas trocadas em dois arquivos do corpus, exatamente o commit que a homologação deste lab usou no Cenário B. O diff acima é o do commit real da homologação (`docs(corpus): sincroniza politica de trocas do catalogo (v2 volta a vigente)`): quatro linhas em dois arquivos, nenhum `.py`, nenhum `.json`.
 
@@ -680,24 +765,44 @@ O passo 7 não alterou nada (`git diff --stat -- corpus/`).
 
 **9. Veja o gate reprovar, o `deploy` não existir e o `live` intocado**
 
-No GitLab (navegador) e no Codespaces. A prova de que um gate funciona não é o job vermelho; é o **`deploy-candidate` sem rodar** e o cliente continuar em R1. A reprovação chega em pouco mais de **1 minuto e meio** depois que o runner pega o job; enquanto espera, leia a tabela do passo 6 de novo.
+No GitLab (navegador) e no Codespaces. A prova de que o gate funciona é o **`deploy-candidate` sem rodar** e o cliente continuar em R1.
+
+Abra o link `pipelines` e o pipeline mais recente. Quando o `evaluate` terminar (~1 min e meio), abra a aba **Tests** → suíte `graph-policy-gate` → o teste em vermelho.
+
+**Esperado:** os três gates do `evaluate` **vermelhos** e `package`, `deploy-candidate`, `postdeploy-synthetic-gate` e `promote-live` **cinza, skipped**.
+
+<details>
+<summary><b>🧭 Passo a passo no GitLab: do link à mensagem do teste</b></summary>
+<blockquote>
+
+A reprovação chega em pouco mais de **1 minuto e meio** depois que o runner pega o job; enquanto espera, leia a tabela do passo 6 de novo.
 
 Abra o link `pipelines` (se fechou o terminal: `cd /home/vscode/environment/quantum-ai-assistant && make links`; é **Build → Pipelines**) e clique no pipeline mais recente (a linha de cima). A página do pipeline mostra os jobs em colunas, uma por stage. Quando os jobs do stage `evaluate` terminarem, clique na aba **Tests** (ao lado de **Pipeline** e **Jobs**, no topo da página): ela lista uma **suíte** por job que publicou relatório JUnit (um arquivo XML com um resultado por teste; é o que o GitLab desenha ali). Clique na suíte `graph-policy-gate` e depois no teste em vermelho para ler a mensagem.
 
-**Esperado:** os três gates do `evaluate` **vermelhos**, `package`, `deploy-candidate`, `postdeploy-synthetic-gate` e `promote-live` **cinza, skipped**, e a aba **Tests** com **205 testes, 20 falhas**. No log do `graph-policy-gate`, `== VEREDITO: FAIL`:
+</blockquote>
+</details>
 
-> ```text
->    seed/front matter: 3 achado(s)
->    SEED [wrong_graph_edge_count] supersedes_invertido: politica-trocas@v2 SUPERSEDES politica-trocas@v3: a versao antiga substitui a nova (corpus:trocas-v2.md#front_matter.supersedes)
->    SEED [stale_source_served_count] substituida_ativa: politica-trocas@v3 esta como status: active em corpus/trocas-v3.md, mas e substituida por ['politica-trocas@v2']
->    SEED [stale_source_served_count] duas_versoes_ativas: politica-trocas (quantum): politica-trocas@v2 e politica-trocas@v3 active com vigencia sobreposta
->    REPROVADO seed.supersedes_invertido: ...
->    REPROVADO seed.substituida_ativa: ...
->    REPROVADO seed.duas_versoes_ativas: ...
->    REPROVADO seed.consistencia: 3 achado(s) no seed/front matter
-> == VEREDITO: FAIL
-> graph-gate-ci: seed/front matter incoerente: o golden de grafo nem roda (o JUnit acima mostra o achado)
-> ```
+<details>
+<summary><b>📋 Saída completa esperada</b></summary>
+<blockquote>
+
+A aba **Tests** com **205 testes, 20 falhas**. No log do `graph-policy-gate`, `== VEREDITO: FAIL`:
+
+```text
+   seed/front matter: 3 achado(s)
+   SEED [wrong_graph_edge_count] supersedes_invertido: politica-trocas@v2 SUPERSEDES politica-trocas@v3: a versao antiga substitui a nova (corpus:trocas-v2.md#front_matter.supersedes)
+   SEED [stale_source_served_count] substituida_ativa: politica-trocas@v3 esta como status: active em corpus/trocas-v3.md, mas e substituida por ['politica-trocas@v2']
+   SEED [stale_source_served_count] duas_versoes_ativas: politica-trocas (quantum): politica-trocas@v2 e politica-trocas@v3 active com vigencia sobreposta
+   REPROVADO seed.supersedes_invertido: ...
+   REPROVADO seed.substituida_ativa: ...
+   REPROVADO seed.duas_versoes_ativas: ...
+   REPROVADO seed.consistencia: 3 achado(s) no seed/front matter
+== VEREDITO: FAIL
+graph-gate-ci: seed/front matter incoerente: o golden de grafo nem roda (o JUnit acima mostra o achado)
+```
+
+</blockquote>
+</details>
 
 <!-- NOVA-IMAGEM: img/pipeline-vermelho-graph-gate.png | capturar: página do pipeline com graph-policy-gate vermelho, os outros gates do evaluate verdes, e package, deploy-candidate, postdeploy e promote em cinza (skipped) | depois de salvar o arquivo, descomente a linha abaixo -->
 <!-- ![Pipeline reprovado no graph-policy-gate: api-contract-gate, retrieval-quality-gate e business-policy-gate verdes, graph-policy-gate vermelho, e package, deploy-candidate, postdeploy-synthetic-gate e promote-live não executados](img/pipeline-vermelho-graph-gate.png) -->
@@ -718,7 +823,7 @@ Leia os três achados: a versão antiga **substitui** a nova (`supersedes_invert
 </blockquote>
 </details>
 
-**9.1. Prove que o `live` não mudou.** Agora a prova que importa, no Codespaces:
+**9.1. Prove que o `live` não mudou.** No Codespaces:
 
 ```bash
 cd /home/vscode/environment/quantum-ai-assistant
@@ -728,7 +833,16 @@ aws ecs describe-services --cluster qc-assistant --services qc-assistant-live qc
   --query 'services[].{service:serviceName,taskDefinition:taskDefinition,running:runningCount,deployments:length(deployments)}' --output table
 ```
 
-**Esperado:** o **mesmo** `release_id` e digest de R1 (passo 4), e a tabela mostrando `live` e `candidate` cada um com **uma** task definition, `running=1`, `deployments=1`: nenhum deploy aconteceu em nenhum dos dois.
+**Esperado:** o **mesmo** `release_id` e digest de R1 (passo 4) e `deployments=1` nos dois services.
+
+<details>
+<summary><b>📋 Saída completa esperada</b></summary>
+<blockquote>
+
+O **mesmo** `release_id` e digest de R1 (passo 4), e a tabela mostrando `live` e `candidate` cada um com **uma** task definition, `running=1`, `deployments=1`: nenhum deploy aconteceu em nenhum dos dois.
+
+</blockquote>
+</details>
 
 <details>
 <summary><b>💡 Clique para entender: o que a homologação viu no ECS e no ECR</b></summary>
@@ -781,7 +895,7 @@ A correção publicada, um pipeline **verde de verdade** até o `promote-live`, 
 
 **10. Reverta, confira localmente e publique**
 
-No Codespaces. A correção é devolver o front matter ao que o jurídico aprovou: v2 obsoleta, v3 vigente e supersedendo a v2. O `git checkout` abaixo devolve os dois arquivos **exatamente** ao último commit aprovado (o estado anterior ao passo 7); o commit seguinte registra a correção:
+No Codespaces. O `git checkout HEAD~1` devolve os dois arquivos ao último commit aprovado (v2 obsoleta, v3 vigente); o commit registra a correção.
 
 ```bash
 cd /home/vscode/environment/quantum-ai-assistant
@@ -795,11 +909,13 @@ eval $(ssh-agent -s) >/dev/null && ssh-add -k /home/vscode/.ssh/gitlab
 git push origin "$(git branch --show-current)"
 ```
 
-**Esperado:** `exit code local: 0` e o push disparando um pipeline novo, que vai **até o fim** e leva mais tempo que o vermelho: conte com **12 a 15 minutos** se o cache estiver frio. Enquanto ele roda, leia o 💡 abaixo e observe os jobs mudarem de cor.
+**Esperado:** `exit code local: 0` e um pipeline novo, que vai **até o fim** em 12 a 15 minutos. Enquanto ele roda, leia o 💡 abaixo.
 
 <details>
 <summary><b>💡 Clique para entender: por que este pipeline demora mais (tempos da homologação)</b></summary>
 <blockquote>
+
+A correção é devolver o front matter ao que o jurídico aprovou: v2 obsoleta, v3 vigente e supersedendo a v2. O `git checkout` devolve os dois arquivos **exatamente** ao último commit aprovado (o estado anterior ao passo 7). O push dispara um pipeline novo, que vai **até o fim** e leva mais tempo que o vermelho: conte com **12 a 15 minutos** se o cache estiver frio; observe os jobs mudarem de cor.
 
 Baseline e candidata passam pelo mesmo `graph_gate.py`, com o mesmo golden set: é isso que transforma "acho que consertei" em "o gate que reprovou agora aprova".
 
@@ -856,24 +972,33 @@ Você não fez o commit do passo 8 (então basta `git checkout -- corpus/`).
 
 **11. Acompanhe candidate → smoke → promote e leia os logs**
 
-No GitLab (navegador). Aqui estão as frases três e quatro do 💡 do passo 6, acontecendo: o candidate é **validado** na AWS, depois o live é **promovido** para o mesmo digest. No pipeline, abra o log do `deploy-candidate`, depois do `postdeploy-synthetic-gate`, depois do `promote-live`.
+No GitLab (navegador). As frases três e quatro do 💡 do passo 6, acontecendo: o candidate é **validado** na AWS e o live é **promovido** para o mesmo digest. Abra, nesta ordem, os logs do `deploy-candidate`, do `postdeploy-synthetic-gate` e do `promote-live`.
 
-**Esperado:** `/ready=200` com o digest servido no candidate, `VEREDITO: PASS` no postdeploy, o `live` trocando de revisão e `Job succeeded`. Números da homologação (R2 = `rel-042d7965-28b7d72a`, o pipeline de correção que rodou depois do vermelho do passo 9); os seus `release_id`, digests e revisões são outros:
+**Esperado:** `VEREDITO: PASS` no postdeploy e `Job succeeded` no `promote-live`.
 
-> ```text
-> [package]           build-push: build qc-assistant-app:<tag> (linux/amd64, commit 042d7965c909)... push ... sha256:28b7d72a...   (18 s, cache quente)
-> [package]           release-record: image_source=build  corpus_version=72532257bea3  graph_seed_version=c07dde5b8806  vector_index_version=10d85da52f32
-> [deploy-candidate]  deploy: t=10s rollout=IN_PROGRESS healthy_targets=0 /ready=503 ... t=190s rollout=COMPLETED healthy_targets=1 /ready=200 digest_servido=sha256:28b7d72a...
-> [deploy-candidate]  {"ok": true, "environment": "candidate", "task_definition_revision": "qc-assistant-candidate:9", "served_digest": "sha256:28b7d72a...", "cold_start_s": 190, ...}
-> [postdeploy]        smoke_ecs: health ok | ready ok | versions = release-record ok | compare bm25/vector/graph ok | order Q-1001 ok | tenant parceiro-x blocked ok
-> [postdeploy]        == graph-policy-gate | alvo=http | ... == VEREDITO: PASS   (graph_gate_exit=0)
-> [promote-live]      live: qc-assistant-live:4 (rel-b8aa56f8-df18cb90) -> qc-assistant-live:6 (sha256:28b7d72a...)   cold_start_s=202
-> [promote-live]      GET /health (live) -> release_id=rel-042d7965-28b7d72a
-> [promote-live]      manifesto: s3://base-config-<RM>/quantum-assistant/releases-ecs/live.json (+ history/20261114T121319Z-rel-042d7965-28b7d72a.json)
-> Job succeeded
-> ```
->
-> <!-- CONFIRMAR-SAIDA: formato literal das linhas de log dos jobs (os valores são os reais do release-record; a forma das linhas é a dos scripts) -->
+<details>
+<summary><b>📋 Saída completa esperada</b></summary>
+<blockquote>
+
+`/ready=200` com o digest servido no candidate, `VEREDITO: PASS` no postdeploy, o `live` trocando de revisão e `Job succeeded`. Números da homologação (R2 = `rel-042d7965-28b7d72a`, o pipeline de correção que rodou depois do vermelho do passo 9); os seus `release_id`, digests e revisões são outros:
+
+```text
+[package]           build-push: build qc-assistant-app:<tag> (linux/amd64, commit 042d7965c909)... push ... sha256:28b7d72a...   (18 s, cache quente)
+[package]           release-record: image_source=build  corpus_version=72532257bea3  graph_seed_version=c07dde5b8806  vector_index_version=10d85da52f32
+[deploy-candidate]  deploy: t=10s rollout=IN_PROGRESS healthy_targets=0 /ready=503 ... t=190s rollout=COMPLETED healthy_targets=1 /ready=200 digest_servido=sha256:28b7d72a...
+[deploy-candidate]  {"ok": true, "environment": "candidate", "task_definition_revision": "qc-assistant-candidate:9", "served_digest": "sha256:28b7d72a...", "cold_start_s": 190, ...}
+[postdeploy]        smoke_ecs: health ok | ready ok | versions = release-record ok | compare bm25/vector/graph ok | order Q-1001 ok | tenant parceiro-x blocked ok
+[postdeploy]        == graph-policy-gate | alvo=http | ... == VEREDITO: PASS   (graph_gate_exit=0)
+[promote-live]      live: qc-assistant-live:4 (rel-b8aa56f8-df18cb90) -> qc-assistant-live:6 (sha256:28b7d72a...)   cold_start_s=202
+[promote-live]      GET /health (live) -> release_id=rel-042d7965-28b7d72a
+[promote-live]      manifesto: s3://base-config-<RM>/quantum-assistant/releases-ecs/live.json (+ history/20261114T121319Z-rel-042d7965-28b7d72a.json)
+Job succeeded
+```
+
+<!-- CONFIRMAR-SAIDA: formato literal das linhas de log dos jobs (os valores são os reais do release-record; a forma das linhas é a dos scripts) -->
+
+</blockquote>
+</details>
 
 <!-- NOVA-IMAGEM: img/pipeline-verde-promote.png | capturar: página do pipeline inteiramente verde, do preflight ao promote-live, com o rollback manual no último stage | depois de salvar o arquivo, descomente a linha abaixo -->
 <!-- ![Pipeline verde: preflight, security-gate, api-contract-gate, retrieval-quality-gate, business-policy-gate e graph-policy-gate, package, deploy-candidate, postdeploy-synthetic-gate e promote-live, com o job rollback manual no último stage](img/pipeline-verde-promote.png) -->
@@ -913,31 +1038,40 @@ aws s3 ls "s3://$BUCKET/quantum-assistant/releases-ecs/"
 aws s3 cp "s3://$BUCKET/quantum-assistant/releases-ecs/live.json" - | python3 -m json.tool
 ```
 
-**Esperado:** o `/health` com o `release_id` novo (R2), `live.json` na lista e o manifesto com `promotion.previous_release_id` apontando para R1. Manifesto real da homologação (R2), resumido aos campos que importam; os seus valores são outros:
+**Esperado:** o `/health` com o `release_id` novo (R2) e, no manifesto, `promotion.previous_release_id` apontando para R1.
 
-> ```json
-> {
->   "release_id": "rel-042d7965-28b7d72a",
->   "git_sha": "042d7965c9091af89fcd4d4dbd66c3ca124c5faf",
->   "ci_pipeline_id": "<id do pipeline no seu projeto>",
->   "image_repository": "qc-assistant-app",
->   "image_digest": "sha256:28b7d72a5546e056712b213eec12839c83679a837a2b680b3511867908afe70a",
->   "image_source": "build",
->   "corpus_version": "72532257bea3",
->   "graph_seed_version": "c07dde5b8806",
->   "vector_index_version": "10d85da52f32",
->   "embedding_model_revision": "e8f8c211226b894fcb81acc59f3b34ba3efd5f42",
->   "eval_set_version": "<12 hex>",
->   "model_version": "none",
->   "timestamps": {"built_at": "2026-11-14T12:05:42Z", "candidate_deployed_at": "2026-11-14T12:09:09Z", "promoted_at": "2026-11-14T12:13:19Z"},
->   "approval": {"approved_by": "politica-automatica", "required": false, "approved_at": "2026-11-14T12:09:09Z"},
->   "gates": {"graph-policy-gate": {"status": "passed", "critical_counts": {"stale_source_served_count": 0, "wrong_graph_edge_count": 0, "tenant_acl_violation_count": 0, "order_auth_violation_count": 0}}, "api-contract-gate": {"status": "passed"}, ...},
->   "deploy": {"candidate": {"task_definition_revision": "qc-assistant-candidate:9", "cold_start_s": 190, "ready_http": 200}, "live": {"task_definition_revision": "qc-assistant-live:6", "cold_start_s": 202, "ready_http": 200}},
->   "postdeploy": {"at": "...Z", "environment": "candidate", "checks_failed": [], "graph_gate_exit": 0, "url": "http://.../candidate"},
->   "promotion": {"event": "promote", "live_before": {"release_id": "rel-b8aa56f8-df18cb90", "image_digest": "sha256:df18cb90..."}, "previous_release_id": "rel-b8aa56f8-df18cb90", "previous_task_definition_revision": "qc-assistant-live:4", "promoted_at": "2026-11-14T12:13:19Z", "promoted_by": "politica-automatica"},
->   "manifest_sha256": "cf2b0a7f..."
-> }
-> ```
+<details>
+<summary><b>📋 Saída completa esperada</b></summary>
+<blockquote>
+
+O `/health` com o `release_id` novo (R2), `live.json` na lista e o manifesto com `promotion.previous_release_id` apontando para R1. Manifesto real da homologação (R2), resumido aos campos que importam; os seus valores são outros:
+
+```json
+{
+  "release_id": "rel-042d7965-28b7d72a",
+  "git_sha": "042d7965c9091af89fcd4d4dbd66c3ca124c5faf",
+  "ci_pipeline_id": "<id do pipeline no seu projeto>",
+  "image_repository": "qc-assistant-app",
+  "image_digest": "sha256:28b7d72a5546e056712b213eec12839c83679a837a2b680b3511867908afe70a",
+  "image_source": "build",
+  "corpus_version": "72532257bea3",
+  "graph_seed_version": "c07dde5b8806",
+  "vector_index_version": "10d85da52f32",
+  "embedding_model_revision": "e8f8c211226b894fcb81acc59f3b34ba3efd5f42",
+  "eval_set_version": "<12 hex>",
+  "model_version": "none",
+  "timestamps": {"built_at": "2026-11-14T12:05:42Z", "candidate_deployed_at": "2026-11-14T12:09:09Z", "promoted_at": "2026-11-14T12:13:19Z"},
+  "approval": {"approved_by": "politica-automatica", "required": false, "approved_at": "2026-11-14T12:09:09Z"},
+  "gates": {"graph-policy-gate": {"status": "passed", "critical_counts": {"stale_source_served_count": 0, "wrong_graph_edge_count": 0, "tenant_acl_violation_count": 0, "order_auth_violation_count": 0}}, "api-contract-gate": {"status": "passed"}, ...},
+  "deploy": {"candidate": {"task_definition_revision": "qc-assistant-candidate:9", "cold_start_s": 190, "ready_http": 200}, "live": {"task_definition_revision": "qc-assistant-live:6", "cold_start_s": 202, "ready_http": 200}},
+  "postdeploy": {"at": "...Z", "environment": "candidate", "checks_failed": [], "graph_gate_exit": 0, "url": "http://.../candidate"},
+  "promotion": {"event": "promote", "live_before": {"release_id": "rel-b8aa56f8-df18cb90", "image_digest": "sha256:df18cb90..."}, "previous_release_id": "rel-b8aa56f8-df18cb90", "previous_task_definition_revision": "qc-assistant-live:4", "promoted_at": "2026-11-14T12:13:19Z", "promoted_by": "politica-automatica"},
+  "manifest_sha256": "cf2b0a7f..."
+}
+```
+
+</blockquote>
+</details>
 
 <details>
 <summary><b>💡 Clique para entender: três coisas para reparar no manifesto</b></summary>
@@ -966,7 +1100,16 @@ O ALB ainda tem a task antiga em *draining*; espere 30 s e repita o `curl`.
 </blockquote>
 </details>
 
-> 🤔 **Pare e pense (P3):** o rollback reimplanta no `live` a **revisão exata** da task definition de `previous_release_id`, lida do histórico em `releases-ecs/history/`, nunca "revisão − 1" nem `latest`. Na homologação isso foi feito de verdade **pelo GitLab**, sem clicar em nada: um `git push -o ci.variable="QC_ACTION=rollback" origin <branch>` criou um pipeline com **um só job**, `rollback`, que em **326 s** levou o `live` de R2 (`live:6`, digest `28b7d72a…`) a R1 (`live:4`, digest `df18cb90…`); o log terminou com `rollback: live /ready = rel-b8aa56f8-df18cb90 sha256:df18cb90cf4e... corpus=72532257bea3 graph=c07dde5b8806 index=10d85da52f32; fone 2026-11-14 -> politica-trocas@v3 30 dias` e `evento rollback gravado em releases-ecs/history/`. "Anterior" é o `previous_release_id` do manifesto do `live`: quem estava no ar quando o release atual foi promovido, e não "o penúltimo da lista" (um release que saiu do ar por rollback nunca é o anterior de ninguém). Para voltar a um release **específico** do histórico (repromover sem rebuild), o mesmo push leva `-o ci.variable="QC_ROLLBACK_TO=<release_id>"`: na homologação, R1 → R2 de novo em **220 s**, com o evento `restore_approved` no histórico. O que volta junto? O que **não** volta (dica: pense no que vive fora da imagem: o grafo em memória, os segredos, a API de pedidos)?
+<details>
+<summary><b>💡 Clique para entender: o rollback real da homologação, antes de responder à P3</b></summary>
+<blockquote>
+
+Na homologação isso foi feito de verdade **pelo GitLab**, sem clicar em nada: um `git push -o ci.variable="QC_ACTION=rollback" origin <branch>` criou um pipeline com **um só job**, `rollback`, que em **326 s** levou o `live` de R2 (`live:6`, digest `28b7d72a…`) a R1 (`live:4`, digest `df18cb90…`); o log terminou com `rollback: live /ready = rel-b8aa56f8-df18cb90 sha256:df18cb90cf4e... corpus=72532257bea3 graph=c07dde5b8806 index=10d85da52f32; fone 2026-11-14 -> politica-trocas@v3 30 dias` e `evento rollback gravado em releases-ecs/history/`. "Anterior" é o `previous_release_id` do manifesto do `live`: quem estava no ar quando o release atual foi promovido, e não "o penúltimo da lista" (um release que saiu do ar por rollback nunca é o anterior de ninguém). Para voltar a um release **específico** do histórico (repromover sem rebuild), o mesmo push leva `-o ci.variable="QC_ROLLBACK_TO=<release_id>"`: na homologação, R1 → R2 de novo em **220 s**, com o evento `restore_approved` no histórico.
+
+</blockquote>
+</details>
+
+> 🤔 **Pare e pense (P3):** o rollback reimplanta no `live` a **revisão exata** da task definition de `previous_release_id`, lida do histórico em `releases-ecs/history/`, nunca "revisão − 1" nem `latest`. O que volta junto? O que **não** volta (dica: pense no que vive fora da imagem: o grafo em memória, os segredos, a API de pedidos)?
 
 ### Checkpoint
 
@@ -992,7 +1135,7 @@ Um incidente injetado **no grafo do `live`, na AWS, sem commit e sem pipeline**:
 
 **13. Injete `stale_graph_policy` no `live`**
 
-No Codespaces. O cenário simula um **sync de catálogo defeituoso** no grafo do Neo4j da task `live`: corpus, imagem, código e pipeline **não** mudam; só o grafo. **Aposte:** o `/health` vai mudar? O `/ready`? A resposta do grafo? E a do BM25?
+No Codespaces. O cenário simula um **sync de catálogo defeituoso**: só o grafo da task `live` muda. **Aposte:** o `/health` vai mudar? O `/ready`? A resposta do grafo? E a do BM25?
 
 ```bash
 cd /home/vscode/environment/quantum-ai-assistant
@@ -1001,24 +1144,35 @@ bash ops/cloud/incident.sh apply --scenario stale_graph_policy --env live
 bash ops/cloud/incident.sh state --env live
 ```
 
-**Esperado:** a hora do início do incidente e, no JSON, `"in_sync": false` com `"active_mutations": ["stale_graph_policy"]` e `graph_version` diferente de `graph_seed_version`:
+**Esperado:** a hora do início do incidente e, no JSON, `"in_sync": false` com `"active_mutations": ["stale_graph_policy"]`.
 
-> ```text
-> 12:27:01Z
-> incident: live: POST /admin/graph/scenario via runner i-... -> task 10.0.x.x:8001
-> {"environment": "live", "action": "apply", "scenario": "stale_graph_policy", "started_at": "2026-11-14T12:27:01Z", "finished_at": "2026-11-14T12:27:12Z",
->  "graph_version_before": "c07dde5b8806", "graph_version": "a445de8d36fc", "graph_seed_version": "c07dde5b8806", "in_sync": false,
->  "active_mutations": ["stale_graph_policy"],
->  "diff": {"node_props_changed": [{"node": "PolicyVersion:politica-trocas@v2", "prop": "status", "expected": "obsolete", "runtime": "active"},
->                                  {"node": "PolicyVersion:politica-trocas@v2", "prop": "status_source", "expected": "corpus:trocas-v2.md#front_matter", "runtime": "runtime:sync-catalogo (cenario stale_graph_policy)"}],
->           "edges_missing": ["(politica-trocas@v3)-[:SUPERSEDES]->(politica-trocas@v2)"],
->           "edges_extra": [{"edge": "(politica-trocas@v2)-[:SUPERSEDES]->(politica-trocas@v3)", "provenance": "runtime:sync-catalogo (cenario stale_graph_policy)"}]},
->  "counts": {"nodes": 79, "edges": 109, "chunks": 31}}
-> ```
+<details>
+<summary><b>📋 Saída completa esperada</b></summary>
+<blockquote>
+
+A hora do início do incidente e, no JSON, `"in_sync": false` com `"active_mutations": ["stale_graph_policy"]` e `graph_version` diferente de `graph_seed_version`:
+
+```text
+12:27:01Z
+incident: live: POST /admin/graph/scenario via runner i-... -> task 10.0.x.x:8001
+{"environment": "live", "action": "apply", "scenario": "stale_graph_policy", "started_at": "2026-11-14T12:27:01Z", "finished_at": "2026-11-14T12:27:12Z",
+ "graph_version_before": "c07dde5b8806", "graph_version": "a445de8d36fc", "graph_seed_version": "c07dde5b8806", "in_sync": false,
+ "active_mutations": ["stale_graph_policy"],
+ "diff": {"node_props_changed": [{"node": "PolicyVersion:politica-trocas@v2", "prop": "status", "expected": "obsolete", "runtime": "active"},
+                                 {"node": "PolicyVersion:politica-trocas@v2", "prop": "status_source", "expected": "corpus:trocas-v2.md#front_matter", "runtime": "runtime:sync-catalogo (cenario stale_graph_policy)"}],
+          "edges_missing": ["(politica-trocas@v3)-[:SUPERSEDES]->(politica-trocas@v2)"],
+          "edges_extra": [{"edge": "(politica-trocas@v2)-[:SUPERSEDES]->(politica-trocas@v3)", "provenance": "runtime:sync-catalogo (cenario stale_graph_policy)"}]},
+ "counts": {"nodes": 79, "edges": 109, "chunks": 31}}
+```
+
+</blockquote>
+</details>
 
 <details>
 <summary><b>💡 Clique para entender: o que o cenário muda no grafo e como ler o <code>diff</code></b></summary>
 <blockquote>
+
+O cenário simula um **sync de catálogo defeituoso** no grafo do Neo4j da task `live`: corpus, imagem, código e pipeline **não** mudam; só o grafo.
 
 No grafo do Neo4j da task `live`, o nó `PolicyVersion(politica-trocas@v2)` recebe `status=active` (com `status_source = 'runtime:sync-catalogo'`, para o trace denunciar a origem), a aresta `SUPERSEDES` v3→v2 é apagada e uma v2→v3 é criada (a v2 passa a superseder a v3). O corpus não muda; só o grafo.
 
@@ -1072,22 +1226,31 @@ PY
 done
 ```
 
-**Esperado:** `/health` e `/ready` em 200 e a linha `graph` citando `politica-trocas@v2` (15 dias):
+**Esperado:** `/health` e `/ready` em 200 e a linha `graph` citando `politica-trocas@v2` (15 dias).
 
-> ```text
-> GET /health -> HTTP 200 em 0.29s
-> GET /ready  -> HTTP 200
-> graph   release=rel-042d7965  citacao=politica-trocas@v2  trace_id=0b47f15d7131fef7565fa283cd20605a
->          O prazo para troca de produtos é de 15 dias corridos após o recebimento. Fonte: Política de trocas, secao "Prazo para troca" (versao 2, vigente desde 2024-03-01).
-> vector  release=rel-042d7965  citacao=<ver nota>  trace_id=<32 hex>
-> bm25    release=rel-042d7965  citacao=<ver nota>  trace_id=<32 hex>
-> ```
+<details>
+<summary><b>📋 Saída completa esperada</b></summary>
+<blockquote>
 
-**Copie o `trace_id` da linha `graph`**: é a evidência do passo 16. Volte à sua resposta à P1 (passo 5). O painel do Diego não vai se mexer.
+```text
+GET /health -> HTTP 200 em 0.29s
+GET /ready  -> HTTP 200
+graph   release=rel-042d7965  citacao=politica-trocas@v2  trace_id=0b47f15d7131fef7565fa283cd20605a
+         O prazo para troca de produtos é de 15 dias corridos após o recebimento. Fonte: Política de trocas, secao "Prazo para troca" (versao 2, vigente desde 2024-03-01).
+vector  release=rel-042d7965  citacao=<ver nota>  trace_id=<32 hex>
+bm25    release=rel-042d7965  citacao=<ver nota>  trace_id=<32 hex>
+```
+
+</blockquote>
+</details>
+
+**Copie o `trace_id` da linha `graph`**: é a evidência do passo 16.
 
 <details>
 <summary><b>💡 Clique para entender: por que só o <code>graph</code> erra, e com sinais técnicos intactos</b></summary>
 <blockquote>
+
+Volte à sua resposta à P1 (passo 5). O painel do Diego não vai se mexer.
 
 Saída da homologação, segundos depois do `apply`: `/health` 200 em 0,28 s, `/ready` 200 em 0,30 s, e a estratégia `graph` respondendo **15 dias, versão 2**, em 0,28 s, HTTP 200. Para a pergunta do fone, `bm25` e `vector` não citam a política de trocas (lembre da Demo 5.1: para essa pergunta eles trazem a garantia de eletrônicos ou abstêm; é similaridade, não aplicabilidade), então **não** são afetados pelo grafo corrompido; o que importa aqui é que o `live` responde pelo `graph` por padrão. <!-- CONFIRMAR-SAIDA: colar as citações reais de vector e bm25 sob o cenário, do B-batch ou de uma rodada nova -->
 
@@ -1120,18 +1283,27 @@ O cenário não pegou (confira `"in_sync": false` com `bash ops/cloud/incident.s
 
 **15. Veja o alerta de qualidade disparar por medição**
 
-No navegador, Grafana. Até aqui **você** olhou e viu; às 23h ninguém olha. O que avisa é o **probe** rodando na AWS com gabarito, e o monitor comparando a fonte citada com a esperada em janela, com `n` mínimo.
+No navegador, Grafana. Às 23h ninguém olha: quem avisa é o **probe** com gabarito rodando na AWS.
 
-Abra os dois dashboards de novo, **Last 15 minutes**. Espere o `qc-probe` completar uma janela: a janela do monitor é de **120 s** e ele só emite veredito com **`n ≥ 20`** probes nela (antes disso, `insufficient_data`); conte **2 a 3 minutos**. O alerta `QualityProbeDegraded` do Prometheus usa um `n` menor, `≥ 10`: veja o 💡 abaixo.
+Abra os dois dashboards de novo, **Last 15 minutes**, e espere **2 a 3 minutos** (a janela do monitor é de 120 s e exige `n ≥ 20`).
 
-**Esperado:** o painel da Helena em **Não confiável** (vermelho) e o do Diego com 5xx e p95 iguais ao baseline, mas com alertas disparando:
+**Esperado:** o painel da Helena em **Não confiável** (vermelho) e o do Diego com 5xx e p95 iguais ao baseline, mas com alertas disparando.
 
-> | Visão técnica · SRE (Diego) | Visão do negócio · Atendimento (Helena) |
-> |---|---|
-> | **Erros 5xx** 0,0% · **Latência p95** 68,57 ms (igual ao baseline) · **Probes corretos** 74% · **Alertas disparando** 8 (na homologação: 4 alertas × 2 cenários, o vigia `live_watch` e um replay) | **Confiança do assistente agora**: **Não confiável** (vermelho) |
-> | **Alertas em FIRING agora**: `QualityCritical`, `StaleSourceServed`, `WrongGraphEdge` (critical) e `QualityProbeDegraded` (warning) | **Por que o semáforo está assim**: *Serviu uma política que não vale hoje* (11) e *Caminho do grafo diferente do gabarito* (2), com o release e os probes que erraram |
-> | **Qualidade da recuperação, do grafo e da citação**: *Fonte vigente* e *Caminho do grafo correto* caem (o probe conferiu o caminho e achou a aresta `SUPERSEDES` invertida) | **Política vigente** e **Caminho do grafo** caem; **Perguntas** e **Pedidos sem status** não mudam |
-> | **Estado do monitor de qualidade**: `critical` (`qc_quality_status = 2`), `n` = 60 na janela · **Dependência: API de pedidos**: ok | **Acerto dos probes por assunto**: só o que depende de política de troca cai; pedidos, entrega e FAQ seguem 100% · **Casos críticos na janela** > 0 |
+<details>
+<summary><b>📋 Leitura completa esperada dos dois painéis</b></summary>
+<blockquote>
+
+O que avisa é o **probe** rodando na AWS com gabarito, e o monitor comparando a fonte citada com a esperada em janela, com `n` mínimo. Antes de `n ≥ 20` na janela, o monitor diz `insufficient_data`. O alerta `QualityProbeDegraded` do Prometheus usa um `n` menor, `≥ 10`: veja o 💡 abaixo.
+
+| Visão técnica · SRE (Diego) | Visão do negócio · Atendimento (Helena) |
+|---|---|
+| **Erros 5xx** 0,0% · **Latência p95** 68,57 ms (igual ao baseline) · **Probes corretos** 74% · **Alertas disparando** 8 (na homologação: 4 alertas × 2 cenários, o vigia `live_watch` e um replay) | **Confiança do assistente agora**: **Não confiável** (vermelho) |
+| **Alertas em FIRING agora**: `QualityCritical`, `StaleSourceServed`, `WrongGraphEdge` (critical) e `QualityProbeDegraded` (warning) | **Por que o semáforo está assim**: *Serviu uma política que não vale hoje* (11) e *Caminho do grafo diferente do gabarito* (2), com o release e os probes que erraram |
+| **Qualidade da recuperação, do grafo e da citação**: *Fonte vigente* e *Caminho do grafo correto* caem (o probe conferiu o caminho e achou a aresta `SUPERSEDES` invertida) | **Política vigente** e **Caminho do grafo** caem; **Perguntas** e **Pedidos sem status** não mudam |
+| **Estado do monitor de qualidade**: `critical` (`qc_quality_status = 2`), `n` = 60 na janela · **Dependência: API de pedidos**: ok | **Acerto dos probes por assunto**: só o que depende de política de troca cai; pedidos, entrega e FAQ seguem 100% · **Casos críticos na janela** > 0 |
+
+</blockquote>
+</details>
 
 <!-- NOVA-IMAGEM: img/grafana-helena-incidente.png | capturar: dashboard da Helena durante o stale_graph_policy: semáforo Não confiável, Política vigente e Caminho do grafo em queda, a tabela Por que o semáforo está assim preenchida | FONTE REAL já capturada (R3): /tmp/qc18/evid/5.2/screenshots/r3/03-helena-incidente-1920.png (versão 1366 ao lado) | depois de salvar o arquivo, descomente a linha abaixo -->
 <!-- ![Dashboard da Helena durante o incidente: semáforo Não confiável, Política vigente e Caminho do grafo em queda, a tabela de motivos apontando a política que não vale hoje, e os demais assuntos em 100%](img/grafana-helena-incidente.png) -->
@@ -1204,36 +1376,70 @@ O trace da resposta errada aberto no Jaeger, o span onde a versão errada foi es
 
 **16. Abra o trace e ache o span**
 
-No navegador, Grafana: dashboard **Investigação · Incidente** ou **Explore → datasource Jaeger**. O alerta diz **que** a qualidade caiu; o trace diz **onde**. Sem isso, a mitigação é chute.
+No navegador, Grafana. O alerta diz **que** a qualidade caiu; o trace diz **onde**. Sem isso, a mitigação é chute.
 
-Abra o link `painel-investigacao` do `make links` (é **Dashboards → Investigação · Incidente**). Leia o painel **Como investigar** e a **Linha do tempo do incidente** (a marca do drift e a faixa de fonte obsoleta). Depois abra o trace, por um de dois caminhos:
+Abra o link `painel-investigacao` do `make links` e abra o trace por um de dois caminhos:
 
-**16.1. Pelo log (um clique).** No topo do dashboard, a variável **Buscar no log (caso, motivo)** filtra o painel **Logs dos probes e do monitor de qualidade**: digite `stale_source_served` (ou `fail`); clique numa linha para expandi-la; ao lado do campo `trace_id` aparece o link **Ver este trace (Jaeger) no painel**, que preenche a variável `trace_id` e abre a faixa recolhida **Trace da requisição escolhida**, logo abaixo dos logs (o segundo link, **Abrir no Jaeger (via SSM port-forward 16686)**, só funciona com um túnel SSM aberto no seu terminal; ignore-o em aula).
+**16.1. Pelo log (um clique).** Em **Buscar no log (caso, motivo)**, digite `stale_source_served`, expanda uma linha e clique em **Ver este trace (Jaeger) no painel**.
 
-**16.2. Pelo Explore (colando o id).** Menu lateral **Explore** (ícone de bússola); no seletor de fonte de dados, no topo à esquerda, escolha **Jaeger**; no campo **Query type** escolha **TraceID**; cole o `trace_id` da linha `graph` do passo 14 (32 caracteres hexadecimais) e clique em **Run query** (ou Shift+Enter). O trace aparece como uma lista de barras horizontais aninhadas: cada barra é um **span**; clique no nome de um span para expandir e ver, em **Tags**/**Attributes**, os campos `qc.*`.
+<details>
+<summary><b>🧭 Passo a passo detalhado: pelo log</b></summary>
+<blockquote>
 
-Para comparar com um trace **certo** (mais abaixo), no mesmo Explore troque **Query type** para **Search**: em **Service** escolha `qc-assistant`, em **Tags** digite `qc.strategy=vector`, e **Run query**; abra o trace mais recente da lista.
+O link `painel-investigacao` é **Dashboards → Investigação · Incidente** (ou use **Explore → datasource Jaeger**). Leia o painel **Como investigar** e a **Linha do tempo do incidente** (a marca do drift e a faixa de fonte obsoleta).
 
-**Esperado:** no span `policy.version.filter`, `qc.selected_doc_version=2`; no span raiz, `qc.graph_version` ≠ `qc.graph_seed_version` (o drift):
+No topo do dashboard, a variável **Buscar no log (caso, motivo)** filtra o painel **Logs dos probes e do monitor de qualidade**: digite `stale_source_served` (ou `fail`); clique numa linha para expandi-la; ao lado do campo `trace_id` aparece o link **Ver este trace (Jaeger) no painel**, que preenche a variável `trace_id` e abre a faixa recolhida **Trace da requisição escolhida**, logo abaixo dos logs (o segundo link, **Abrir no Jaeger (via SSM port-forward 16686)**, só funciona com um túnel SSM aberto no seu terminal; ignore-o em aula).
 
-> ```text
-> qc-probe       quality.evaluate          case_id=...  outcome=fail  reason=stale_source_served
->   qc-assistant   POST /lab/compare
->     http.request                         qc.release_id=rel-042d7965-28b7d72a
->                                          qc.graph_version=a445de8d36fc  qc.graph_seed_version=c07dde5b8806   ← drift
->     auth.tenant                          tenant=quantum  user_role=customer
->     intent.route                         qc.route=knowledge
->     entity.link                          product_id=fone-bluetooth-qc  category=audio
->     graph.traverse                       cypher_query_id=graph.policy_for_product.v1  candidates=3
->     policy.version.filter                candidates_allowed=1  candidates_blocked=2
->                                          qc.selected_doc_id=politica-trocas  qc.selected_doc_version=2  qc.path_hops=6   ← AQUI
->     compose.deterministic                abstained=false  citations=1
-> ```
+</blockquote>
+</details>
+
+**16.2. Pelo Explore (colando o id).** **Explore** → fonte **Jaeger** → **Query type** `TraceID` → cole o `trace_id` da linha `graph` do passo 14 → **Run query**.
+
+<details>
+<summary><b>🧭 Passo a passo detalhado: pelo Explore</b></summary>
+<blockquote>
+
+Menu lateral **Explore** (ícone de bússola); no seletor de fonte de dados, no topo à esquerda, escolha **Jaeger**; no campo **Query type** escolha **TraceID**; cole o `trace_id` da linha `graph` do passo 14 (32 caracteres hexadecimais) e clique em **Run query** (ou Shift+Enter). O trace aparece como uma lista de barras horizontais aninhadas: cada barra é um **span**; clique no nome de um span para expandir e ver, em **Tags**/**Attributes**, os campos `qc.*`.
+
+</blockquote>
+</details>
+
+**Esperado:** no span `policy.version.filter`, `qc.selected_doc_version=2`; no span raiz, `qc.graph_version` ≠ `qc.graph_seed_version` (o drift).
+
+<details>
+<summary><b>📋 Saída completa esperada</b></summary>
+<blockquote>
+
+```text
+qc-probe       quality.evaluate          case_id=...  outcome=fail  reason=stale_source_served
+  qc-assistant   POST /lab/compare
+    http.request                         qc.release_id=rel-042d7965-28b7d72a
+                                         qc.graph_version=a445de8d36fc  qc.graph_seed_version=c07dde5b8806   ← drift
+    auth.tenant                          tenant=quantum  user_role=customer
+    intent.route                         qc.route=knowledge
+    entity.link                          product_id=fone-bluetooth-qc  category=audio
+    graph.traverse                       cypher_query_id=graph.policy_for_product.v1  candidates=3
+    policy.version.filter                candidates_allowed=1  candidates_blocked=2
+                                         qc.selected_doc_id=politica-trocas  qc.selected_doc_version=2  qc.path_hops=6   ← AQUI
+    compose.deterministic                abstained=false  citations=1
+```
+
+</blockquote>
+</details>
 
 <!-- NOVA-IMAGEM: img/trace-stale-graph.png | capturar: o trace da resposta errada no Grafana (datasource Jaeger), com o span policy.version.filter aberto mostrando selected_doc_version=2, e graph_version diferente de graph_seed_version nos atributos | FONTE REAL já capturada (R3): /tmp/qc18/evid/5.2/screenshots/r3/05-trace-incidente-1920.png (versão 1366 ao lado) | depois de salvar o arquivo, descomente a linha abaixo -->
 <!-- ![Trace da resposta errada: http.request com graph_version diferente de graph_seed_version, entity.link no fone, graph.traverse trazendo as versões 2 e 3, e policy.version.filter escolhendo a versão 2 por status active e supersedes no grafo](img/trace-stale-graph.png) -->
 
-Compare com um trace **certo** (o caminho **Search** descrito no 16.2): O `policy.version.filter` escolhe `selected_doc_version=3`, com `reason=front matter`; e o `graph.traverse` não existe (a vetorial tem `vector.embed` e `vector.query` no lugar).
+<details>
+<summary><b>🔎 Opcional: compare com um trace certo</b></summary>
+<blockquote>
+
+Para comparar com um trace **certo**, no mesmo Explore troque **Query type** para **Search**: em **Service** escolha `qc-assistant`, em **Tags** digite `qc.strategy=vector`, e **Run query**; abra o trace mais recente da lista.
+
+Compare com um trace **certo** (o caminho **Search** descrito acima): O `policy.version.filter` escolhe `selected_doc_version=3`, com `reason=front matter`; e o `graph.traverse` não existe (a vetorial tem `vector.embed` e `vector.query` no lugar).
+
+</blockquote>
+</details>
 
 <details>
 <summary><b>💡 Clique para entender: o elo quebrado e os spans deste assistente</b></summary>
@@ -1279,9 +1485,9 @@ Atraso de exportação (espere 10 s) ou a task que respondeu já foi substituíd
 
 **17. "Reinicia que resolve": teste a hipótese com a resposta certa para esta arquitetura**
 
-No Codespaces; **leitura primeiro**, comando depois. Em quase todo incidente alguém propõe reiniciar, e nesta arquitetura reiniciar a task **restauraria** o grafo. Isso é bom? Depende do que você quer.
+No Codespaces; **leitura primeiro**, comando depois. Nesta arquitetura, reiniciar a task **restauraria** o grafo. Isso é bom? Depende do que você quer.
 
-**Não** reinicie ainda. Leia o 💡 e responda à P4. Em sala, o professor conduz a escolha; sozinho, siga o passo 18 (o restore cirúrgico), que é a mitigação que este README adota: não derruba o serviço e registra o que desfez. O restart fica como alternativa documentada no ⚠ do passo 18.
+**Não** reinicie ainda: leia o 💡 e responda à P4. A mitigação deste README é o restore cirúrgico do passo 18.
 
 **Esperado:** a sua resposta à P4 escrita, antes de qualquer comando.
 
@@ -1290,6 +1496,8 @@ No Codespaces; **leitura primeiro**, comando depois. Em quase todo incidente alg
 <details>
 <summary><b>💡 Clique para entender: por que o restart restaura o grafo aqui, e por que isso NÃO significa que "restart resolve sempre"</b></summary>
 <blockquote>
+
+Em quase todo incidente alguém propõe reiniciar. Em sala, o professor conduz a escolha; sozinho, siga o passo 18 (o restore cirúrgico), que é a mitigação que este README adota: não derruba o serviço e registra o que desfez. O restart fica como alternativa documentada no ⚠ do passo 18.
 
 Na Demo 5.2 anterior (preservada em [LEGADO-local-demo.md](LEGADO-local-demo.md)), reiniciar **não** resolvia, porque a corrupção estava em disco. **Aqui é diferente, e você precisa saber por quê:** nesta arquitetura o grafo é reconstruído **da imagem** a cada subida da task. A mutação vive só em memória. Então reiniciar a task **restauraria** o grafo.
 
@@ -1321,16 +1529,23 @@ bash ops/cloud/incident.sh restore --scenario stale_graph_policy --env live
 bash ops/cloud/incident.sh state --env live
 ```
 
-**Esperado:** `graph_version` igual ao `graph_seed_version` (`c07dde5b8806`), `"in_sync": true` e `diff` vazio:
+**Esperado:** `graph_version` igual ao `graph_seed_version` (`c07dde5b8806`), `"in_sync": true` e `diff` vazio.
 
-> ```text
-> 12:30:32Z
-> incident: live: POST /admin/graph/scenario via runner i-... -> task 10.0.x.x:8001
-> {"environment": "live", "action": "restore", "scenario": "stale_graph_policy", "started_at": "2026-11-14T12:30:32Z", "finished_at": "2026-11-14T12:30:47Z",
->  "graph_version_before": "a445de8d36fc", "graph_version": "c07dde5b8806", "graph_seed_version": "c07dde5b8806", "in_sync": true,
->  "active_mutations": [], "diff": {"node_props_changed": [], "nodes_missing": [], "nodes_extra": [], "edges_missing": [], "edges_extra": []},
->  "counts": {"nodes": 79, "edges": 109, "chunks": 31}}
-> ```
+<details>
+<summary><b>📋 Saída completa esperada</b></summary>
+<blockquote>
+
+```text
+12:30:32Z
+incident: live: POST /admin/graph/scenario via runner i-... -> task 10.0.x.x:8001
+{"environment": "live", "action": "restore", "scenario": "stale_graph_policy", "started_at": "2026-11-14T12:30:32Z", "finished_at": "2026-11-14T12:30:47Z",
+ "graph_version_before": "a445de8d36fc", "graph_version": "c07dde5b8806", "graph_seed_version": "c07dde5b8806", "in_sync": true,
+ "active_mutations": [], "diff": {"node_props_changed": [], "nodes_missing": [], "nodes_extra": [], "edges_missing": [], "edges_extra": []},
+ "counts": {"nodes": 79, "edges": 109, "chunks": 31}}
+```
+
+</blockquote>
+</details>
 
 <details>
 <summary><b>💡 Clique para entender: por que o <code>graph_version</code> volta exatamente ao mesmo valor</b></summary>
@@ -1377,14 +1592,21 @@ curl -s -X POST "$APP/assistant/ask" -H 'content-type: application/json' \
 | python3 -c 'import json,sys; r=json.load(sys.stdin); c=r["citations"][0]; print("graph  citacao:", c["doc_id"]+"@v"+c["version"], "| graph_version:", r["versions"]["graph_version"], "| trace_id:", r["trace_id"]); print("       ", r["answer"][:95], "...")'
 ```
 
-**Esperado:** a citação de volta em `politica-trocas@v3`, 30 dias:
+**Esperado:** a citação de volta em `politica-trocas@v3`, 30 dias.
 
-> ```text
-> graph  citacao: politica-trocas@v3 | graph_version: <igual ao seed> | trace_id: <32 hex>
->         Você tem até 30 dias corridos, ...
-> ```
+<details>
+<summary><b>📋 Saída completa esperada</b></summary>
+<blockquote>
 
-No Grafana, o painel da Helena volta a **Confiável** depois que a janela de 120 s desliza sem fonte obsoleta (na homologação, **~2 minutos**). Anote a hora em que ficou verde: é o **tempo até recuperação**.
+```text
+graph  citacao: politica-trocas@v3 | graph_version: <igual ao seed> | trace_id: <32 hex>
+        Você tem até 30 dias corridos, ...
+```
+
+</blockquote>
+</details>
+
+No Grafana, espere o painel da Helena voltar a **Confiável** (~2 minutos na homologação) e anote a hora: é o **tempo até recuperação**.
 
 <!-- NOVA-IMAGEM: img/grafana-helena-restaurado.png | capturar: dashboard da Helena depois do restore: semáforo Confiável de volta, Política vigente e Caminho do grafo em 100%, e a Linha do tempo da confiança mostrando o vale do incidente | FONTE REAL já capturada (R3): /tmp/qc18/evid/5.2/screenshots/r3/06-helena-restaurado-1920.png (versão 1366 ao lado; neste print o live já mostrava o release R1, porque o rollback do cenário E estava em curso) | depois de salvar o arquivo, descomente a linha abaixo -->
 <!-- ![Dashboard da Helena após o restore: semáforo Confiável, contador de fonte obsoleta zerado na janela atual, e o gráfico histórico mostrando a queda e a recuperação](img/grafana-helena-restaurado.png) -->
@@ -1395,7 +1617,7 @@ No Grafana, o painel da Helena volta a **Confiável** depois que a janela de 120
 
 O replay **em escala** é feito pelo `qc-probe`, que continua rodando na AWS com a mesma semente e as mesmas perguntas: a próxima janela já mede o grafo restaurado. Na homologação, a mesma rodada de 40 casos com `seed 42` (sequência de casos idêntica: `case_sequence_sha 9a9ce3ad7637` antes, durante e depois) deu: **antes** do incidente `pass_rate 1.0`, 0 violações; **durante**, `pass_rate 0.525`, `stale_source_served 14`, `wrong_graph_edge 19`, `http_non_200 0` (40 de 40 respostas em HTTP 200); **depois do restore**, `pass_rate 1.0`, 0 violações, e os cinco casos de troca (`gg-camiseta-troca-regular`, `troca-prazo`, `gg-troca-fone-15-dias-obsoleta`, `gg-tenis-troca-tamanho`, `gg-incidente-troca-fone-2026-11-14`) citando `politica-trocas@v3`. Isso é o que "recuperação provada" significa: **o mesmo experimento**, não um experimento parecido. <!-- CONFIRMAR-SAIDA: como o aluno dispara a rodada imediata (probe.py run via SSM na EC2 obs); hoje obs.sh não tem subcomando para isso -->
 
-Na homologação, o restore terminou às 12:30:47Z e o vigia `live_watch` voltou a `ok` (`qc_quality_status = 0`) às 12:32:40Z (**~2 minutos**), com os alertas apagando em seguida. O alerta "resolve" pela janela, não por um botão.
+O painel da Helena volta a **Confiável** depois que a janela de 120 s desliza sem fonte obsoleta. Na homologação, o restore terminou às 12:30:47Z e o vigia `live_watch` voltou a `ok` (`qc_quality_status = 0`) às 12:32:40Z (**~2 minutos**), com os alertas apagando em seguida. O alerta "resolve" pela janela, não por um botão.
 
 </blockquote>
 </details>
@@ -1440,7 +1662,7 @@ Um postmortem blameless curto, um caso golden novo que **reprova** se a corrupç
 
 **20. Preencha o postmortem blameless**
 
-No Codespaces (editor). O incidente só vira aprendizado se for escrito com **evidência**, não com "deveria". O modelo `ops/postmortem-template.md` já está no seu projeto (veio com a cópia da Parte 1; tem oito seções). Copie-o e abra a cópia no editor:
+No Codespaces (editor). Copie o modelo `ops/postmortem-template.md` (oito seções, veio com a cópia da Parte 1) e abra a cópia:
 
 ```bash
 cd /home/vscode/environment/quantum-ai-assistant
@@ -1451,7 +1673,7 @@ code ops/postmortem-stale-graph-policy.md
 
 **Esperado:** o arquivo aberto com as oito seções do modelo.
 
-**20.1. Preencha o que é seu.** Para caber nos 8 minutos, o conteúdo de cada seção já está rascunhado na tabela abaixo (é o que a homologação observou); **você preenche só o que é seu**: os horários dos passos 13, 15, 18 e 19, o `trace_id` do passo 14 e os `graph_version` do passo 13. O resto, confira e ajuste se o que viu foi diferente:
+**20.1. Preencha o que é seu.** A tabela abaixo já rascunha cada seção (é o que a homologação observou). Você completa os horários dos passos 13, 15, 18 e 19, o `trace_id` do passo 14 e os `graph_version` do passo 13; o resto, confira e ajuste:
 
 | Seção | O que escrever |
 |---|---|
@@ -1467,6 +1689,8 @@ code ops/postmortem-stale-graph-policy.md
 <details>
 <summary><b>💡 Clique para entender: por que blameless é método, não cortesia</b></summary>
 <blockquote>
+
+O incidente só vira aprendizado se for escrito com **evidência**, não com "deveria". Para caber nos 8 minutos, o conteúdo de cada seção já vem rascunhado na tabela; **você preenche só o que é seu**, e ajusta o resto se o que viu foi diferente.
 
 "Blameless" não é cortesia; é método. A pergunta não é "quem rodou o sync", é "**o que no sistema permitiu** que um metadado corrompido chegasse ao cliente sem nenhum gate e sem nenhum sinal técnico". A resposta à primeira vira medo de mexer; a resposta à segunda vira a lista acima.
 
@@ -1488,18 +1712,20 @@ Tudo está nos passos 12 a 19 e no painel.
 
 **21. Transforme o incidente em caso golden**
 
-No Codespaces. É a seta de volta da disciplina: o par **pergunta → caminho e versão esperados** do incidente é exatamente o formato de um caso do `golden_graph_v1`. Primeiro veja um caso existente, depois acrescente o seu e rode o gate contra o **`live`** (o que está atendendo):
+No Codespaces. O par **pergunta → caminho e versão esperados** do incidente vira um caso do `golden_graph_v1`. Primeiro, veja um caso existente:
 
 ```bash
 cd /home/vscode/environment/quantum-ai-assistant
 head -1 evals/golden_graph_v1.jsonl | python3 -m json.tool --no-ensure-ascii
 ```
 
-**Esperado:** um JSON cujo `case_id` é `gg-incidente-troca-fone-2026-11-14` (pergunta `Comprei um fone de ouvido, qual o prazo para trocar?`), com `tags: ["postmortem", "stale_graph_policy"]`.
+**Esperado:** um JSON com `case_id` `gg-incidente-troca-fone-2026-11-14` e `tags: ["postmortem", "stale_graph_policy"]`.
 
 <details>
 <summary><b>💡 Clique para entender: os campos de um caso golden e por que o do incidente já existia</b></summary>
 <blockquote>
+
+É a seta de volta da disciplina: o par **pergunta → caminho e versão esperados** do incidente é exatamente o formato de um caso do `golden_graph_v1`. Primeiro você vê um caso existente, depois acrescenta o seu e roda o gate contra o **`live`** (o que está atendendo). O caso do `head -1` tem a pergunta `Comprei um fone de ouvido, qual o prazo para trocar?`.
 
 O incidente nasceu de uma pergunta ("quantos dias para trocar um fone?") respondida pela estratégia `graph` com a versão errada. Com um caso golden para ela, o `graph-policy-gate` reprova qualquer release cuja semente ligue o fone à v2, e o `postdeploy` reprova qualquer candidate cujo grafo em runtime faça isso.
 
@@ -1508,7 +1734,7 @@ O JSON tem `case_id`, `question`, `as_of_date`, `tenant`, `user_role`, `gate_str
 </blockquote>
 </details>
 
-**21.1. Acrescente o seu caso e rode o gate contra o `live`.** A **formulação exata** da pergunta da cliente, que não está no arquivo (o comando se recusa a duplicar se rodar duas vezes; para desfazer: `git checkout -- evals/golden_graph_v1.jsonl`):
+**21.1. Acrescente o seu caso e rode o gate contra o `live`.** O caso usa a **formulação exata** da pergunta da cliente (o comando não duplica; para desfazer: `git checkout -- evals/golden_graph_v1.jsonl`):
 
 ```bash
 cd /home/vscode/environment/quantum-ai-assistant
@@ -1519,35 +1745,44 @@ APP=$(terraform -chdir=infra-ecs output -raw app_url)
 python3 evals/graph_gate.py --target http --url "$APP" --out /tmp/graph-gate-pm.json --junit /tmp/junit-graph-pm.xml; echo "exit=$?"
 ```
 
-**Esperado:** `== VEREDITO: PASS` e `exit=0` (saída real da homologação contra o `live` restaurado, com `gate_strategies: ["graph"]` no caso novo, 8 s; os números são deste golden com o seu caso acrescentado):
+**Esperado:** `== VEREDITO: PASS` e `exit=0`.
 
-> ```text
-> == graph-policy-gate | alvo=http | set=golden_graph_v1 | seed=42
->    seed/front matter: OK
->    estrategia  Hit@k  MRR     fonte_vigente  recusa  caminho_grafo  casos
->    bm25        1.0    1.0     1.0            1.0     None           1.0
->    vector      1.0    0.9167  1.0            1.0     None           0.9565
->    graph       1.0    1.0     1.0            1.0     1.0            1.0
->    criticos: tenant_acl_violation_count=0 | stale_source_served_count=0 | wrong_graph_edge_count=0 | order_auth_violation_count=0
->    slice              n  pass
->    abstention         2  1.0
->    adversarial        2  1.0
->    authorization      2  1.0
->    graph_multi_hop    4  1.0
->    graph_precedence   4  1.0
->    orders             3  1.0
->    temporal           2  1.0
->    tenant             3  1.0
->    vector_quality     4  0.75
-> == VEREDITO: PASS
-> exit=0
-> ```
+<details>
+<summary><b>📋 Saída completa esperada</b></summary>
+<blockquote>
 
-Passou, porque o grafo está restaurado.
+Saída real da homologação contra o `live` restaurado, com `gate_strategies: ["graph"]` no caso novo, 8 s; os números são deste golden com o seu caso acrescentado.
+
+```text
+== graph-policy-gate | alvo=http | set=golden_graph_v1 | seed=42
+   seed/front matter: OK
+   estrategia  Hit@k  MRR     fonte_vigente  recusa  caminho_grafo  casos
+   bm25        1.0    1.0     1.0            1.0     None           1.0
+   vector      1.0    0.9167  1.0            1.0     None           0.9565
+   graph       1.0    1.0     1.0            1.0     1.0            1.0
+   criticos: tenant_acl_violation_count=0 | stale_source_served_count=0 | wrong_graph_edge_count=0 | order_auth_violation_count=0
+   slice              n  pass
+   abstention         2  1.0
+   adversarial        2  1.0
+   authorization      2  1.0
+   graph_multi_hop    4  1.0
+   graph_precedence   4  1.0
+   orders             3  1.0
+   temporal           2  1.0
+   tenant             3  1.0
+   vector_quality     4  0.75
+== VEREDITO: PASS
+exit=0
+```
+
+</blockquote>
+</details>
 
 <details>
 <summary><b>💡 Clique para entender: métrica e limiar, e o que faltava de verdade</b></summary>
 <blockquote>
+
+Passou, porque o grafo está restaurado.
 
 O gate decide por **métrica e limiar** (os quatro contadores críticos em zero, pisos por estratégia e por slice), não por "todos os casos passaram": o veredito é `PASS` mesmo que um caso isolado reprove numa estratégia. É por isso que o caso novo cobra **só** `graph` (`"gate_strategies": ["graph"]`, igual ao caso modelo do `head -1`): para esta pergunta, o BM25 cita a garantia de eletrônicos e o vetorial se abstém, exatamente o que você viu na Demo 5.1 (similaridade não é aplicabilidade); cobrar as três faria o seu caso reprovar nelas sem acrescentar nada ao que o incidente ensinou.
 
@@ -1612,7 +1847,16 @@ eval $(ssh-agent -s) >/dev/null && ssh-add -k /home/vscode/.ssh/gitlab
 git push origin "$(git branch --show-current)"
 ```
 
-**Esperado:** o push termina e dispara um pipeline que vai até o `promote-live` com o caso novo no gate: **R3**, com `eval_set_version` novo e o mesmo `graph_seed_version`. Você não precisa esperá-lo em aula; confira depois que ficou verde.
+**Esperado:** o push dispara um pipeline que vai até o `promote-live`: **R3**. Não precisa esperá-lo em aula; confira depois que ficou verde.
+
+<details>
+<summary><b>💡 Clique para entender: o que muda em R3</b></summary>
+<blockquote>
+
+O pipeline vai até o `promote-live` com o caso novo no gate: **R3**, com `eval_set_version` novo e o mesmo `graph_seed_version`.
+
+</blockquote>
+</details>
 
 <details>
 <summary><b>⚠ Se der erro: <code>exit=1</code> na primeira avaliação (grafo restaurado)</b></summary>
@@ -1697,44 +1941,53 @@ bash ops/cloud/obs.sh destroy
 bash scripts/cloud/cleanup.sh
 ```
 
-**Esperado:** `"in_sync": true`, `Plan: 0 to add, 0 to change, 9 to destroy.` da observabilidade e, no fim, `cleanup: --dry-run: nada foi destruido.` Saída real da homologação (os três comandos somaram 60 s: `state` ~11 s, `obs.sh destroy` 48 s, `cleanup.sh` ~31 s):
+**Esperado:** no fim, `cleanup: --dry-run: nada foi destruido.` Leia as linhas `keep`: é o que o script **se recusa** a tocar.
 
-> ```text
-> incident: live: GET /admin/graph/state via runner i-... -> task 10.0.x.x:8001
-> {"environment": "live", "action": "state", ..., "graph_version": "c07dde5b8806", "graph_seed_version": "c07dde5b8806", "in_sync": true, "active_mutations": [], ...}
-> obs: DRY-RUN: plano de destruicao SO do state quantum-assistant/obs (nada foi apagado)
->   # aws_instance.obs will be destroyed
->   # aws_lb_listener_rule.grafana[0] will be destroyed
->   # aws_lb_target_group.grafana[0] will be destroyed
->   # aws_lb_target_group_attachment.grafana[0] will be destroyed
->   # aws_security_group.obs will be destroyed
->   # aws_vpc_security_group_egress_rule.obs_all will be destroyed
->   # aws_vpc_security_group_ingress_rule.grafana_from_alb["sg-..."] will be destroyed
->   # aws_vpc_security_group_ingress_rule.otlp_from_sources["sg-..."] will be destroyed
->   # aws_vpc_security_group_ingress_rule.otlp_from_sources["sg-..."] will be destroyed
-> Plan: 0 to add, 0 to change, 9 to destroy.
-> obs: para apagar de verdade: bash ops/cloud/obs.sh destroy --apply
-> cleanup: plano de destruicao do state s3://base-config-<SEU RM>/quantum-assistant/ecs/terraform.tfstate:
-> # terraform (state quantum-assistant/ecs/terraform.tfstate): 28 recursos
-> destroy  aws_cloudwatch_log_group.ecs                 /qc-assistant/ecs
-> destroy  aws_ecr_repository.repo["app"]               qc-assistant-app
-> destroy  aws_ecr_repository.repo["neo4j"]             qc-assistant-neo4j
-> destroy  aws_ecs_cluster.this                         qc-assistant
-> destroy  aws_ecs_service.env["candidate"]             qc-assistant-candidate
-> destroy  aws_ecs_service.env["live"]                  qc-assistant-live
-> destroy  aws_lb.this                                  qc-assistant-alb
-> destroy  aws_lb_target_group.env["live"]              qc-assistant-live-tg
-> destroy  aws_security_group.task                      qc-assistant-task-sg
-> ...  (29 linhas destroy no total: as nomeadas qc-assistant-, mais listener, regra do listener, 2 lifecycle policies do ECR, 3 parâmetros SSM e 6 regras de SG, que aparecem por ARN ou id sgr-)
-> # fora do terraform
-> deregister+delete  task-definition family qc-assistant-live        <n> revisoes ativas
-> deregister+delete  task-definition family qc-assistant-candidate   <n> revisoes ativas
-> keep  ssm /qc-assistant/<env>/{neo4j-password,neo4j-auth,admin-hmac}   use --with-secrets para apagar
-> keep  VPC fiap-lab, runner, bucket base-config-<SEU RM>, API de pedidos, observabilidade 5.2   nunca tocados
-> cleanup: --dry-run: nada foi destruido. Para destruir: bash scripts/cloud/cleanup.sh --apply
-> ```
+<details>
+<summary><b>📋 Saída completa esperada</b></summary>
+<blockquote>
+
+`"in_sync": true`, `Plan: 0 to add, 0 to change, 9 to destroy.` da observabilidade e, no fim, `cleanup: --dry-run: nada foi destruido.` Saída real da homologação (os três comandos somaram 60 s: `state` ~11 s, `obs.sh destroy` 48 s, `cleanup.sh` ~31 s):
+
+```text
+incident: live: GET /admin/graph/state via runner i-... -> task 10.0.x.x:8001
+{"environment": "live", "action": "state", ..., "graph_version": "c07dde5b8806", "graph_seed_version": "c07dde5b8806", "in_sync": true, "active_mutations": [], ...}
+obs: DRY-RUN: plano de destruicao SO do state quantum-assistant/obs (nada foi apagado)
+  # aws_instance.obs will be destroyed
+  # aws_lb_listener_rule.grafana[0] will be destroyed
+  # aws_lb_target_group.grafana[0] will be destroyed
+  # aws_lb_target_group_attachment.grafana[0] will be destroyed
+  # aws_security_group.obs will be destroyed
+  # aws_vpc_security_group_egress_rule.obs_all will be destroyed
+  # aws_vpc_security_group_ingress_rule.grafana_from_alb["sg-..."] will be destroyed
+  # aws_vpc_security_group_ingress_rule.otlp_from_sources["sg-..."] will be destroyed
+  # aws_vpc_security_group_ingress_rule.otlp_from_sources["sg-..."] will be destroyed
+Plan: 0 to add, 0 to change, 9 to destroy.
+obs: para apagar de verdade: bash ops/cloud/obs.sh destroy --apply
+cleanup: plano de destruicao do state s3://base-config-<SEU RM>/quantum-assistant/ecs/terraform.tfstate:
+# terraform (state quantum-assistant/ecs/terraform.tfstate): 28 recursos
+destroy  aws_cloudwatch_log_group.ecs                 /qc-assistant/ecs
+destroy  aws_ecr_repository.repo["app"]               qc-assistant-app
+destroy  aws_ecr_repository.repo["neo4j"]             qc-assistant-neo4j
+destroy  aws_ecs_cluster.this                         qc-assistant
+destroy  aws_ecs_service.env["candidate"]             qc-assistant-candidate
+destroy  aws_ecs_service.env["live"]                  qc-assistant-live
+destroy  aws_lb.this                                  qc-assistant-alb
+destroy  aws_lb_target_group.env["live"]              qc-assistant-live-tg
+destroy  aws_security_group.task                      qc-assistant-task-sg
+...  (29 linhas destroy no total: as nomeadas qc-assistant-, mais listener, regra do listener, 2 lifecycle policies do ECR, 3 parâmetros SSM e 6 regras de SG, que aparecem por ARN ou id sgr-)
+# fora do terraform
+deregister+delete  task-definition family qc-assistant-live        <n> revisoes ativas
+deregister+delete  task-definition family qc-assistant-candidate   <n> revisoes ativas
+keep  ssm /qc-assistant/<env>/{neo4j-password,neo4j-auth,admin-hmac}   use --with-secrets para apagar
+keep  VPC fiap-lab, runner, bucket base-config-<SEU RM>, API de pedidos, observabilidade 5.2   nunca tocados
+cleanup: --dry-run: nada foi destruido. Para destruir: bash scripts/cloud/cleanup.sh --apply
+```
 
 Leia as linhas `keep`: elas são a lista do que o script **se recusa** a tocar, impressa toda vez.
+
+</blockquote>
+</details>
 
 <details>
 <summary><b>💡 Clique para entender: por que dois scripts, e em que ordem</b></summary>
@@ -1765,13 +2018,19 @@ O `obs.sh destroy --apply` apaga esses 9 recursos e grava `/qc-assistant/obs/otl
 
 **24. Desligue ou destrua o runner: fim do ciclo de nuvem**
 
-No Codespaces. O runner é o único recurso que custa parado e sobrevive à limpeza acima. Se você ainda vai voltar à Aula 5, **desligue** em vez de destruir. Para **desligar** (reversível; `make runner` liga de volta):
+No Codespaces. O runner é o único recurso que custa parado e sobrevive à limpeza acima. Se ainda vai voltar à Aula 5, **desligue** (reversível; `make runner` liga de volta):
 
 ```bash
 INSTANCE=$(aws ec2 describe-instances --region us-east-1 --filters "Name=tag:Name,Values=quantum-ai-gitlab-runner" "Name=instance-state-name,Values=running,stopped" --query 'Reservations[].Instances[].InstanceId' --output text)
 echo "runner: $INSTANCE"
 aws ec2 stop-instances --instance-ids "$INSTANCE" --region us-east-1 --query 'StoppingInstances[].CurrentState.Name' --output text
 ```
+
+**Esperado:** `stopping`.
+
+<details>
+<summary><b>🗑 Alternativa: destruir o runner (irreversível, só com a Aula 5 encerrada)</b></summary>
+<blockquote>
 
 Para **destruir** (irreversível; só com a Aula 5 encerrada), use o Terraform do módulo 02, em dois blocos, **conferindo o plano** antes:
 
@@ -1789,7 +2048,10 @@ cd /workspaces/FIAP-AI-Devops-CICD/02-Ansible/01-provisionando-gitlab-runner/ter
 terraform destroy -auto-approve
 ```
 
-**Esperado:** `stopping` (desligar) ou `Destroy complete! Resources: 3 destroyed.` (destruir). No GitLab, o runner fica offline; pode removê-lo no link `runners` do `make links` (**Settings → CI/CD → Runners**).
+**Esperado:** `Destroy complete! Resources: 3 destroyed.` No GitLab, o runner fica offline; pode removê-lo no link `runners` do `make links` (**Settings → CI/CD → Runners**).
+
+</blockquote>
+</details>
 
 <details>
 <summary><b>💡 Clique para entender: por que destruir aqui não deixa nada órfão</b></summary>
