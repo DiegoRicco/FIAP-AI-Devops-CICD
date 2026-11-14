@@ -267,6 +267,43 @@ def test_coop_vai_quando_o_proxy_diz_https(client):
     assert "default-src 'self'" in r.headers["content-security-policy"]
 
 
+def test_cypher_do_catalogo_e_constante_e_sem_valores():
+    # O painel "Cypher parametrizado (somente leitura)" mostra o texto EXATO que o
+    # driver executa e so os NOMES dos parametros: nada de valor nem da pergunta.
+    pytest.importorskip("neo4j")
+    from graph import queries
+    from lab.engine import Engine
+    from vector import index as vindex
+    cat = Engine._cypher_catalog()
+    assert cat["graph.policy_for_product.v1"] == queries.POLICY_FOR_PRODUCT["cypher"].strip()
+    assert cat[vindex.QUERY_ID] == vindex.KNN.strip()
+    assert all("{_TAIL}" not in txt and "{{" not in txt for txt in cat.values())
+    assert queries.param_names(cat["graph.policy_for_product.v1"]) == ["product_id", "tenant", "topic"]
+    assert queries.param_names(cat[vindex.QUERY_ID]) == ["index", "k", "embedding"]
+
+    entry = Engine._with_cypher(Engine.__new__(Engine), {"cypher_query_id": "graph.policy_for_product.v1"})
+    assert entry["cypher"].startswith("MATCH tp = (p:Product {id: $product_id})")
+    assert entry["cypher_params"] == ["product_id", "tenant", "topic"]
+    bm25 = Engine._with_cypher(Engine.__new__(Engine), {"cypher_query_id": None})
+    assert "cypher" not in bm25 and "cypher_params" not in bm25
+
+
+def test_compare_repassa_cypher_e_nomes_de_parametros(client, engine):
+    original = engine.compare
+
+    def compare(question, as_of_date, **kw):
+        out = original(question, as_of_date, **kw)
+        out["strategies"]["graph"].update({"cypher_query_id": "graph.policy_for_product.v1",
+                                           "cypher": "MATCH (p:Product {id: $product_id}) RETURN p",
+                                           "cypher_params": ["product_id"]})
+        return out
+    engine.compare = compare
+    r = client.post("/lab/compare", json={"question": "Qual o prazo para trocar um fone?", "as_of_date": "2026-11-14"})
+    g = r.json()["strategies"]["graph"]
+    assert r.status_code == 200 and g["cypher_params"] == ["product_id"]
+    assert "fone" not in json.dumps(g["cypher"]) and "fone" not in json.dumps(g["cypher_params"])
+
+
 # ------------------------------------------------------------ admin HMAC
 @pytest.fixture
 def admin(engine, monkeypatch):

@@ -150,7 +150,7 @@
       "gridPos": {
         "x": 0,
         "y": 0,
-        "w": 7,
+        "w": 6,
         "h": 7
       },
       "datasource": {
@@ -251,10 +251,10 @@
     {
       "id": 2,
       "type": "stat",
-      "title": "Perguntas atendidas",
-      "description": "Quantas perguntas o assistente do ambiente escolhido respondeu no período (inclui os probes; health check do ALB não conta). Para o negócio: volume de atendimento sem atendente.",
+      "title": "Perguntas",
+      "description": "Perguntas atendidas. Quantas perguntas o assistente do ambiente escolhido respondeu no período (inclui os probes; health check do ALB não conta). Para o negócio: volume de atendimento sem atendente.",
       "gridPos": {
-        "x": 7,
+        "x": 6,
         "y": 0,
         "w": 4,
         "h": 7
@@ -321,10 +321,10 @@
     {
       "id": 3,
       "type": "stat",
-      "title": "Com a política vigente",
-      "description": "Das respostas verificadas pelos probes nos últimos 5 minutos, quantas usaram a versão de política que vale hoje. Fica vermelho abaixo de 100%: uma única política vencida já é crítica. Sem o n mínimo na janela o painel diz 'Sem amostra suficiente' em vez de mostrar 100%.",
+      "title": "Política vigente",
+      "description": "Com a política vigente. Das respostas verificadas pelos probes nos últimos 2 minutos (a mesma janela do semáforo), quantas usaram a versão de política que vale hoje. Fica vermelho abaixo de 100%: uma única política vencida já é crítica. Sem o n mínimo na janela o painel diz 'Sem amostra suficiente' em vez de mostrar 100%.",
       "gridPos": {
-        "x": 11,
+        "x": 10,
         "y": 0,
         "w": 5,
         "h": 7
@@ -339,7 +339,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(sum(increase(qc_probe_source_current_total{scenario_id=~\"$scenario_id\", environment=~\"$environment\", release_id=~\"$release\"}[5m])) / sum(increase(qc_probe_source_checked_total{scenario_id=~\"$scenario_id\", environment=~\"$environment\", release_id=~\"$release\"}[5m]))) and on() (sum(qc_quality_samples{scenario_id=~\"$scenario_id\", environment=~\"$environment\"}) >= on() max(qc_quality_min_samples{scenario_id=~\"$scenario_id\", environment=~\"$environment\"}))",
+          "expr": "(sum(increase(qc_probe_source_current_total{scenario_id=~\"$scenario_id\", environment=~\"$environment\", release_id=~\"$release\"}[2m])) / sum(increase(qc_probe_source_checked_total{scenario_id=~\"$scenario_id\", environment=~\"$environment\", release_id=~\"$release\"}[2m]))) and on() (sum(qc_quality_samples{scenario_id=~\"$scenario_id\", environment=~\"$environment\"}) >= on() max(qc_quality_min_samples{scenario_id=~\"$scenario_id\", environment=~\"$environment\"}))",
           "refId": "A",
           "legendFormat": "vigente",
           "range": false,
@@ -398,10 +398,10 @@
     {
       "id": 4,
       "type": "stat",
-      "title": "Caminho do grafo conferido",
-      "description": "Das respostas dos probes que passaram pelo grafo (produto → categoria → campanha → política → versão) nos últimos 5 minutos, quantas chegaram à versão de política que o gabarito espera.",
+      "title": "Caminho do grafo",
+      "description": "Caminho do grafo conferido. Das respostas dos probes que passaram pelo grafo (produto → categoria → campanha → política → versão) nos últimos 2 minutos (a mesma janela do semáforo), quantas chegaram à versão de política que o gabarito espera.",
       "gridPos": {
-        "x": 16,
+        "x": 15,
         "y": 0,
         "w": 4,
         "h": 7
@@ -416,7 +416,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(sum(increase(qc_probe_graph_path_correct_total{scenario_id=~\"$scenario_id\", environment=~\"$environment\", release_id=~\"$release\"}[5m])) / sum(increase(qc_probe_graph_path_checked_total{scenario_id=~\"$scenario_id\", environment=~\"$environment\", release_id=~\"$release\"}[5m]))) and on() (sum(qc_quality_samples{scenario_id=~\"$scenario_id\", environment=~\"$environment\"}) >= on() max(qc_quality_min_samples{scenario_id=~\"$scenario_id\", environment=~\"$environment\"}))",
+          "expr": "(sum(increase(qc_probe_graph_path_correct_total{scenario_id=~\"$scenario_id\", environment=~\"$environment\", release_id=~\"$release\"}[2m])) / sum(increase(qc_probe_graph_path_checked_total{scenario_id=~\"$scenario_id\", environment=~\"$environment\", release_id=~\"$release\"}[2m]))) and on() (sum(qc_quality_samples{scenario_id=~\"$scenario_id\", environment=~\"$environment\"}) >= on() max(qc_quality_min_samples{scenario_id=~\"$scenario_id\", environment=~\"$environment\"}))",
           "refId": "A",
           "legendFormat": "grafo",
           "range": false,
@@ -476,11 +476,11 @@
       "id": 5,
       "type": "stat",
       "title": "Pedidos sem status",
-      "description": "Dos probes de pedido dos últimos 5 minutos, quantos ficaram sem status porque a API de pedidos não respondeu (o assistente recusou com honestidade). Sinal técnico, separado da qualidade documental.",
+      "description": "Pedidos sem status. Dos probes de pedido dos últimos 2 minutos (a mesma janela do semáforo), quantos ficaram sem status porque a API de pedidos não respondeu (o assistente recusou com honestidade). Sinal técnico, separado da qualidade documental.",
       "gridPos": {
-        "x": 20,
+        "x": 19,
         "y": 0,
-        "w": 4,
+        "w": 5,
         "h": 7
       },
       "datasource": {
@@ -493,7 +493,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(sum(increase(qc_probe_total{scenario_id=~\"$scenario_id\", environment=~\"$environment\", release_id=~\"$release\", result=\"fallback\"}[5m])) or vector(0)) / sum(increase(qc_probe_total{scenario_id=~\"$scenario_id\", environment=~\"$environment\", release_id=~\"$release\", slice=~\"pedidos|orders\"}[5m]))",
+          "expr": "(sum(increase(qc_probe_total{scenario_id=~\"$scenario_id\", environment=~\"$environment\", release_id=~\"$release\", result=\"fallback\"}[2m])) or vector(0)) / sum(increase(qc_probe_total{scenario_id=~\"$scenario_id\", environment=~\"$environment\", release_id=~\"$release\", slice=~\"pedidos|orders\"}[2m]))",
           "refId": "A",
           "legendFormat": "falhas",
           "range": false,
@@ -987,7 +987,7 @@
       "id": 9,
       "type": "bargauge",
       "title": "Acerto dos probes por assunto",
-      "description": "Os 6 assuntos com menor acerto nos últimos 5 minutos (probes rotulados). Ajuda a ver QUAL assunto está sofrendo, por exemplo só Políticas.",
+      "description": "Os 6 assuntos com menor acerto nos últimos 2 minutos (probes rotulados, a mesma janela do semáforo). Ajuda a ver QUAL assunto está sofrendo, por exemplo só Políticas.",
       "gridPos": {
         "x": 12,
         "y": 16,
@@ -1004,7 +1004,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "bottomk(6, sum by (slice) (increase(qc_probe_total{scenario_id=~\"$scenario_id\", environment=~\"$environment\", release_id=~\"$release\", result=\"pass\"}[5m])) / sum by (slice) (increase(qc_probe_total{scenario_id=~\"$scenario_id\", environment=~\"$environment\", release_id=~\"$release\", result=~\"pass|fail\"}[5m])))",
+          "expr": "bottomk(6, sum by (slice) (increase(qc_probe_total{scenario_id=~\"$scenario_id\", environment=~\"$environment\", release_id=~\"$release\", result=\"pass\"}[2m])) / sum by (slice) (increase(qc_probe_total{scenario_id=~\"$scenario_id\", environment=~\"$environment\", release_id=~\"$release\", result=~\"pass|fail\"}[2m])))",
           "refId": "A",
           "legendFormat": "{{slice}}",
           "range": false,

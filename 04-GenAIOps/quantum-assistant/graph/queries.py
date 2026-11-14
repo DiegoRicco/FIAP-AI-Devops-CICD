@@ -11,6 +11,8 @@ Regras de seguranca:
   da PolicyVersion lidos do grafo, e a regra unica core.retrieval.check_access
   decide em Python, antes de qualquer texto ir para o composer.
 """
+import re
+
 from neo4j import Query
 
 QUERY_TIMEOUT_S = 3.0
@@ -102,6 +104,16 @@ RETURN {_EDGE_MAP} AS edge, startNode(r) {{.*, text: null, embedding: null, syno
        labels(endNode(r))[0] AS bl
 """,
 }
+
+
+def param_names(cypher):
+    """Nomes dos parametros ($nome) de um Cypher, em ordem de aparicao. Vai para
+    a interface sem os VALORES: o aluno ve a forma da consulta, nunca dados."""
+    seen = []
+    for name in re.findall(r"\$([A-Za-z_][A-Za-z0-9_]*)", cypher):
+        if name not in seen:
+            seen.append(name)
+    return seen
 
 
 def run(session, query, timeout=QUERY_TIMEOUT_S, **params):

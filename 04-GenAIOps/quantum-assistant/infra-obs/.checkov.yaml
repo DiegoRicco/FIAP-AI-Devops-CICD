@@ -1,0 +1,15 @@
+# Excecoes ACEITAS do Checkov para a observabilidade da Demo 5.2, uma por linha e
+# cada uma com o motivo (mesmo padrao do infra-ecs/.checkov.yaml):
+#   checkov -d infra-obs --config-file infra-obs/.checkov.yaml
+# Achado novo, fora desta lista, reprova. Remover uma linha daqui e o jeito de
+# transformar a excecao em obrigacao de novo.
+framework:
+  - terraform
+skip-check:
+  # Subnet publica sem NAT Gateway (NAT custa por hora e o Learner Lab nao precisa): o IP publico da EC2 e so de
+  # SAIDA (docker pull, S3, SSM). Nenhuma regra de entrada vem da internet: 3000 so do SG do ALB, 4318 so do SG
+  # das tasks e do runner; Jaeger/Prometheus/Loki publicam so em 127.0.0.1. Sem SSH e sem key pair.
+  - CKV_AWS_88
+  # Target group do Grafana em HTTP: o trafego ALB -> EC2 fica dentro da VPC e nao ha certificado sem dominio
+  # (mesmo motivo do CKV_AWS_378 no infra-ecs). Dados ficticios; nunca reutilizar uma senha real no Grafana do lab.
+  - CKV_AWS_378

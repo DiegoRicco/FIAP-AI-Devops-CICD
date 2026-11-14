@@ -705,6 +705,23 @@ class Engine:
         return out, base
 
     # ------------------------------------------------------------- API
+    @staticmethod
+    def _cypher_catalog():
+        """id da consulta -> texto EXATO que o driver executa (constante de codigo,
+        nunca entrada do usuario). O painel "Cypher parametrizado" mostra isto."""
+        cat = {q["id"]: q["cypher"].strip() for q in (queries.POLICY_FOR_PRODUCT, queries.POLICY_FOR_CATEGORY,
+                                                     queries.CHUNKS_FOR_VERSION, queries.PRODUCT_NEIGHBORHOOD)}
+        cat[vindex.QUERY_ID] = vindex.KNN.strip()
+        return cat
+
+    def _with_cypher(self, entry):
+        qid = entry.get("cypher_query_id")
+        text = self._cypher_catalog().get(qid) if qid else None
+        if text:
+            entry["cypher"] = text
+            entry["cypher_params"] = queries.param_names(text)
+        return entry
+
     def _strategy_entry(self, name, out, detail, attrs):
         entry = {"strategy": name, "source": SOURCES[name], "answer": out["answer"],
                  "abstained": out["abstained"], "abstain_reason": out["abstain_reason"],
@@ -712,7 +729,7 @@ class Engine:
                                 "section": c.get("section")} for c in out["citations"]],
                  "evidence_category": out.get("evidence_category")}
         entry.update(detail)
-        return entry
+        return self._with_cypher(entry)
 
     def _run_strategy(self, name, question, as_of, tenant, role, attrs):
         fn = {"bm25": self._bm25, "vector": self._vector, "graph": self._graph}[name]
