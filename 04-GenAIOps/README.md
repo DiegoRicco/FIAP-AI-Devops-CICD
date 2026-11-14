@@ -121,8 +121,9 @@ flowchart LR
     runner -. SSM + HMAC · porta 8001 .-> live
 ```
 
-<!-- NOVA-IMAGEM: 01-Release-RAG-Quality-Gates/img/arquitetura-modulo-04.png | capturar: diagrama Excalidraw da arquitetura acima, com ícones oficiais AWS, legível em telão | depois de salvar o arquivo, descomente a linha abaixo -->
-<!-- ![Arquitetura do módulo 04: push no projeto quantum-ai-assistant, pipeline no runner EC2, imagem por digest no ECR, dois services ECS Fargate (live e candidate, cada um com app e Neo4j) atrás do ALB, API de pedidos em Lambda e DynamoDB, EC2 de observabilidade recebendo OTLP e rodando probes, e a rota administrativa privada do runner para a task live](01-Release-RAG-Quality-Gates/img/arquitetura-modulo-04.png) -->
+![Arquitetura do módulo 04: o GitLab, fora da AWS, dispara o pipeline no runner EC2, que faz build e push da imagem no ECR e implanta os dois services ECS Fargate (live e candidate, cada um com app e Neo4j) atrás do ALB; o ALB também leva /grafana à EC2 de observabilidade, que recebe OTLP e roda os probes; a API de pedidos fica em API Gateway, Lambda e DynamoDB; o incidente da Demo 5.2 vai do Codespaces pelo SSM Run Command ao runner e à porta admin 8001 do live, fora do pipeline](01-Release-RAG-Quality-Gates/img/arquitetura-modulo-04.png)
+
+> Fonte editável: [`diagramas/arquitetura-modulo-04.excalidraw`](diagramas/arquitetura-modulo-04.excalidraw), gerada por `diagramas/gerar_aula5_ecs.py`.
 
 Capacidades, não logotipos: `cliente → ALB → app → auth.tenant → intent.route → (entity.link → graph.traverse | vector.embed → vector.query | bm25) → policy.version.filter → compose.deterministic (sem LLM) → citações e recusas`, com `orders.lookup` para pedidos. Tudo isso vira spans OpenTelemetry com os mesmos nomes.
 

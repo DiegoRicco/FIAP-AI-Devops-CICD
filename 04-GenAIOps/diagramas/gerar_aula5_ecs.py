@@ -38,8 +38,10 @@ minimo de fonte 15 (o PNG precisa ser legivel num notebook 1366x768).
 """
 import os
 
+import sys
+
 from gerar import (ALERTA, AWS, CINZA, DIR, FUNDO, GITLAB, MAGENTA, OTLP,
-                   TEXTO, Diagrama)
+                   TEXTO, Diagrama, log)
 
 AZUL = "#1971C2"      # selo "Demo 5.1"
 VERDE = "#2F9E44"     # selo "Demo 5.2"
@@ -95,137 +97,229 @@ class D(Diagrama):
 
 
 # ---------------------------------------------------------------------------
-# Demo 5.1: onde mora cada evidencia?
 # ---------------------------------------------------------------------------
+ESCURO = "#343a40"    # L32: texto secundario escuro, nunca cinza medio
+CINZA2 = ESCURO       # nome usado pela Demo 5.2 para o mesmo tom
+
+
+def folgas(d, minimo=15, ponta=40):
+    """L36: rotulo a >= 15 px de qualquer borda e ponta de seta longe de borda
+    intermediaria. Devolve a lista de violacoes (vazia = ok)."""
+    caixas = [e for e in d.elements if e["type"] == "rectangle"
+              and e["strokeColor"] != "transparent"]
+    rotulos = [e for e in d.elements if e["type"] == "rectangle"
+               and e["strokeColor"] == "transparent"]
+    ruins = []
+    for r in rotulos:
+        rl, rr, rt, rb = r["x"], r["x"] + r["width"], r["y"], r["y"] + r["height"]
+        for c in caixas:
+            cl, cr, ct, cb = c["x"], c["x"] + c["width"], c["y"], c["y"] + c["height"]
+            # distancia do retangulo do rotulo a cada uma das 4 bordas
+            for nome, dist, sobrepoe in (
+                    ("esq", min(abs(rl - cl), abs(rr - cl)) if not rl < cl < rr else 0, rt < cb and rb > ct),
+                    ("dir", min(abs(rl - cr), abs(rr - cr)) if not rl < cr < rr else 0, rt < cb and rb > ct),
+                    ("topo", min(abs(rt - ct), abs(rb - ct)) if not rt < ct < rb else 0, rl < cr and rr > cl),
+                    ("base", min(abs(rt - cb), abs(rb - cb)) if not rt < cb < rb else 0, rl < cr and rr > cl)):
+                if sobrepoe and dist < minimo:
+                    ruins.append(f"rotulo@({rl:.0f},{rt:.0f}) a {dist:.0f}px da borda {nome} de caixa@({cl:.0f},{ct:.0f})")
+    for e in d.elements:
+        if e["type"] != "arrow":
+            continue
+        px = e["x"] + e["points"][-1][0]
+        py = e["y"] + e["points"][-1][1]
+        perto = []
+        for c in caixas:
+            cl, cr, ct, cb = c["x"], c["x"] + c["width"], c["y"], c["y"] + c["height"]
+            for dist, dentro in ((abs(px - cl), ct <= py <= cb), (abs(px - cr), ct <= py <= cb),
+                                 (abs(py - ct), cl <= px <= cr), (abs(py - cb), cl <= px <= cr)):
+                if dentro and dist < ponta:
+                    perto.append(dist)
+        perto.sort()
+        # a borda mais proxima (<= 12) e o destino; qualquer outra < 40 e ruim
+        extras = perto[1:] if perto and perto[0] <= 12 else perto
+        for dist in extras:
+            ruins.append(f"ponta de seta em ({px:.0f},{py:.0f}) a {dist:.0f}px de outra borda")
+    return ruins
+
+
 def demo_51():
     d = D()
+    ESC = "#343a40"   # L32: texto secundario escuro
     d.texto("Quantum Commerce · Demo 5.1: onde mora cada evidência da "
-            "resposta?", 30, 24, 1760, size=32, cor=MAGENTA, align="left")
+            "resposta?", 30, 24, 1780, size=32, cor=MAGENTA, align="left")
     d.texto("Empresa fictícia. Não há LLM: a resposta é montada a partir do "
-            "trecho recuperado e citado. A imagem no ECR é o release.",
-            30, 72, 1760, size=20, cor=CINZA, align="left")
-
-    # Voce, fora da AWS
-    d.no_s("user", "Você (navegador\ne Codespaces)", 115, 440, s=72, w=200,
-           size=17)
-    d.seta([(160, 440), (322, 440)], cor=TEXTO, largura=3)
-    d.rotulo("HTTP :80", 205, 408, 80)
-
-    # AWS
-    d.caixa(260, 130, 1520, 1020, "", AWS)
-    d.imagem("aws-cloud", 274, 138, 36)
-    d.texto("AWS · us-east-1", 318, 146, 900, size=18, cor=AWS,
+            "trecho recuperado e citado.", 30, 72, 1780, size=20, cor=ESC,
             align="left")
-    d.ret(275, 178, 1180, 724, cor=AWS, bg="transparent", largura=1)
-    d.texto("VPC fiap-lab\n(subnets públicas,\nsem NAT)", 285, 188, 220,
-            size=16, cor=AWS, align="left")
 
-    alb = d.no_s("elb", "Application Load\nBalancer · HTTP :80\n"
-                 "qc-assistant-alb", 370, 440, s=80, w=220, size=16)
-
-    # --- service live ---
-    d.caixa(520, 190, 920, 560, "ECS Fargate · service qc-assistant-live: "
-            "1 task, a que o cliente usa", TEXTO, bg=FUNDO,
-            icones=("fargate",), size=18)
-    # conteiner app
-    d.ret(545, 245, 530, 485, bg="#ffffff")
-    d.imagem("fastapi", 557, 253, 34)
-    d.imagem("python", 595, 253, 34)
-    d.texto("contêiner app · FastAPI · porta 8000", 637, 260, 430, size=17,
+    # --- Voce (no papel do cliente, fora da AWS) <-> ALB ---
+    YA = 600
+    d.no_s("user", "Você\n(no papel do\ncliente)", 75, YA, s=72, w=150,
+           size=18)
+    d.seta([(117, YA), (288, YA)], cor=TEXTO, largura=3)
+    d.texto("HTTP :80", 126, YA - 40, 90, size=18,
             align="left")
-    X, W = 575, 480
-    d.cartao(X, 292, W, 70, "① BM25 · palavras",
-             "índice em memória do próprio app", csize=16)
-    d.cartao(X, 374, W, 84, "② Vetorial · significado",
-             "o modelo de embeddings roda na CPU do app (só\n"
-             "gera vetores) e consulta o índice no Neo4j", csize=16)
-    d.cartao(X, 470, W, 84, "③ Grafo · relações",
-             "consulta Cypher que percorre o grafo\nno Neo4j",
-             csize=16)
-    d.cartao(X, 568, W, 70, "mesmo filtro nas três: vigência, tenant, ACL",
-             "composer determinístico: trecho + citação (sem LLM)",
-             bg="#f1f3f5", csize=16)
-    d.cartao(X, 650, W, 66, "④ Pergunta sobre pedido: outro caminho",
-             "status e entrega vêm da API de pedidos, não do grafo",
-             csize=16, bg="#fff9db")
-    # colchete: as tres estrategias passam pelo mesmo filtro
-    d.seta([(X - 4, 327), (X - 18, 327), (X - 18, 603), (X - 6, 603)],
-           cor=TEXTO, largura=2)
-    d.linha([(X - 18, 416), (X - 4, 416)], cor=TEXTO)
-    d.linha([(X - 18, 512), (X - 4, 512)], cor=TEXTO)
 
-    # conteiner neo4j
-    d.ret(1135, 245, 285, 405, bg="#ffffff")
-    d.imagem("neo4j", 1147, 253, 34)
-    d.texto("contêiner neo4j\nCommunity 5.26", 1189, 253, 220, size=17,
-            align="left")
-    d.texto("aceita conexão só de\ndentro da task", 1149, 306, 260,
-            size=15, cor=CINZA, align="left")
-    d.cartao(1150, 374, 255, 84, "índice vetorial",
-             "chunk_embedding\n(cosseno, 384 dimensões)")
-    d.cartao(1150, 470, 255, 84, "grafo",
-             "produto → categoria →\npolítica → versão → trecho")
-    d.texto("reconstruídos a partir\nda imagem a cada\nsubida da task",
-            1150, 562, 255, size=15, cor=CINZA, align="left")
-    d.seta([(X + W + 6, 416), (1142, 416)], cor=TEXTO, largura=2)
-    d.seta([(X + W + 6, 512), (1142, 512)], cor=TEXTO, largura=2)
+    # --- AWS e VPC (L28: folga >= 27 px; L44: vaos >= 50 px nas travessias)
+    d.caixa(220, 130, 1580, 1470, "", AWS)
+    d.imagem("aws-cloud", 234, 138, 36)
+    d.texto("AWS · us-east-1", 278, 146, 600, size=18, cor=AWS, align="left")
+    d.ret(252, 186, 1258, 1152, cor=AWS, bg="transparent", largura=1)
+    d.texto("VPC fiap-lab\nsubnets públicas", 264, 196, 190, size=18,
+            cor=AWS, align="left")
 
-    # ALB -> live e -> candidate (cada rota com o proprio rotulo)
-    d.seta([(alb["r"] + 8, 440), (512, 440)], cor=TEXTO, largura=3)
-    d.rotulo("/ (padrão)", 465, 406, 84, size=15)
-    d.seta([(370, 565), (370, 835), (512, 835)], cor=TEXTO, largura=3)
-    d.rotulo("/candidate*", 445, 803, 96, size=15)
+    alb = d.no_s("elb", "Application\nLoad Balancer", 336, YA, s=80, w=170,
+                 size=18)
 
     # --- service candidate ---
-    d.caixa(520, 775, 920, 120, "ECS Fargate · service "
-            "qc-assistant-candidate", TEXTO, bg=FUNDO,
+    d.caixa(470, 228, 990, 92, "ECS Fargate · service "
+            "qc-assistant-candidate", TEXTO, bg=FUNDO, icones=("fargate",),
+            size=18)
+    d.texto("a próxima imagem, em teste, com app + Neo4j próprios; nunca "
+            "lê nem escreve o grafo do live", 484, 274, 920, size=18,
+            cor=ESC, align="left")
+
+    # --- service live ---
+    d.caixa(470, 350, 990, 960, "ECS Fargate · service qc-assistant-live: "
+            "a task que atende você", TEXTO, bg=FUNDO,
             icones=("fargate",), size=18)
-    d.texto("a mesma estrutura (app + Neo4j próprios) com a próxima imagem."
-            "\nNunca lê nem escreve o grafo do live.", 540, 820, 880,
-            size=16, cor=CINZA, align="left")
+    BX = (814, 1010, 1206)   # colunas das buscas = colunas dos armazenamentos
+    BW = 184
+    # conteiner neo4j
+    YN = 410
+    d.ret(492, YN, 946, 180, bg="#ffffff")
+    d.imagem("neo4j", 504, YN + 8, 34)
+    d.texto("contêiner neo4j · Community 5.26", 546, YN + 15, 500, size=18,
+            align="left")
+    d.texto("só aceita conexão de\ndentro da task; dados\nrefeitos da "
+            "imagem a\ncada subida", 508, YN + 56, 230, size=18, cor=ESC,
+            align="left")
+    d.cartao(BX[1], YN + 44, BW, 88, "índice vetorial",
+             "vetores dos\ntrechos", csize=18, ccor=ESC)
+    d.cartao(BX[2], YN + 44, BW, 88, "grafo",
+             "liga produto,\npolítica e trecho", csize=18, ccor=ESC)
 
-    # --- API de pedidos ---
-    d.caixa(1475, 560, 285, 555, "API de pedidos\n(fictícia, infra própria)",
-            TEXTO, bg=FUNDO, size=17)
-    gw = d.no_s("apigateway", "Amazon API Gateway", 1617, 700, s=64, w=260)
-    lam = d.no_s("lambda", "AWS Lambda\nqc-assistant-orders", 1617, 860,
-                 s=64, w=260)
-    ddb = d.no_s("dynamodb", "Amazon DynamoDB\npedidos fictícios", 1617,
-                 1020, s=64, w=260)
-    d.seta([(X + W + 6, 683), (gw["l"] - 8, 683)], cor=TEXTO, largura=3)
-    d.rotulo("GET /orders/{id}", 1290, 698, 140, size=15)
-    d.seta([(1617, 774), (1617, lam["t"] - 8)], cor=TEXTO, largura=2)
-    d.seta([(1617, 952), (1617, ddb["t"] - 8)], cor=TEXTO, largura=2)
+    # conteiner app (vao de 50 px ate o neo4j: as setas "consulta" cruzam)
+    YAPP = 640
+    d.ret(492, YAPP, 946, 646, bg="#ffffff")
+    d.imagem("fastapi", 504, YAPP + 7, 34)
+    d.imagem("python", 542, YAPP + 7, 34)
+    d.texto("contêiner app · FastAPI · porta 8000", 586, YAPP + 14, 400,
+            size=18, align="left")
+    # grupo das tres buscas em paralelo
+    GX, GY, GR = 770, 836, 1414
+    d.ret(GX, GY, GR - GX, 150, cor=CINZA, bg="#ffffff", largura=1)
+    d.texto("busca em paralelo", GX + 14, GY + 9,
+            160, size=18, cor=ESC, align="left")
+    YB = GY + 44          # topo dos cartoes de busca
+    YF = 1036             # filtro (vao de 50 px ate o grupo)
+    YCP = 1166            # composer e pedido
+    YE = YB + 46          # altura da seta "/" e do roteador
+    RX, RW = 540, 150     # coluna do roteador e do pedido
+    RC = RX + RW / 2
 
-    # --- linha de baixo: de onde a task nasce ---
-    s3 = d.no_s("s3", "Amazon S3\nbase-config-<SEU RM>\nstate do Terraform"
-                "\n(manifestos: Demo 5.2)", 430, 1000, s=64, w=230, size=16)
-    d.seta([(115, 560), (115, 1000), (s3["l"] - 8, 1000)], tracejada=True)
-    d.rotulo("o Terraform\n(Parte 0)\ngrava o state", 115, 706, 130,
-             size=15)
-    ecr = d.no_s("ecr", "Amazon ECR · qc-assistant-app\nimagem = release "
-                 "(por digest): código,\ncorpus, seed do grafo, pesos do\n"
-                 "modelo e embeddings", 760, 1000, s=64, w=310, size=16)
-    ssm = d.no_s("ssm-parameter-store", "SSM Parameter Store\nsenhas do "
-                 "Neo4j, chave HMAC\nda porta admin, URL de pedidos",
-                 1160, 1000, s=64, w=290, size=16)
-    d.seta([(760, ecr["t"] - 6), (760, 903)], tracejada=True)
-    d.rotulo("cada task (live e\ncandidate), ao nascer,\npuxa a imagem", 900,
-             912, 200, size=15)
-    d.seta([(1160, ssm["t"] - 6), (1160, 903)], tracejada=True)
-    d.rotulo("cada task, ao nascer,\nlê os segredos", 1310, 912, 200,
-             size=15)
+    # setas antes dos cartoes: o inicio fica escondido sob a origem e o
+    # ultimo segmento tem >= 50 px, entao toda ponta sai do mesmo tamanho
+    JX, YC = 416, 274
+    d.seta([(alb["r"] + 6, YA), (JX, YA), (JX, YC), (464, YC)], cor=TEXTO,
+           largura=3)
+    d.seta([(JX, YA), (JX, YE), (RX - 6, YE)], cor=TEXTO, largura=3)
+    d.texto("/candidate", 312, 440, 90, size=18, align="left")
+    d.texto("/ (padrão)", 312, 760, 90, size=18, align="left")
+    for i, bx in enumerate(BX):
+        ax = bx + 154
+        topo = (YAPP + 130 if i == 0 else YN + 132) + 6
+        d.seta([(ax, YB + 40), (ax, topo)], cor=TEXTO, largura=3)
+        d.seta([(bx + BW / 2, YB + 40), (bx + BW / 2, YF - 6)], cor=TEXTO,
+               largura=3)
+    d.texto("consulta", BX[0] + 66, YAPP + 150, 76, size=18, cor=ESC,
+            align="left")
+    for bx in BX[1:]:
+        d.texto("consulta", bx + 66, YAPP + 150, 76, size=18, cor=ESC,
+                align="left")
+    d.seta([(RX + 100, YE), (GX - 6, YE)], cor=TEXTO, largura=3)
+    d.texto("não", 712, YE - 32, 40, size=18, align="left")
+    d.seta([(RC, YE), (RC, YCP - 6)], cor=TEXTO, largura=3)
+    d.texto("sim", RC + 17, YE + 110, 40, size=18, align="left")
+    d.seta([(1010, YF + 30), (1010, YCP - 6)], cor=TEXTO, largura=3)
+    d.seta([(RX + 100, YCP + 38), (808, YCP + 38)], cor=TEXTO, largura=3)
+
+    d.cartao(BX[0], YAPP + 54, BW, 76, "índice BM25", "na memória do app",
+             csize=18, ccor=ESC)
+    d.cartao(RX, YE - 48, RW, 96, "roteador", "a pergunta é\nsobre pedido?",
+             csize=18, ccor=ESC)
+    d.cartao(BX[0], YB, BW, 92, "BM25", "por palavras", csize=18, ccor=ESC)
+    d.cartao(BX[1], YB, BW, 92, "Vetorial", "por significado\n(vetor na CPU)",
+             csize=18, ccor=ESC)
+    d.cartao(BX[2], YB, BW, 92, "Grafo", "por relações\n(Cypher)", csize=18,
+             ccor=ESC)
+    d.cartao(BX[0], YF, GR - 14 - BX[0], 76, "filtro único, igual para as "
+             "três", "vigência (data), loja (tenant) e permissão (ACL)",
+             csize=18, ccor=ESC)
+    d.cartao(RX, YCP, RW, 96, "pedido", "consulta a API\nde pedidos",
+             csize=18, ccor=ESC)
+    d.seta([(BX[0] + 300, YCP + 38), (1250, YCP + 38)], cor=TEXTO,
+           largura=3)
+    d.cartao(BX[0], YCP, 400, 76, "composer (sem LLM)", "trecho + citação, "
+             "ou status do pedido", csize=18, ccor=ESC)
+    # a resposta volta pelo mesmo caminho (ALB) ate voce
+    d.texto("resposta volta a\nvocê pelo ALB", 1258, YCP + 16, 160,
+            size=18, align="left")
+
+    # pedido -> API de pedidos (fora da VPC, embaixo)
+    YP = 1490
+    d.seta([(RC, YCP + 102), (RC, YP - 36)], cor=TEXTO, largura=3)
+    d.texto("GET /orders/{id}", RC + 19, 1362, 170, size=18, cor=ESC,
+            align="left")
+
+    # --- fora da VPC: ECR e SSM alimentam as DUAS tasks (L22, L45, L46) ---
+    BUS = 1560
+    d.seta([(BUS, 274), (1468, 274)], tracejada=True)
+    d.seta([(BUS, 380), (1468, 380)], tracejada=True)
+    d.linha([(BUS, 274), (BUS, 940)], cor=CINZA, tracejada=True)
+    d.texto("ECR e SSM\nfornecem a cada\ntask (live e\ncandidate),\nquando "
+            "ela sobe", 1578, 296, 220, size=18, cor=ESC, align="left")
+    d.no_s("ecr", "Amazon ECR\nimagem da release:\ncódigo, políticas,\n"
+           "grafo e o modelo\nque gera os vetores", 1690, 560, s=64, w=230,
+           size=18)
+    d.no_s("ssm-parameter-store", "SSM Parameter Store\nsenhas do Neo4j "
+           "e\nendereço da API\nde pedidos", 1690, 940, s=64, w=230,
+           size=18)
+    d.linha([(1652, 560), (BUS, 560)], cor=CINZA, tracejada=True)
+    d.linha([(1652, 940), (BUS, 940)], cor=CINZA, tracejada=True)
+
+    # --- API de pedidos (fora da VPC) ---
+    d.caixa(470, YP - 82, 1300, 172, "", TEXTO, bg=FUNDO)
+    d.texto("API de pedidos (fictícia), fora da VPC", 650, YP - 70, 560,
+            size=18, align="left")
+    gw = d.no_s("apigateway", "Amazon API Gateway", RC, YP, s=56, w=200,
+                size=18)
+    lam = d.no_s("lambda", "AWS Lambda", 1100, YP, s=56, w=160, size=18)
+    ddb = d.no_s("dynamodb", "Amazon DynamoDB\npedidos fictícios", 1580,
+                 YP, s=56, w=200, size=18)
+    d.seta([(gw["r"] + 10, YP), (lam["l"] - 10, YP)], cor=TEXTO, largura=3)
+    d.seta([(lam["r"] + 10, YP), (ddb["l"] - 10, YP)], cor=TEXTO,
+           largura=3)
+    d.seta([(RC, YCP + 102), (RC, YP - 36)], cor=TEXTO, largura=3)
+
+    # --- Terraform (no Codespaces) grava o state no S3 (L31) ---
+    d.no_s("terraform", "Terraform\n(no seu\nCodespaces)", 75, 1440, s=56,
+           w=150, size=18)
+    s3 = d.no_s("s3", "Amazon S3\nstate do\nTerraform", 340, 1440, s=56,
+                w=150, size=18)
+    d.seta([(110, 1440), (s3["l"] - 10, 1440)], tracejada=True)
+    d.texto("grava o\nstate", 118, 1376, 80, size=18, cor=ESC,
+            align="left")
 
     # --- Legenda ---
-    d.caixa(30, 1170, 1750, 64, "", TEXTO, bg=FUNDO)
-    y = 1202
+    d.caixa(30, 1630, 1770, 60, "", TEXTO, bg=FUNDO)
+    y = 1660
     d.seta([(50, y), (110, y)], cor=TEXTO, largura=3)
-    d.texto("requisição", 122, y - 10, 140, size=16, align="left")
-    d.seta([(270, y), (330, y)], tracejada=True)
-    d.texto("apoio, fora do caminho da pergunta", 342, y - 10, 340,
-            size=16, cor=CINZA, align="left")
+    d.texto("caminho da pergunta", 122, y - 11, 260, size=18, align="left")
+    d.seta([(380, y), (440, y)], tracejada=True)
+    d.texto("apoio, fora do caminho da pergunta", 452, y - 11, 360,
+            size=18, cor=ESC, align="left")
     d.texto("A telemetria (traces, métricas e logs) entra na Demo 5.2.",
-            700, y - 10, 1060, size=16, cor=CINZA, align="left")
+            860, y - 11, 900, size=18, cor=ESC, align="left")
 
     d.salvar(os.path.join(DIR, "arquitetura-5-1.excalidraw"))
 
@@ -233,286 +327,469 @@ def demo_51():
 # ---------------------------------------------------------------------------
 # Demo 5.2: do push ao cliente, e de volta
 # ---------------------------------------------------------------------------
+
+
 def demo_52():
     d = D()
     d.texto("Quantum Commerce · Demo 5.2: do push ao cliente, e de volta",
-            30, 24, 1840, size=32, cor=MAGENTA, align="left")
+            30, 20, 1840, size=32, cor=MAGENTA, align="left")
     d.texto("Empresa fictícia. Mudança de código só chega ao live pelos "
-            "gates. O incidente de laboratório muda o grafo em runtime e "
-            "não passa pelo pipeline.", 30, 72, 1840, size=20, cor=CINZA,
-            align="left")
+            "gates. O incidente de laboratório muda o grafo em runtime, fora "
+            "do pipeline. Probes = perguntas de teste rotuladas.",
+            30, 62, 1860, size=20, cor=CINZA2, align="left")
 
     # --- faixa de cima: Codespaces -> GitLab -> pipeline ---
-    cs = d.no_s("github", "Você no\nCodespaces", 110, 250, s=60, w=130,
-                size=16)
-    gl = d.no_s("gitlab", "GitLab\nquantum-ai-assistant", 260, 250, s=60,
-                w=170, size=15)
+    cs = d.no_s("github", "Você no\nCodespaces", 60, 250, s=56, w=130,
+                size=19)
+    gl = d.no_s("gitlab", "GitLab\nquantum-ai-\nassistant", 225, 250, s=56,
+                w=160, size=19)
     d.seta([(cs["r"] + 6, 250), (gl["l"] - 6, 250)], cor=TEXTO, largura=3)
-    d.rotulo("git push", 185, 206, 62, size=15)
-    d.seta([(gl["r"] + 6, 250), (372, 250)], cor=TEXTO, largura=3)
-    d.rotulo("dispara", 322, 200, 52, size=15)
+    d.texto("git push", 92, 208, 100, size=19)
+    d.seta([(gl["r"] + 6, 250), (342, 250)], cor=TEXTO, largura=3)
+    d.texto("dispara", 262, 208, 76, size=19)
 
-    d.caixa(360, 140, 1500, 255, "Pipeline .gitlab-ci.yml · roda no GitLab "
-            "Runner (EC2 com shell, Docker e LabRole: nenhuma chave AWS no "
-            "GitLab)", TEXTO, icones=("gitlab",), size=17)
+    d.caixa(350, 130, 1570, 295, "Pipeline .gitlab-ci.yml · os jobs rodam no "
+            "GitLab Runner (EC2 na VPC, desenhada abaixo)", TEXTO,
+            icones=("gitlab",), size=23)
+    d.texto("executor shell + Docker · credencial = LabRole · nenhuma chave "
+            "AWS guardada no GitLab", 408, 174, 1300, size=19, cor=CINZA2,
+            align="left")
     st = [
-        (380, 300, "1 · gates", "security · contrato da API\nretrieval · "
-         "business-policy\ngraph-policy: Neo4j efêmero"),
-        (714, 250, "2 · package", "docker build + push no\nECR: o digest "
-         "vira o\nrelease"),
-        (998, 250, "3 · deploy candidate", "o service candidate\nrecebe o "
+        (368, 310, "1 · gates", "security · contrato API\nretrieval · "
+         "business-policy\ngraph-policy (Neo4j efêmero)"),
+        (731, 240, "2 · package", "docker build + push\nno ECR: o digest\n"
+         "vira o release"),
+        (1024, 280, "3 · deploy candidate", "o service candidate\nrecebe o "
          "digest novo"),
-        (1282, 250, "4 · smoke", "testa /candidate\npelo ALB real"),
-        (1566, 250, "5 · promote live", "o live recebe o\nmesmo digest "
-         "testado"),
+        (1357, 220, "4 · smoke", "testa /candidate\npelo ALB real"),
+        (1630, 255, "5 · promote live", "o live recebe o\nmesmo digest "
+         "testado;\nmanifesto vai ao S3"),
     ]
     for x, w, t, c in st:
-        d.cartao(x, 190, w, 120, t, c, csize=16)
+        d.cartao(x, 210, w, 135, t, c, tsize=23, csize=19, ccor=CINZA2)
     for i in range(len(st) - 1):
         x0 = st[i][0] + st[i][1]
-        d.seta([(x0 + 6, 250), (st[i + 1][0] - 8, 250)], cor=TEXTO,
+        d.seta([(x0 + 6, 278), (st[i + 1][0] - 8, 278)], cor=TEXTO,
                largura=3)
-    d.seta([(400, 316), (400, 336)], cor=ALERTA, tracejada=True, largura=3)
-    d.texto("gate reprovou: o pipeline para;\no live segue no release "
-            "anterior", 418, 330, 290, size=15, cor=ALERTA, align="left")
-    d.texto("rollback (manual): o live volta ao digest\nanterior, lido do "
-            "manifesto no S3", 1282, 330, 340, size=15, cor=CINZA,
+    d.texto("gate reprovou: o pipeline para e o live\nsegue no release "
+            "anterior", 368, 356, 560, size=19, cor=CINZA2, align="left")
+
+    # --- AWS: regiao; ECR, S3 e SSM moram fora da VPC ---
+    d.caixa(30, 415, 1890, 810, "", AWS)
+    d.imagem("aws-cloud", 42, 423, 34)
+    d.texto("AWS · região us-east-1", 84, 427, 320, size=23, cor=AWS,
             align="left")
 
-    # --- AWS ---
-    d.caixa(260, 440, 1515, 720, "", AWS)
-    d.imagem("aws-cloud", 274, 448, 36)
-    d.texto("AWS · us-east-1 · VPC fiap-lab", 318, 456, 400, size=18,
-            cor=AWS, align="left")
+    ecr = d.no_s("ecr", "", 851, 515, s=56)
+    d.texto("Amazon ECR · qc-assistant-app\n(imagem = release)", 470, 493,
+            340, size=19, align="right")
+    d.seta([(851, 319), (851, ecr["t"] - 8)], cor=TEXTO, largura=3)
+    d.texto("push da imagem", 866, 422, 170, size=19, align="left")
+    s3 = d.no_s("s3", "Amazon S3\nreleases-ecs/\n(manifestos)", 1820, 505,
+                s=56, w=150, size=19)
+    d.seta([(1820, 319), (1820, s3["t"] - 8)], cor=TEXTO, largura=3)
 
-    ecr = d.no_s("ecr", "Amazon ECR\nqc-assistant-app\n(imagem = release)",
-                 839, 560, s=64, w=190, size=15)
-    d.seta([(839, 316), (839, ecr["t"] - 8)], cor=TEXTO, largura=2)
-    d.rotulo("push da imagem", 920, 404, 110, size=15)
-    s3 = d.no_s("s3", "Amazon S3 · releases-ecs/\n(manifestos)",
-                1660, 515, s=64, w=240, size=15)
-    d.seta([(1660, 316), (1660, s3["t"] - 8)], cor=TEXTO, largura=2)
-    d.rotulo("grava o manifesto", 1750, 404, 130, size=15)
+    # --- VPC ---
+    d.caixa(50, 590, 1690, 615, "", TEXTO)
+    d.imagem("vpc", 60, 598, 34)
+    d.texto("VPC fiap-lab", 102, 602, 220, size=23, align="left")
 
-    # cluster ECS: candidate em cima, live embaixo; o promote leva o MESMO
-    # digest do candidate para o live (etapa 5)
-    d.caixa(940, 500, 500, 320, "ECS Fargate · cluster", TEXTO, bg=FUNDO,
-            icones=("fargate",), size=17)
-    d.seta([(1230, 316), (1230, 544)], cor=TEXTO, largura=3)
-    d.rotulo("etapa 3: deploy no candidate", 1375, 404, 250, size=15)
-    d.cartao(960, 552, 460, 84, "service qc-assistant-candidate",
-             "app + Neo4j próprios: recebe a\nmudança antes do cliente",
-             csize=16)
-    d.seta([(1300, 642), (1300, 672)], cor=TEXTO, largura=3)
-    d.rotulo("etapa 5: promote (mesmo digest)", 1150, 646, 250, size=15)
-    d.cartao(960, 680, 460, 130, "service qc-assistant-live",
-             "app :8000 (só pelo ALB)\nadmin :8001 (só do runner, HMAC)\n"
-             "Neo4j: grafo reconstruído da\nimagem a cada subida da task",
-             csize=16)
-
-    alb = d.no_s("elb", "ALB qc-assistant-alb\nHTTP :80 público", 1660,
-                 760, s=72, w=200, size=16)
-    d.seta([(alb["l"] - 8, 748), (1448, 600)], cor=TEXTO, largura=3)
-    d.seta([(alb["l"] - 8, 772), (1448, 760)], cor=TEXTO, largura=3)
-    d.rotulo("/candidate/*", 1530, 650, 96, size=15)
-    d.rotulo("/ (padrão)", 1500, 730, 80, size=15)
-
-    cli = d.no_s("users", "Clientes", 1900, 760, s=64, w=100, size=16)
-    d.seta([(cli["l"] - 6, 760), (alb["r"] + 8, 760)], cor=TEXTO, largura=3)
-    d.rotulo("HTTP :80", 1830, 716, 62, size=15)
-
-    # --- observabilidade ---
-    d.ret(800, 880, 945, 250, bg=FUNDO)
-    d.imagem("ec2", 985, 886, 36)
-    d.imagem("docker", 1025, 886, 36)
-    d.texto("EC2 qc-assistant-obs · Docker Compose (sem SSH)", 1069, 893,
-            520, size=17, align="left")
-    col = d.no_s("otel", "OTel Collector\nrecebe e distribui", 960, 1010,
-                 s=60, w=160, size=15)
-    d.seta([(960, 826), (960, col["t"] - 8)], cor=OTLP, tracejada=True,
-           largura=2)
-    d.rotulo("OTLP: traces, métricas e logs (live e candidate)", 1170, 842,
-             370, size=15, cor=OTLP)
-    d.ret(1095, 955, 340, 150, bg="#ffffff")
-    for cx, ic, t in ((1150, "jaeger", "Jaeger\ntraces"),
-                      (1265, "prometheus", "Prometheus\nmétricas"),
-                      (1380, "loki", "Loki\nlogs")):
-        d.no_s(ic, t, cx, 1000, s=50, w=105, size=15)
-    d.seta([(col["r"] + 8, 1010), (1087, 1010)], cor=OTLP, tracejada=True)
-    gf = d.no_s("grafana", "Grafana\ncom login", 1590, 1010, s=60, w=90,
-                size=15)
-    d.seta([(1443, 1010), (gf["l"] - 8, 1010)], cor=TEXTO)
-    d.seta([(1610, 864), (1610, gf["t"] - 8)], cor=TEXTO, largura=3)
-    d.texto("/grafana/*", 1500, 930, 96, size=15, cor=CINZA,
+    # cluster ECS: titulo entre as setas de deploy e promote
+    d.ret(930, 650, 790, 265, bg=FUNDO)
+    d.imagem("fargate", 1300, 656, 36)
+    d.texto("ECS Fargate · cluster", 1344, 662, 280, size=22, align="left")
+    d.cartao(946, 705, 408, 160, "service qc-assistant-candidate",
+             "app + Neo4j próprios:\nrecebe a mudança\nantes do cliente",
+             tsize=23, csize=19, ccor=CINZA2)
+    d.cartao(1370, 705, 334, 160, "service qc-assistant-live",
+             "app :8000 (via ALB)\nadmin :8001 (só runner)\nNeo4j: grafo "
+             "refeito da\nimagem a cada task", tsize=23, csize=19, ccor=CINZA2)
+    # os dois services puxam a imagem do ECR pelo digest: a seta chega no
+    # cluster, que agrupa os dois
+    d.seta([(ecr["r"] + 8, 530), (1060, 530), (1060, 642)], cor=TEXTO,
+           largura=3)
+    d.texto("os dois services puxam pelo digest", 896, 492, 350, size=19,
+            align="left")
+    d.seta([(1262, 319), (1262, 697)], cor=TEXTO, largura=3)
+    d.texto("deploy", 1274, 440, 100, size=19, align="left")
+    d.seta([(1660, 319), (1660, 697)], cor=TEXTO, largura=3)
+    d.texto("promote\n(mesmo digest)", 1486, 440, 150, size=19,
             align="right")
-    pr = d.no_s("python", "qc-probe:\nprobes\nrotulados", 1705,
-                1010, s=52, w=110, size=15)
-    d.seta([(1700, pr["t"] - 8), (1700, 864)], cor=TEXTO, largura=2)
 
-    # --- incidente: fora do pipeline (L10: unico caminho em cor de alerta)
-    ssm = d.no_s("ssm", "AWS Systems\nManager\n(send-command)", 420, 1010,
-                 s=60, w=160, size=15)
-    run = d.no_s("ec2", "GitLab Runner\n(EC2)", 660, 1010, s=60, w=150,
-                 size=15)
-    d.seta([(110, 345), (110, 1010), (ssm["l"] - 8, 1010)], cor=ALERTA,
-           tracejada=True, largura=3)
-    d.texto("incident.sh\napply / restore\n(sem commit,\nsem pipeline)",
-            122, 640, 132, size=15, cor=ALERTA, align="left")
-    d.seta([(ssm["r"] + 8, 1010), (run["l"] - 8, 1010)], cor=ALERTA,
-           tracejada=True, largura=3)
-    d.seta([(660, run["t"] - 8), (660, 745), (950, 745)], cor=ALERTA,
-           tracejada=True, largura=3)
-    d.rotulo("porta 8001 + HMAC\n(nunca pelo ALB)", 800, 758, 150, size=15,
-             cor=ALERTA)
+    # ALB: / -> live, /candidate* -> candidate, /grafana* -> Grafana
+    alb = d.no_s("elb", "", 980, 1030, s=72)
+    d.seta([(980, alb["t"] - 6), (980, 873)], cor=TEXTO, largura=3)
+    d.texto("/candidate/*", 994, 935, 140, size=19, align="left")
+    d.seta([(alb["r"] + 6, 1030), (1390, 1030), (1390, 873)], cor=TEXTO,
+           largura=3)
+    d.texto("/ (padrão)", 1222, 998, 140, size=19, align="right")
+    d.texto("ALB qc-assistant-alb\nHTTP :80 público", 1030, 1048, 240,
+            size=19, align="left")
 
-    # --- de volta: do incidente ao proximo push (direita -> esquerda) ---
-    d.seta([(1705, 1112), (1705, 1187)], cor=CINZA, largura=2)
-    passos = ["probe e trace\nmostram o erro", "restore\ne replay",
-              "postmortem", "caso novo no\ngolden set",
-              "próximo git push:\no gate novo protege"]
-    bw, gap, y0 = 300, 60, 1195
-    xs = [1560 - i * (bw + gap) for i in range(len(passos))]
-    for x, t in zip(xs, passos):
-        d.ret(x, y0, bw, 72, bg=FUNDO)
-        d.texto(t, x, y0 + 12 + (0 if "\n" in t else 11), bw, size=17)
-    for i in range(len(passos) - 1):
-        d.seta([(xs[i] - 8, y0 + 36), (xs[i + 1] + bw + 8, y0 + 36)],
-               cor=CINZA, largura=2)
-    d.seta([(xs[-1] - 8, y0 + 36), (40, y0 + 36), (40, 250),
-            (cs["l"] - 8, 250)], cor=CINZA, largura=2)
-    d.rotulo("e de\nvolta", 40, 560, 44, size=15)
+    cli = d.no_s("users", "", 980, 1290, s=56)
+    d.seta([(980, cli["t"] - 6), (980, alb["b"] + 6)], cor=TEXTO, largura=3)
+    d.texto("Clientes · HTTP :80", 1020, 1278, 220, size=19, align="left")
 
-    # --- Legenda ---
-    y = 1312
-    d.seta([(40, y), (100, y)], cor=TEXTO, largura=3)
-    d.texto("mudança e requisição", 112, y - 10, 210, size=16, align="left")
-    d.seta([(330, y), (390, y)], cor=OTLP, tracejada=True)
-    d.texto("telemetria OTLP", 402, y - 10, 170, size=16, cor=OTLP,
+    # --- observabilidade (EC2 com Docker Compose) ---
+    d.ret(70, 650, 820, 535, bg=FUNDO)
+    d.imagem("ec2", 84, 658, 34)
+    d.imagem("docker", 122, 658, 34)
+    d.texto("EC2 qc-assistant-obs · Docker Compose (sem SSH)", 164, 662,
+            720, size=22, align="left")
+    col = d.no_s("otel", "OTel Collector\nrecebe e distribui", 715, 805,
+                 s=56, w=200, size=19)
+    d.seta([(926, 805), (col["r"] + 8, 805)], cor=OTLP, tracejada=True,
+           largura=2)
+    d.texto("OTLP de\ncandidate\ne live", 754, 712, 100, size=19, cor=OTLP)
+    d.ret(96, 712, 480, 180, cor=CINZA, bg="transparent", largura=1)
+    d.texto("guardam a telemetria", 108, 720, 300, size=19, cor=CINZA2,
             align="left")
-    d.seta([(590, y), (650, y)], cor=ALERTA, tracejada=True, largura=3)
-    d.texto("incidente de laboratório e gate reprovado", 662, y - 10, 400,
-            size=16, cor=ALERTA, align="left")
-    d.seta([(1070, y), (1130, y)], cor=CINZA, largura=2)
-    d.texto("ciclo de aprendizado depois do incidente", 1142, y - 10, 380,
-            size=16, cor=CINZA, align="left")
-    d.texto("Sem LLM · probes = tráfego sintético", 1540, y - 10, 360,
-            size=16, cor=CINZA, align="left")
+    for cx, ic, t in ((180, "jaeger", "Jaeger\ntraces"),
+                      (336, "prometheus", "Prometheus\nmétricas"),
+                      (492, "loki", "Loki\nlogs")):
+        d.no_s(ic, t, cx, 795, s=46, w=140, size=19)
+    d.seta([(col["l"] - 8, 805), (584, 805)], cor=OTLP, tracejada=True)
+    gf = d.no_s("grafana", "", 520, 1000, s=46)
+    d.seta([(520, 900), (520, gf["t"] - 8)], cor=TEXTO, largura=3)
+    d.texto("Grafana\n(com login)", 360, 978, 124, size=19, align="right")
+    d.seta([(alb["l"] - 6, 1000), (gf["r"] + 8, 1000)], cor=TEXTO,
+           largura=3)
+    d.texto("/grafana/*", 680, 964, 130, size=19)
+    pr = d.no_s("python", "qc-probe:\nperguntas de\nteste rotuladas", 185,
+                1058, s=50, w=170, size=19)
+    d.seta([(pr["r"] + 8, 1058), (alb["l"] - 6, 1058)], cor=TEXTO,
+           largura=3)
+    d.texto("o probe pergunta pelo ALB", 300, 1070, 300, size=19,
+            align="left")
 
+    # --- incidente: fora do pipeline (unico traco vermelho tracejado) ---
+    ssm = d.no_s("ssm", "", 1830, 1060, s=56)
+    d.texto("AWS Systems\nManager\nRun Command", 1755, 955, 150, size=19)
+    run = d.no_s("ec2", "GitLab Runner\n(EC2) roda jobs\ne incident.sh",
+                 1630, 1060, s=56, w=170, size=19)
+    d.seta([(ssm["l"] - 8, 1060), (run["r"] + 8, 1060)], cor=ALERTA,
+           tracejada=True, largura=3)
+    d.seta([(1630, run["t"] - 8), (1630, 873)], cor=ALERTA, tracejada=True,
+           largura=3)
+    d.texto("admin :8001 + HMAC:\naltera o grafo\n(nunca pelo ALB)", 1410,
+            935, 200, size=19, cor=ALERTA, align="right")
+    inc = d.no_s("github", "", 1830, 1290, s=50)
+    d.seta([(1830, inc["t"] - 6), (1830, ssm["b"] + 8)], cor=ALERTA,
+           tracejada=True, largura=3)
+    d.texto("Você no Codespaces: incident.sh\napply / restore (sem commit,"
+            " sem pipeline)", 1295, 1268, 500, size=19, cor=ALERTA,
+            align="right")
+
+    # --- de volta: ciclo de aprendizado (esquerda -> direita) ---
+    y0 = 1390
+    d.seta([(pr["l"] - 8, 1058), (100, 1058), (100, y0 - 8)], cor=CINZA,
+           largura=2)
+    d.texto("Depois do incidente: ciclo de aprendizado, da esquerda para a "
+            "direita", 160, 1340, 1200, size=22, align="left")
+    passos = ["o probe acusa o erro;\no trace no Grafana\nmostra onde",
+              "restore e replay:\nvolta o grafo e\nrepete os probes",
+              "postmortem:\no que falhou e\npor quê",
+              "caso novo no golden set\n(perguntas que\nos gates cobram)",
+              "próximo git push:\nprotegido pelo\n1 · gates"]
+    bw, gap = 334, 50
+    xs = [30 + i * (bw + gap) for i in range(len(passos))]
+    for x, t in zip(xs, passos):
+        n = t.count("\n") + 1
+        d.ret(x, y0, bw, 100, bg=FUNDO)
+        d.texto(t, x, y0 + (100 - n * 25) / 2, bw, size=20)
+    for i in range(len(passos) - 1):
+        d.seta([(xs[i] + bw + 6, y0 + 50), (xs[i + 1] - 8, y0 + 50)],
+               cor=CINZA, largura=2)
+
+    # --- Legenda: vaos iguais entre itens ---
+    y = 1540
+    x = 30
+    for cor, trac, larg, t in ((TEXTO, False, 3, "mudança e requisição"),
+                               (OTLP, True, 2, "telemetria OTLP"),
+                               (ALERTA, True, 3, "incidente de laboratório "
+                                "(fora do pipeline)"),
+                               (CINZA, False, 2, "ciclo de aprendizado")):
+        d.seta([(x, y), (x + 60, y)], cor=cor, tracejada=trac, largura=larg)
+        w = len(t) * 19 * 0.47
+        d.texto(t, x + 72, y - 12, w + 10, size=19,
+                cor=TEXTO if cor == TEXTO else cor, align="left")
+        x += 72 + w + 50
+    d.texto("Rollback: job manual do pipeline que volta o live ao último "
+            "release aprovado registrado no S3.", 30, y + 28, 1500, size=19,
+            cor=TEXTO, align="left")
+
+    # o cabecalho do pipeline ganhou uma linha: os cartoes desceram 30 px e
+    # tudo da regiao AWS para baixo desce 40 px; setas que saem dos cartoes
+    # comecam 30 px mais abaixo
+    for e in d.elements:
+        if e["type"] in ("arrow", "line") and 300 <= e["y"] < 400:
+            ab = [(e["x"] + px, e["y"] + py) for px, py in e["points"]]
+            ab = [(px, py + (30 if py < 400 else 40)) for px, py in ab]
+            e["x"], e["y"] = ab[0]
+            e["points"] = [[px - ab[0][0], py - ab[0][1]] for px, py in ab]
+            e["height"] = max(p[1] for p in e["points"]) - min(
+                p[1] for p in e["points"])
+        elif e["y"] >= 400:
+            e["y"] += 40
+
+    # abre 45 px entre o subtitulo e o pipeline para o laco de volta passar
+    # longe das bordas (L47)
+    for e in d.elements:
+        if e["y"] >= 100:
+            e["y"] += 45
+
+    # "e de volta": o proximo git push fecha o laco no Codespaces; ponta no
+    # meio do trecho vertical para mostrar o sentido, traco sem rugosidade
+    n0 = len(d.elements)
+    d.seta([(1906, 1525), (1978, 1525), (1978, 820)], cor=CINZA, largura=2)
+    d.seta([(1978, 830), (1978, 128), (60, 128), (60, 259)], cor=CINZA,
+           largura=2)
+    for e in d.elements[n0:]:
+        e["roughness"] = 0
+    # margem direita: o render corta rente ao ultimo elemento
+    d._base("rectangle", 2000, 1500, 20, 20, strokeColor="transparent",
+            backgroundColor="transparent", strokeWidth=1, roughness=0)
+    d.texto("e de volta:\no próximo push", 76, 140, 170, size=19,
+            cor=CINZA2, align="left")
     d.salvar(os.path.join(DIR, "arquitetura-5-2.excalidraw"))
 
 
 # ---------------------------------------------------------------------------
 # Modulo 04: duas demos, a mesma base
 # ---------------------------------------------------------------------------
+
+
 def modulo():
     d = D()
+    from PIL import ImageFont
+    fonte = {}
+
+    def larg(t, size):
+        """Largura real do glifo (Helvetica = fontFamily 2 do Excalidraw)."""
+        if size not in fonte:
+            fonte[size] = ImageFont.truetype(
+                "/System/Library/Fonts/Helvetica.ttc", size)
+        return max(fonte[size].getlength(l) for l in t.split("\n"))
+
+    def card(x, y, w, h, icone, titulo, corpo="", s=44, size=18):
+        d.ret(x, y, w, h, bg="#ffffff")
+        d.imagem(icone, x + 12, y + 12, s)
+        tx = x + 24 + s
+        d.texto(titulo, tx, y + 12, w - (tx - x) - 8, size=size,
+                align="left")
+        d.texto(corpo, tx, y + 14 + size * 1.25, w - (tx - x) - 8,
+                size=size, cor=ESCURO, align="left")
+        return {"l": x, "r": x + w, "t": y, "b": y + h}
+
+    def rot(t, cx, y, cor=ESCURO, size=18):
+        d.rotulo(t, cx, y, larg(t, size) + 4, size=size, cor=cor)
+
+    def rot_esq(t, x, y, cor=ESCURO, size=18):
+        """Rotulo comecando em x (ao lado direito de uma seta vertical)."""
+        w = larg(t, size) + 4
+        d.rotulo(t, x + w / 2, y, w, size=size, cor=cor)
+
+    def rot_dir(t, x, y, cor=ESCURO, size=18):
+        """Rotulo terminando em x (ao lado esquerdo de uma seta vertical)."""
+        w = larg(t, size) + 4
+        d.rotulo(t, x - w / 2, y, w, size=size, cor=cor)
+
+    # --- titulo -----------------------------------------------------------
     d.texto("Quantum Commerce · Módulo 04 (Aula 5): duas demos sobre a mesma "
-            "base", 30, 24, 1700, size=32, cor=MAGENTA, align="left")
-    d.texto("Empresa fictícia. A Parte 0 da Demo 5.1 sobe a base uma vez; a "
-            "5.1 investiga a evidência e a 5.2 automatiza e opera. Sem LLM.",
-            30, 72, 1700, size=20, cor=CINZA, align="left")
+            "base na AWS", 30, 22, 1760, size=32, cor=MAGENTA, align="left")
+    d.texto("Empresa fictícia. Sem LLM: a resposta é montada do trecho "
+            "recuperado e citado. A Parte 0 (preparação da Demo 5.1) cria esta base AWS "
+            "uma vez.",
+            30, 68, 1760, size=20, cor=ESCURO, align="left")
 
-    def demo(x, w, selo, cor, titulo, pergunta, itens):
-        d.ret(x, 130, w, 400, cor=cor, bg="#ffffff", largura=3)
-        sw = d.selo(x + 16, 146, selo, cor)
-        d.texto(titulo, x + 28 + sw, 146, w - sw - 44, size=19, cor=TEXTO,
-                align="left")
-        d.texto(pergunta, x + 16, 190, w - 32, size=18, cor=TEXTO,
-                align="left")
-        y = 268
-        for ic, t, c in itens:
-            d.imagem(ic, x + 18, y, 44)
-            d.texto(t, x + 76, y + 2, w - 92, size=16, cor=c, align="left")
-            y += 64
+    # --- as duas demos: so texto; o selo de cada uma reaparece no desenho --
+    def demo(x, selo, cor, titulo, linhas):
+        d.ret(x, 112, 870, 188, cor=cor, bg="#ffffff", largura=3)
+        sw = d.selo(x + 16, 126, selo, cor)
+        d.texto(titulo, x + 30 + sw, 126, 800 - sw, size=22, align="left")
+        d.texto(linhas, x + 18, 166, 834, size=21, align="left")
 
-    demo(30, 800, "Demo 5.1", AZUL, "Release, RAG e quality gates",
+    demo(30, "Demo 5.1", AZUL, "A evidência por trás da resposta",
          "Pergunta: qual evidência autoriza um release?\n"
-         "(de onde veio a resposta, e ela se aplica?)",
-         [("user", "Central de Evidências no navegador, pelo ALB", TEXTO),
-          ("neo4j", "a mesma pergunta em três estratégias: BM25,\n"
-           "vetorial e grafo, com citação e recusa", TEXTO),
-          ("metrics", "trocar data e tenant: o mesmo filtro de\n"
-           "vigência e ACL vale para as três", TEXTO),
-          ("gear", "mexer numa aresta do grafo e ver o\n"
-           "graph_version mudar (e restaurar)", TEXTO)])
-    demo(910, 800, "Demo 5.2", VERDE, "Operação e qualidade contínua",
-         "Pergunta: como barrar a evidência errada e\n"
-         "perceber quando ela muda depois do deploy?",
-         [("gitlab", "pipeline: gates → package → candidate →\n"
-           "smoke → promote (e rollback por digest)", TEXTO),
-          ("grafana", "EC2 de observabilidade: OTel Collector,\n"
-           "Jaeger, Prometheus, Loki e Grafana", TEXTO),
-          ("python", "qc-probe: perguntas com gabarito contra o\n"
-           "ALB, marcadas como tráfego sintético", TEXTO),
-          ("ssm", "incidente: incident.sh → SSM Run Command →\n"
-           "runner → porta admin 8001 do app (fora do pipeline)",
-           ALERTA)])
-    d.seta([(838, 330), (902, 330)], cor=TEXTO, largura=3)
-    d.rotulo("vira\npipeline", 870, 270, 64, size=15)
+         "· a mesma pergunta em BM25, vetorial e grafo, com citação\n"
+         "· o mesmo filtro de vigência, tenant e ACL nas três\n"
+         "· na Central de Evidências, servida pelo service live")
+    demo(940, "Demo 5.2", VERDE, "Operação e qualidade contínua",
+         "Pergunta: como barrar a evidência errada no deploy?\n"
+         "· pipeline: gates → package → candidate → smoke → promote\n"
+         "· EC2 de observabilidade: qc-probe e Grafana medem a qualidade\n"
+         "· incidente: muda o grafo do live sem passar pelo pipeline")
 
-    # base comum (GitLab e SaaS: fica fora da caixa AWS)
-    d.caixa(330, 610, 1380, 480, "", AWS, bg=FUNDO)
-    d.imagem("aws-cloud", 344, 618, 36)
-    d.texto("A mesma base nas duas demos · AWS us-east-1 · VPC fiap-lab "
-            "(criada no Módulo 01)", 388, 626, 1300, size=18, cor=AWS,
+    # --- fora da AWS: o GitLab (SaaS) e voce no Codespaces -------------------
+    XI = 1045  # vertical do incidente: Codespaces -> runner -> live
+    gl = card(540, 330, 340, 84, "gitlab", "GitLab (SaaS)",
+              "projeto quantum-ai-assistant")
+    d.selo(735, 339, "Demo 5.2", VERDE)
+    d.no_s("user", "Você (Codespaces)", XI, 356, s=48, w=200, size=18)
+    d.seta([(XI - 32, 356), (gl["r"] + 8, 356)], cor=TEXTO, largura=2)
+    rot("git push", 946, 322)
+
+    # --- regiao e VPC (molduras com >= 25 px de folga, L28) -----------------
+    d.caixa(265, 490, 1565, 775, "", AWS, bg="#ffffff")
+    d.imagem("aws-cloud", 279, 498, 36)
+    d.texto("AWS · região us-east-1", 323, 505, 400, size=18, cor=AWS,
             align="left")
-    d.seta([(430, 538), (430, 602)], cor=TEXTO, largura=3)
-    d.rotulo("sobe a base (Parte 0) e investiga", 600, 556, 250, size=15)
-    d.seta([(1310, 538), (1310, 602)], cor=TEXTO, largura=3)
-    d.rotulo("automatiza e opera a mesma base", 1475, 556, 240, size=15)
+    VR = 1385
+    d.ret(295, 545, VR - 295, 690, cor=CINZA, bg=FUNDO, largura=1)
+    d.texto("VPC fiap-lab (do Módulo 01, reutilizada)", 311, 556, 400,
+            size=18, cor=ESCURO, align="left")
 
-    r1, r2 = 760, 960
-    g = d.no_s("gitlab", "GitLab (SaaS)\nquantum-ai-assistant", 160, r1,
-               s=64, w=220, size=16)
+    rn = card(720, 600, 400, 135, "ec2", "GitLab Runner (EC2)",
+              "shell, Docker e LabRole (papel IAM)\n"
+              "executa os jobs do pipeline e,\n"
+              "fora dele, o incident.sh (via SSM)", s=48)
+    d.seta([(770, gl["b"] + 8), (770, rn["t"] - 8)], cor=TEXTO, largura=2)
+    rot_esq("roda os jobs\ndo pipeline", 786, 436)
+    d.seta([(XI, 418), (XI, rn["t"] - 8)], cor=ALERTA, tracejada=True)
+    rot_esq("incident.sh via SSM Run Command\n(não é job do pipeline)", XI + 16,
+            436, cor=ALERTA)
 
-    rn = d.no_s("ec2", "GitLab Runner (EC2)\nDocker e LabRole", 560, r1,
-                s=64, w=220, size=16)
-    ecr = d.no_s("ecr", "Amazon ECR\nimagem = release\n(por digest)", 930,
-                 r1, s=64, w=200, size=16)
-    d.ret(1190, 690, 470, 160, bg="#ffffff")
-    d.imagem("fargate", 1204, 700, 40)
-    d.texto("ECS Fargate · 2 services: live e candidate", 1252, 708,
-            400, size=17, align="left")
-    d.imagem("fastapi", 1214, 756, 40)
-    d.imagem("neo4j", 1214, 802, 40)
-    d.texto("app FastAPI (BM25 e modelo de\nembeddings na CPU)", 1266, 752,
-            390, size=16, cor=CINZA, align="left")
-    d.texto("Neo4j na mesma task (grafo e\níndice vetorial, só localhost)",
-            1266, 800, 390, size=16, cor=CINZA, align="left")
-    d.seta([(g["r"] + 8, r1), (rn["l"] - 8, r1)], cor=TEXTO, largura=2)
-    d.rotulo("roda os jobs", 400, r1 - 34, 100, size=15)
-    d.seta([(rn["r"] + 8, r1), (ecr["l"] - 8, r1)], cor=TEXTO, largura=2)
-    d.rotulo("build e push", 745, r1 - 34, 100, size=15)
-    d.seta([(ecr["r"] + 8, r1), (1182, r1)], cor=TEXTO, largura=2)
-    d.rotulo("pull", 1080, r1 - 34, 40, size=15)
+    # servicos regionais: fora da VPC, dentro da regiao (L21); vaos de 40
+    RX, RW = 1435, 375
+    s3 = card(RX, 570, RW, 80, "s3", "Amazon S3",
+              "state do Terraform e manifestos")
+    ecr = card(RX, 690, RW, 100, "ecr", "Amazon ECR",
+               "imagem = release\n(por digest)")
+    ssm = card(RX, 830, RW, 80, "ssm-parameter-store", "SSM Parameter Store",
+               "segredos lidos pelas tasks")
+    MV = (rn["r"] + VR) / 2   # meio do vao runner -> borda da VPC
+    d.seta([(rn["r"] + 8, 615), (RX - 8, 615)], tracejada=True)
+    rot("grava state e manifestos", MV, 583)
+    d.seta([(rn["r"] + 8, 705), (RX - 8, 705)], cor=TEXTO, largura=2)
+    rot("build e push da imagem", MV, 673)
 
-    d.no_s("ssm-parameter-store", "SSM Parameter Store\n(segredos: as "
-           "tasks\nleem ao subir)", 1300, r2 + 20, s=56, w=230, size=16)
-    d.no_s("s3", "Amazon S3\nstate e manifestos", 560, r2, s=64, w=220,
-           size=16)
-    d.seta([(560, 852), (560, r2 - 40)], tracejada=True)
-    d.rotulo("runner grava", 630, 872, 96, size=15)
-    d.imagem("elb", 930 - 32, r2 - 32, 64)
-    d.texto("ALB · HTTP :80\n(a 5.2 adiciona\n/grafana)", 700, r2 - 30,
-            180, size=16, align="right")
-    alb = {"r": 962, "l": 898}
-    d.no_s("user", "Você e os clientes (navegador)", 930, 1150, s=56, w=320,
-           size=16)
-    d.seta([(930, 1114), (930, r2 + 40)], cor=TEXTO, largura=2)
-    d.rotulo("HTTP :80", 1000, 1040, 70, size=15)
-    d.seta([(alb["r"] + 8, r2 - 10), (1220, 858)], cor=TEXTO, largura=2)
-    d.rotulo("/ → live\n/candidate/* → candidate", 1110, 920, 200,
-             size=15)
-    d.seta([(1300, r2 - 18), (1300, 858)], tracejada=True)
-    d.ret(1430, 900, 260, 160, bg="#ffffff")
-    d.imagem("apigateway", 1444, 912, 40)
-    d.imagem("lambda", 1492, 912, 40)
-    d.imagem("dynamodb", 1540, 912, 40)
-    d.texto("API de pedidos: API\nGateway, Lambda e\nDynamoDB", 1444, 962,
-            240, size=16, align="left")
-    d.seta([(1560, 858), (1560, 892)], cor=TEXTO, largura=2)
-    d.rotulo("GET /orders", 1640, 864, 90, size=15)
+    # ECS: dois services, cada um com app + Neo4j proprios (r4 item 4);
+    # cartoes recuados 50 px para a ponta da seta do ALB nao cair na borda
+    E = {"l": 720, "r": 1210, "t": 860, "b": 1200}
+    d.ret(720, 860, 490, 340, bg="#ffffff")
+    d.imagem("fargate", 732, 870, 40)
+    d.texto("ECS Fargate · 2 services", 782, 870, 300, size=18,
+            align="left")
+    d.texto("cada task: app + Neo4j", 782, 896, 300, size=18, cor=ESCURO,
+            align="left")
+    CL = 770
+    live = {"l": CL, "r": 1190, "t": 925, "b": 1065}
+    d.ret(CL, 925, 420, 140, bg="#ffffff")
+    d.texto("service live: Central de Evidências", CL + 12, 937, 300,
+            size=18, align="left")
+    d.selo(1086, 934, "Demo 5.1", AZUL)
+    d.imagem("fastapi", CL + 14, 971, 36)
+    d.texto("app: BM25 e embeddings", CL + 62, 978, 300, size=18,
+            cor=ESCURO, align="left")
+    d.imagem("neo4j", CL + 12, 1015, 40)
+    d.texto("Neo4j: grafo e índice vetorial", CL + 62, 1024, 340, size=18,
+            cor=ESCURO, align="left")
+    cand = {"l": CL, "r": 1190, "t": 1080, "b": 1185}
+    d.ret(CL, 1080, 420, 105, bg="#ffffff")
+    d.texto("service candidate: próximo release", CL + 12, 1092, 400,
+            size=18, align="left")
+    d.imagem("fastapi", CL + 14, 1128, 36)
+    d.imagem("neo4j", CL + 56, 1126, 40)
+    d.texto("app e Neo4j próprios,\ncom a próxima imagem", CL + 108, 1126,
+            300, size=18, cor=ESCURO, align="left")
 
+    # runner -> ECS: deploy por digest (candidate, depois promote no live)
+    d.seta([(770, rn["b"] + 8), (770, E["t"] - 8)], cor=TEXTO, largura=2)
+    rot_dir("deploy e\npromote\n(Demo 5.2)", 754, 758)
+    # incidente: runner -> porta admin 8001 do live (mesma vertical XI)
+    d.seta([(XI, rn["b"] + 8), (XI, live["t"] - 8)], cor=ALERTA,
+           tracejada=True)
+    rot_dir("porta admin 8001", XI - 16, 785, cor=ALERTA)
+    # pull em L, 65 abaixo da chegada do push (pontas separadas, r4 item 1)
+    d.seta([(RX - 8, 770), (1165, 770), (1165, E["t"] - 8)], cor=TEXTO,
+           largura=2)
+    rot_esq("pull ao subir", 1181, 790)
+
+    MD = (E["r"] + VR) / 2    # meio do vao ECS -> borda da VPC
+    d.seta([(RX - 8, 890), (E["r"] + 8, 890)], tracejada=True)
+    rot("segredos", MD, 852)
+
+    # API de pedidos: fora da VPC, chamada pelos dois services (sai do ECS)
+    d.ret(RX, 950, RW, 210, bg="#ffffff")
+    d.texto("API de pedidos (status e entrega)", RX, 962, RW, size=18)
+    for nome, rotulo, cx in (("apigateway", "Amazon API\nGateway", RX + 65),
+                             ("lambda", "AWS\nLambda", RX + 188),
+                             ("dynamodb", "Amazon\nDynamoDB", RX + 310)):
+        d.no_s(nome, rotulo, cx, 1060, s=56, w=120, size=18)
+    d.seta([(RX + 101, 1060), (RX + 152, 1060)], cor=TEXTO)
+    d.seta([(RX + 224, 1060), (RX + 274, 1060)], cor=TEXTO)
+    d.seta([(E["r"] + 8, 1060), (RX - 8, 1060)], cor=TEXTO, largura=2)
+    rot("GET /orders\n(os 2 services)", MD, 1000)
+
+    # EC2 de observabilidade (so na 5.2), Grafana e qc-probe dentro
+    d.ret(320, 610, 290, 300, cor=VERDE, bg="#ebfbee")
+    d.selo(334, 622, "Demo 5.2", VERDE)
+    d.imagem("ec2", 558, 620, 40)
+    d.texto("EC2 de observabilidade", 334, 658, 270, size=18, align="left")
+    d.texto("OTel Collector, Jaeger,\nPrometheus e Loki", 334, 686, 270,
+            size=18, cor=ESCURO, align="left")
+    d.ret(332, 770, 120, 85, bg="#ffffff")
+    d.imagem("grafana", 374, 780, 36)
+    d.texto("Grafana", 332, 822, 120, size=18)
+    d.ret(472, 770, 126, 85, bg="#ffffff")
+    d.imagem("python", 517, 780, 36)
+    d.texto("qc-probe", 472, 822, 126, size=18)
+    d.seta([(E["l"] - 8, 890), (618, 890)], tracejada=True)
+    rot("OTLP", 665, 852)
+
+    # ALB e clientes (ALB a 50 px da VPC: a ponta do HTTP :80 nao cai na borda)
+    alb = {"l": 345, "r": 570, "t": 1000, "b": 1180}
+    d.ret(345, 1000, 225, 180, bg="#ffffff")
+    d.imagem("elb", 429, 1014, 56)
+    d.texto("Application Load\nBalancer (ALB)\nHTTP :80 público", 345,
+            1078, 225, size=18)
+    d.no_s("user", "Você e os clientes\n(navegador)", 95, 1090, s=56,
+           w=180, size=18)
+    d.seta([(131, 1090), (alb["l"] - 8, 1090)], cor=TEXTO, largura=2)
+    rot("HTTP :80", 197, 1058)
+    MA = (alb["r"] + E["l"]) / 2
+    d.seta([(alb["r"] + 8, 1040), (live["l"] - 8, 1040)], cor=TEXTO,
+           largura=2)
+    rot("/ (padrão)", MA, 1004)
+    d.seta([(alb["r"] + 8, 1150), (cand["l"] - 8, 1150)], cor=TEXTO,
+           largura=2)
+    rot("/candidate", MA, 1114)
+    d.seta([(392, alb["t"] - 8), (392, 863)], cor=TEXTO, largura=2)
+    rot_esq("/grafana", 404, 935)
+    d.seta([(535, 863), (535, alb["t"] - 8)], cor=TEXTO, largura=2)
+    rot_esq("perguntas com\ngabarito ao live", 547, 932)
+
+    # legenda: toda seta desenhada cabe numa linha daqui (L35)
+    y = 1300
+    d.seta([(40, y + 11), (100, y + 11)], cor=TEXTO, largura=2)
+    d.texto("requisição, entrega e deploy", 112, y, 280, size=18,
+            align="left")
+    d.seta([(410, y + 11), (470, y + 11)], tracejada=True)
+    d.texto("apoio (state, segredos, telemetria)", 482, y, 340, size=18,
+            align="left")
+    d.seta([(820, y + 11), (880, y + 11)], cor=ALERTA, tracejada=True)
+    d.texto("incidente de laboratório (Demo 5.2): muda o grafo do live, "
+            "fora do pipeline", 892, y, 900, size=18, cor=ALERTA,
+            align="left")
+
+    # desce tudo da AWS para baixo (y >= 470) para os rotulos de duas linhas
+    # entre o GitLab e a regiao terem folga (L36); setas que cruzam a borda
+    # so estendem o trecho de baixo
+    DY = 24
+    for e in d.elements:
+        if e["type"] in ("arrow", "line"):
+            pts = [(e["x"] + px, e["y"] + py) for px, py in e["points"]]
+            pts = [(px, py + DY if py >= 470 else py) for px, py in pts]
+            x0, y0 = pts[0]
+            e["x"], e["y"] = x0, y0
+            e["points"] = [[px - x0, py - y0] for px, py in pts]
+            e["height"] = max(p[1] for p in e["points"]) - min(
+                p[1] for p in e["points"])
+        elif e["y"] >= 470:
+            e["y"] += DY
+
+    for r in folgas(d):
+        log("  FOLGA: " + r)
     d.salvar(os.path.join(DIR, "arquitetura-modulo-04.excalidraw"))
 
 

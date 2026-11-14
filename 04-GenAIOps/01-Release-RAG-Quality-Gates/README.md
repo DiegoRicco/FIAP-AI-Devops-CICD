@@ -111,8 +111,9 @@ flowchart LR
     end
 ```
 
-<!-- NOVA-IMAGEM: img/arquitetura-5-1.png | capturar: diagrama Excalidraw da arquitetura acima (ALB, dois serviços ECS com app + Neo4j, ECR, API de pedidos, EC2 de observabilidade tracejada), legível em telão | depois de salvar o arquivo, descomente a linha abaixo -->
-<!-- ![Arquitetura da Demo 5.1: o aluno acessa pelo ALB o serviço live em ECS Fargate (app FastAPI e Neo4j na mesma task); um segundo serviço candidate recebe o prefixo /candidate; a imagem no ECR carrega código, corpus, seed do grafo e embeddings; a API de pedidos continua em Lambda, API Gateway e DynamoDB](img/arquitetura-5-1.png) -->
+![Arquitetura da Demo 5.1: o aluno acessa pelo ALB o service live em ECS Fargate (contêiner app FastAPI e contêiner Neo4j na mesma task) e, pelo prefixo /candidate, o service candidate; dentro do app, um roteador manda pergunta de pedido para a API de pedidos (API Gateway, Lambda e DynamoDB) e as demais para três buscas em paralelo (BM25 no índice em memória, vetorial no índice do Neo4j e grafo no Neo4j), que passam pelo mesmo filtro de vigência, tenant e ACL antes do composer sem LLM; ECR e SSM Parameter Store abastecem as duas tasks quando elas sobem, e o Terraform grava o state no S3](img/arquitetura-5-1.png)
+
+> Fonte editável: [`diagramas/arquitetura-5-1.excalidraw`](../diagramas/arquitetura-5-1.excalidraw), gerada por `diagramas/gerar_aula5_ecs.py`.
 
 Quatro decisões que explicam esse desenho, e que você vai ver na prática:
 

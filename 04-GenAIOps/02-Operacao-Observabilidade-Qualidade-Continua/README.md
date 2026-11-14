@@ -114,8 +114,9 @@ flowchart LR
     runner -->|manifesto| s3["S3 releases-ecs/"]
 ```
 
-<!-- NOVA-IMAGEM: img/arquitetura-5-2.png | capturar: diagrama Excalidraw da arquitetura acima (GitLab → runner → ECR/ECS; ALB com três rotas; EC2 de observabilidade com a pilha OSS e o probe; a rota administrativa tracejada do runner para a task live; S3 de manifestos), legível em telão | depois de salvar o arquivo, descomente a linha abaixo -->
-<!-- ![Arquitetura da Demo 5.2: o push no projeto quantum-ai-assistant dispara o pipeline no runner EC2, que constrói a imagem por digest no ECR, implanta o candidate, roda o smoke e promove o live; o ALB roteia / para o live, /candidate para o candidate e /grafana para a EC2 de observabilidade, que recebe OTLP dos serviços e roda os probes rotulados; a rota administrativa do incidente sai do runner via SSM para a porta 8001 da task live](img/arquitetura-5-2.png) -->
+![Arquitetura da Demo 5.2: o git push no GitLab dispara o pipeline no runner EC2 (gates, package com push no ECR, deploy candidate, smoke pelo ALB e promote live com o mesmo digest, manifesto no S3); o ALB leva / ao live, /candidate ao candidate e /grafana à EC2 de observabilidade, onde OTel Collector, Jaeger, Prometheus, Loki, Grafana e o qc-probe medem a qualidade; o incidente de laboratório vai do Codespaces pelo SSM Run Command ao runner e à porta admin 8001 do live, fora do pipeline; embaixo, o ciclo de aprendizado leva do erro detectado ao novo caso no golden set](img/arquitetura-5-2.png)
+
+> Fonte editável: [`diagramas/arquitetura-5-2.excalidraw`](../diagramas/arquitetura-5-2.excalidraw), gerada por `diagramas/gerar_aula5_ecs.py`.
 
 | Componente | Onde roda | Papel |
 |---|---|---|
