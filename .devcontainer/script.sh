@@ -28,8 +28,26 @@ for rc in ~/.bashrc ~/.profile; do
   grep -q 'venv/bin' "$rc" 2>/dev/null || echo 'export PATH="$HOME/venv/bin:$PATH"' >> "$rc"
 done
 
+# session-manager-plugin: e o binario que o connection plugin aws_ssm do Ansible
+# chama para abrir a sessao com a EC2 do runner (Modulo 02 e 'make runner' da
+# Aula 5). Sem ele o playbook para no meio. Versao exata em vez de "latest" para
+# todo aluno receber o mesmo binario; a AWS mantem as URLs versionadas no ar.
+# A pasta muda por arquitetura: Codespaces e amd64, Mac com Apple Silicon e arm64.
+# Fica depois do Ansible: se o download falhar, o venv ja esta pronto e o
+# runner-recover.sh mostra o comando para instalar o plugin a mao.
+SMP_VERSION=1.2.896.0
+if ! command -v session-manager-plugin >/dev/null; then
+  SMP_ARCH=ubuntu_64bit
+  if [ "$(dpkg --print-architecture)" = arm64 ]; then SMP_ARCH=ubuntu_arm64; fi
+  curl -fsSL "https://s3.amazonaws.com/session-manager-downloads/plugin/${SMP_VERSION}/${SMP_ARCH}/session-manager-plugin.deb" \
+    -o /tmp/session-manager-plugin.deb
+  sudo dpkg -i /tmp/session-manager-plugin.deb
+  rm -f /tmp/session-manager-plugin.deb
+fi
+
 # Confirma as ferramentas de que os labs dependem.
 aws --version
 jq --version
 terraform -version
 ~/venv/bin/ansible --version
+session-manager-plugin --version
