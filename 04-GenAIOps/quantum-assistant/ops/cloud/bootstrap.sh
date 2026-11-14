@@ -44,7 +44,10 @@ fi
 
 echo "[bootstrap] sincronizando s3://$QC_CONFIG_BUCKET/quantum-assistant/obs-config/"
 mkdir -p "$APP" "$DATA/results" "$DATA/monitor" "$DATA/incident"
-aws s3 sync --only-show-errors --delete "s3://$QC_CONFIG_BUCKET/quantum-assistant/obs-config/" "$APP/"
+# --exact-timestamps: o sync padrao so compara tamanho e, na descida, ignora
+# arquivo do mesmo tamanho com data diferente. No ensaio, um dashboard com outra
+# largura de painel (mesmo numero de bytes) nao chegou na EC2.
+aws s3 sync --only-show-errors --delete --exact-timestamps "s3://$QC_CONFIG_BUCKET/quantum-assistant/obs-config/" "$APP/"
 # O probe roda como uid 10001 (sem root) e so escreve em /data.
 chown -R 10001:10001 "$DATA"
 

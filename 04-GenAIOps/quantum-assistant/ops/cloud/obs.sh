@@ -93,7 +93,9 @@ do_sync() {
   local d
   for d in ops/cloud core evals corpus config graph; do
     [ -d "$ROOT/$d" ] || continue
-    aws s3 sync --only-show-errors --delete "$ROOT/$d" "$dest/$d" \
+    # --exact-timestamps: sem ele, arquivo do mesmo tamanho (ex.: so a largura
+    # de um painel mudou) pode nao ser reenviado.
+    aws s3 sync --only-show-errors --delete --exact-timestamps "$ROOT/$d" "$dest/$d" \
       --exclude '*__pycache__*' --exclude '*.pyc' --exclude '.terraform/*' --exclude 'results/*'
   done
   # Do stack local reaproveitamos os arquivos, sem copia: Jaeger/Loki iguais e
