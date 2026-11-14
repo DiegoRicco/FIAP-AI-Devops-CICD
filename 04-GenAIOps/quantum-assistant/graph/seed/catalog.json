@@ -1,0 +1,436 @@
+{
+  "_comentario": "Fixture didatica e ficticia do grafo da Quantum Commerce (Aula 5.1). Este arquivo guarda SO o que o corpus nao sabe: produtos, categorias, campanhas e a quais categorias/campanhas cada politica se aplica. Status, vigencia, tenant e access_level das versoes de politica NAO ficam aqui: o loader le do front matter de corpus/*.md (fonte unica). Cada 'evidence' explica por que a aresta existe.",
+  "seed_format": 1,
+  "tenants": [
+    {
+      "id": "quantum",
+      "name": "Quantum Commerce"
+    },
+    {
+      "id": "parceiro-x",
+      "name": "Parceiro X (marketplace)"
+    }
+  ],
+  "topics": [
+    {
+      "id": "arrependimento",
+      "terms": [
+        "arrependimento",
+        "arrependi",
+        "arrepender",
+        "desistir",
+        "desisti",
+        "desistencia"
+      ],
+      "note": "A ordem da lista e a prioridade: arrependimento (7 dias) vem antes de troca, e estorno antes de entrega/frete, para a pergunta cair na regra mais especifica."
+    },
+    {
+      "id": "estorno",
+      "terms": [
+        "estorno",
+        "alcada"
+      ]
+    },
+    {
+      "id": "troca",
+      "terms": [
+        "troca",
+        "trocar",
+        "trocas"
+      ]
+    },
+    {
+      "id": "garantia",
+      "terms": [
+        "garantia",
+        "defeito"
+      ]
+    },
+    {
+      "id": "devolucao",
+      "terms": [
+        "devolver",
+        "devolucao",
+        "reembolso"
+      ]
+    },
+    {
+      "id": "entrega",
+      "terms": [
+        "entrega",
+        "frete"
+      ]
+    }
+  ],
+  "categories": [
+    {
+      "id": "audio",
+      "name": "Audio e fones",
+      "family": "eletronicos",
+      "synonyms": [
+        "audio",
+        "caixa de som",
+        "caixas de som"
+      ]
+    },
+    {
+      "id": "informatica",
+      "name": "Notebooks e informatica",
+      "family": "eletronicos",
+      "synonyms": [
+        "informatica",
+        "computador",
+        "computadores"
+      ]
+    },
+    {
+      "id": "celulares",
+      "name": "Celulares e relogios",
+      "family": "eletronicos",
+      "synonyms": [
+        "celulares",
+        "smartphones"
+      ]
+    },
+    {
+      "id": "vestuario",
+      "name": "Roupas",
+      "family": "moda",
+      "synonyms": [
+        "roupa",
+        "roupas",
+        "blusa",
+        "vestuario"
+      ]
+    },
+    {
+      "id": "calcados",
+      "name": "Calcados",
+      "family": "moda",
+      "synonyms": [
+        "sapato",
+        "sapatos"
+      ]
+    },
+    {
+      "id": "acessorios",
+      "name": "Acessorios de moda",
+      "family": "moda",
+      "synonyms": [
+        "acessorio",
+        "acessorios"
+      ]
+    }
+  ],
+  "products": [
+    {
+      "id": "fone-bluetooth-qc",
+      "name": "Fone de ouvido Bluetooth QC Sound",
+      "tenant": "quantum",
+      "category": "audio",
+      "synonyms": [
+        "fone",
+        "fones",
+        "fone de ouvido",
+        "headphone",
+        "headphones",
+        "fone bluetooth"
+      ]
+    },
+    {
+      "id": "caixa-som-qc",
+      "name": "Caixa de som portatil QC Boom",
+      "tenant": "quantum",
+      "category": "audio",
+      "synonyms": [
+        "caixa de som qc boom",
+        "qc boom"
+      ]
+    },
+    {
+      "id": "notebook-qc14",
+      "name": "Notebook QC 14",
+      "tenant": "quantum",
+      "category": "informatica",
+      "synonyms": [
+        "notebook",
+        "notebooks",
+        "laptop"
+      ]
+    },
+    {
+      "id": "smartphone-qc-x",
+      "name": "Smartphone QC X",
+      "tenant": "quantum",
+      "category": "celulares",
+      "synonyms": [
+        "smartphone",
+        "celular",
+        "qc x"
+      ]
+    },
+    {
+      "id": "smartwatch-qc-fit",
+      "name": "Smartwatch QC Fit",
+      "tenant": "quantum",
+      "category": "celulares",
+      "synonyms": [
+        "smartwatch",
+        "relogio inteligente"
+      ]
+    },
+    {
+      "id": "camiseta-basica",
+      "name": "Camiseta basica de algodao",
+      "tenant": "quantum",
+      "category": "vestuario",
+      "synonyms": [
+        "camiseta",
+        "camisetas",
+        "camisa"
+      ]
+    },
+    {
+      "id": "calca-jeans-slim",
+      "name": "Calca jeans slim",
+      "tenant": "quantum",
+      "category": "vestuario",
+      "synonyms": [
+        "calca",
+        "calcas",
+        "calca jeans",
+        "jeans"
+      ]
+    },
+    {
+      "id": "jaqueta-corta-vento",
+      "name": "Jaqueta corta-vento",
+      "tenant": "quantum",
+      "category": "vestuario",
+      "synonyms": [
+        "jaqueta",
+        "corta vento",
+        "casaco"
+      ]
+    },
+    {
+      "id": "tenis-corrida-qc",
+      "name": "Tenis de corrida QC Run",
+      "tenant": "quantum",
+      "category": "calcados",
+      "synonyms": [
+        "tenis",
+        "tenis de corrida"
+      ]
+    },
+    {
+      "id": "mochila-urbana-qc",
+      "name": "Mochila urbana QC",
+      "tenant": "quantum",
+      "category": "acessorios",
+      "synonyms": [
+        "mochila",
+        "mochilas"
+      ]
+    },
+    {
+      "id": "relogio-parceiro-x",
+      "name": "Relogio analogico (vendido pelo Parceiro X)",
+      "tenant": "parceiro-x",
+      "category": "acessorios",
+      "synonyms": [
+        "relogio analogico"
+      ]
+    }
+  ],
+  "campaigns": [
+    {
+      "id": "black-friday-2027",
+      "name": "Black Friday 2027",
+      "tenant": "quantum",
+      "synonyms": [
+        "black friday",
+        "bf 2027"
+      ],
+      "window_from_doc": "campanha-black-friday",
+      "participants": {
+        "categories": [
+          "informatica"
+        ],
+        "products": [
+          "fone-bluetooth-qc",
+          "smartphone-qc-x",
+          "camiseta-basica",
+          "tenis-corrida-qc"
+        ]
+      },
+      "evidence": "Ofertas definidas pelo time comercial: quatro produtos entram direto e a categoria Notebooks e informatica entra inteira. A janela da campanha vem do front matter de corpus/black-friday-2027.md."
+    },
+    {
+      "id": "liquida-inverno-2026",
+      "name": "Liquida de Inverno 2026 (encerrada)",
+      "tenant": "quantum",
+      "synonyms": [
+        "liquida de inverno",
+        "liquidacao de inverno"
+      ],
+      "start_date": "2026-06-01",
+      "end_date": "2026-07-31",
+      "participants": {
+        "categories": [
+          "vestuario"
+        ],
+        "products": []
+      },
+      "evidence": "Campanha ja encerrada e sem regra propria de troca: existe para mostrar que campanha fora da vigencia nao muda a resposta."
+    }
+  ],
+  "policies": [
+    {
+      "id": "politica-trocas",
+      "doc_id": "politica-trocas",
+      "topics": [
+        "troca"
+      ],
+      "applies_to": {
+        "categories": [
+          "audio",
+          "informatica",
+          "celulares",
+          "vestuario",
+          "calcados",
+          "acessorios"
+        ],
+        "campaigns": []
+      },
+      "evidence": "trocas-v3.md, secao Prazo para troca: vale para produto de moda (roupas, calcados e acessorios) ou eletronico.",
+      "rule_sections": {
+        "troca": "Prazo para troca"
+      }
+    },
+    {
+      "id": "campanha-black-friday",
+      "doc_id": "campanha-black-friday",
+      "topics": [
+        "troca",
+        "entrega"
+      ],
+      "applies_to": {
+        "categories": [],
+        "campaigns": [
+          "black-friday-2027"
+        ]
+      },
+      "evidence": "black-friday-2027.md: regra especial so para produtos comprados durante a Black Friday.",
+      "rule_sections": {
+        "troca": "Trocas na Black Friday",
+        "entrega": "Prazos de entrega na Black Friday"
+      }
+    },
+    {
+      "id": "politica-devolucoes",
+      "doc_id": "politica-devolucoes",
+      "topics": [
+        "arrependimento",
+        "devolucao"
+      ],
+      "applies_to": {
+        "categories": [
+          "audio",
+          "informatica",
+          "celulares",
+          "vestuario",
+          "calcados",
+          "acessorios"
+        ],
+        "campaigns": []
+      },
+      "evidence": "devolucoes.md: direito de arrependimento de 7 dias para compras pelo site ou aplicativo.",
+      "rule_sections": {
+        "arrependimento": "Direito de arrependimento",
+        "devolucao": "Reembolso"
+      }
+    },
+    {
+      "id": "politica-garantia-eletronicos",
+      "doc_id": "politica-garantia-eletronicos",
+      "topics": [
+        "garantia"
+      ],
+      "applies_to": {
+        "categories": [
+          "audio",
+          "informatica",
+          "celulares"
+        ],
+        "campaigns": []
+      },
+      "evidence": "garantia-eletronicos.md: garantia de 90 dias para celulares, notebooks, fones e televisores.",
+      "rule_sections": {
+        "garantia": "Garantia legal"
+      }
+    },
+    {
+      "id": "politica-entrega-frete",
+      "doc_id": "politica-entrega-frete",
+      "topics": [
+        "entrega"
+      ],
+      "applies_to": {
+        "categories": [
+          "audio",
+          "informatica",
+          "celulares",
+          "vestuario",
+          "calcados",
+          "acessorios"
+        ],
+        "campaigns": []
+      },
+      "evidence": "entrega-e-frete.md: prazos e frete valem para qualquer produto da loja.",
+      "rule_sections": {
+        "entrega": "Prazos de entrega"
+      }
+    },
+    {
+      "id": "manual-interno-reembolso",
+      "doc_id": "manual-interno-reembolso",
+      "topics": [
+        "estorno"
+      ],
+      "applies_to": {
+        "categories": [
+          "audio",
+          "informatica",
+          "celulares",
+          "vestuario",
+          "calcados",
+          "acessorios"
+        ],
+        "campaigns": []
+      },
+      "evidence": "manual-interno-reembolso.md: alcada de estorno do atendente (conteudo interno).",
+      "rule_sections": {
+        "estorno": "Estorno sem devolução do produto"
+      }
+    },
+    {
+      "id": "parceiro-x-trocas",
+      "doc_id": "parceiro-x-trocas",
+      "topics": [
+        "troca"
+      ],
+      "applies_to": {
+        "categories": [
+          "acessorios"
+        ],
+        "campaigns": []
+      },
+      "evidence": "parceiro-x-trocas.md: o Parceiro X vende acessorios no marketplace; a politica e do tenant parceiro-x.",
+      "rule_sections": {
+        "troca": "Prazo para troca"
+      }
+    }
+  ],
+  "_comentario_rule_sections": "rule_sections: para cada topico, a secao do documento que escreve a REGRA (o prazo). O texto continua vindo do corpus em runtime; o seed so diz qual secao e a regra."
+}

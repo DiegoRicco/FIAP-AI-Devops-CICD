@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta name="description" content="Central de Evidências do AI Customer Assistant da Quantum Commerce: a mesma pergunta respondida por BM25, recuperação vetorial e recuperação guiada por grafo, com as fontes, os filtros e o caminho no grafo. Sem modelo gerativo.">
+<title>Central de Evidências · Quantum Commerce</title>
+<!-- Ícone embutido: evita um 404 de /favicon.ico em cada ambiente (live e candidate). -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120'%3E%3Crect width='120' height='120' fill='%2316171A'/%3E%3Ccircle cx='56' cy='56' r='34' fill='none' stroke='%23F1EFEC' stroke-width='9'/%3E%3Cpath d='M70 70 L84 84 L104 84' fill='none' stroke='%23ED145B' stroke-width='9'/%3E%3C/svg%3E">
+<!-- Caminhos relativos de propósito: a mesma página roda em / (live) e em /candidate/ (candidate). -->
+<!-- O id é o que o Cytoscape procura antes de injetar um <style> inline (bloqueado
+     pela CSP). Com ele presente, a regra de posição vem do app.css. -->
+<link rel="stylesheet" href="app.css" id="__________cytoscape_stylesheet">
+<script src="vendor/cytoscape.min.js" defer></script>
+<script src="app.js" defer></script>
+</head>
+<body data-env="unknown">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="qc-mark" viewBox="0 0 120 120">
+    <circle cx="56" cy="56" r="34" fill="none" stroke="currentColor" stroke-width="9"/>
+    <path d="M70 70 L84 84 L104 84" fill="none" stroke="#ED145B" stroke-width="9" stroke-linecap="square" stroke-linejoin="miter"/>
+    <rect x="100" y="78" width="12" height="12" fill="#ED145B"/>
+  </symbol>
+</svg>
+<a class="skip" href="#comparar">Pular para a comparação</a>
+
+<header class="masthead">
+  <div class="wrap mast-row">
+    <div class="brand">
+      <svg role="img" aria-label="Marca Quantum Commerce"><use href="#qc-mark"/></svg>
+      <span><span class="brand-name">Quantum Commerce</span><span class="brand-sub">Central de Evidências do AI Customer Assistant</span></span>
+    </div>
+    <dl class="release" aria-label="Release que respondeu esta página">
+      <div><dt>Ambiente</dt><dd><span id="env-badge" class="env" data-env="unknown">verificando</span></dd></div>
+      <div><dt>Release</dt><dd id="rel-id" class="mono">…</dd></div>
+      <div><dt>Imagem</dt><dd><code id="rel-digest" data-tip="">…</code></dd></div>
+      <div><dt>/ready</dt><dd><span id="rel-ready" class="check" data-state="unknown">…</span></dd></div>
+    </dl>
+  </div>
+  <div class="wrap">
+    <details class="versions" id="versions">
+      <summary><span>Versões deste release</span><span id="ver-flag" class="flag" hidden>grafo em runtime difere da imagem</span></summary>
+      <div class="versions-body">
+        <dl id="ver-list" class="kv-grid"></dl>
+        <div class="ready-box">
+          <p class="mini-title">Checks de <code>/ready</code></p>
+          <ul id="ready-checks" class="checks"></ul>
+        </div>
+      </div>
+    </details>
+  </div>
+</header>
+
+<main id="main">
+  <div class="wrap">
+    <p id="banner" class="banner" role="status" hidden></p>
+
+    <section class="intro" aria-labelledby="t-intro">
+      <h1 id="t-intro">Mesma pergunta, três estratégias</h1>
+      <p class="qualifier">BM25, recuperação vetorial e recuperação guiada por grafo recebem a mesma pergunta, a mesma data e os mesmos filtros de acesso. Nenhuma resposta é escrita por LLM: um composer determinístico monta o texto a partir da fonte escolhida. O que muda entre as colunas é <em>como</em> cada estratégia chegou a essa fonte e se ela se aplica a este cliente, produto e momento.</p>
+    </section>
+
+    <form id="ask" class="composer" novalidate>
+      <fieldset class="presets">
+        <legend>Perguntas do roteiro</legend>
+        <div id="preset-list" class="chips"></div>
+      </fieldset>
+
+      <div class="q-row">
+        <label class="field q-field" for="q"><span class="lbl">Pergunta</span>
+          <textarea id="q" name="question" rows="1" maxlength="500" required placeholder="Ex.: posso trocar um notebook depois de 20 dias?"></textarea>
+        </label>
+        <p id="preset-hint" class="hint" aria-live="polite"></p>
+      </div>
+
+      <div class="controls">
+        <fieldset class="dates">
+          <legend>Data simulada da pergunta <span class="legend-note">(não é o relógio do sistema)</span>
+            <button type="button" class="tip-btn" data-tip="O backend avalia vigência, campanha e versão como se a pergunta tivesse sido feita nesta data (as_of_date). O relógio real do servidor não muda." aria-label="O que é a data simulada">?</button>
+          </legend>
+          <div id="date-list" class="seg"></div>
+        </fieldset>
+
+        <label class="field" for="tenant"><span class="lbl">Tenant
+          <button type="button" class="tip-btn" data-tip="Loja à qual o cliente pertence. Política de outro tenant pode ser parecida com a pergunta, mas nunca pode ser usada." aria-label="O que é tenant">?</button></span>
+          <select id="tenant" name="tenant"><option value="quantum">quantum</option><option value="parceiro-x">parceiro-x</option></select>
+        </label>
+
+        <label class="field" for="role"><span class="lbl">Papel</span>
+          <select id="role" name="user_role">
+            <option value="customer">customer · cliente</option>
+            <option value="agent">agent · atendente</option>
+          </select>
+        </label>
+
+        <fieldset class="order">
+          <legend>Pedido (opcional)
+            <button type="button" class="tip-btn" data-tip="O status do pedido vem só da API de pedidos, autorizado pelo token. Os documentos apenas explicam o que o status significa." aria-label="Como o pedido é consultado">?</button>
+          </legend>
+          <div class="order-row">
+            <label class="field"><span class="sr">Número do pedido</span><input id="order-id" name="order_id" inputmode="text" autocomplete="off" spellcheck="false" placeholder="Q-1001" pattern="Q-[0-9]{4}" maxlength="12"></label>
+            <label class="field"><span class="sr">Token de teste</span><input id="auth-token" name="auth_token" autocomplete="off" spellcheck="false" placeholder="token de teste" maxlength="64"></label>
+          </div>
+        </fieldset>
+
+        <button type="submit" id="run" class="primary">Comparar as três</button>
+      </div>
+    </form>
+
+    <section id="comparar" class="compare" aria-labelledby="t-compare" aria-busy="false">
+      <div class="compare-head">
+        <h2 id="t-compare">Resultado lado a lado</h2>
+        <p id="run-meta" class="run-meta" aria-live="polite">Nenhuma comparação feita ainda.</p>
+      </div>
+      <p class="compare-note">Os scores não são comparáveis entre colunas: cada estratégia mede uma coisa diferente. Compare a fonte escolhida, o motivo e o que foi bloqueado.</p>
+      <div id="cols" class="cols"></div>
+    </section>
+
+    <section class="graph" aria-labelledby="t-graph">
+      <div class="graph-head">
+        <h2 id="t-graph">Caminho no grafo</h2>
+        <div class="tabs" role="tablist" aria-label="Origem do grafo exibido">
+          <button type="button" role="tab" id="tab-answer" aria-selected="true" aria-controls="graph-panel">Caminho desta resposta</button>
+          <button type="button" role="tab" id="tab-product" aria-selected="false" aria-controls="graph-panel" tabindex="-1">Explorar um produto</button>
+        </div>
+      </div>
+      <div id="graph-panel" class="graph-body" role="tabpanel" aria-labelledby="tab-answer">
+        <div class="graph-stage">
+          <form id="explore" class="explore" hidden>
+            <label class="field" for="ex-product"><span class="lbl">Produto</span><select id="ex-product"></select></label>
+            <label class="field" for="ex-date"><span class="lbl">Data simulada</span><select id="ex-date"></select></label>
+            <label class="field" for="ex-tenant"><span class="lbl">Tenant</span><select id="ex-tenant"><option value="quantum">quantum</option><option value="parceiro-x">parceiro-x</option></select></label>
+            <button type="submit" class="secondary">Ver relações</button>
+          </form>
+          <p id="graph-caption" class="graph-caption"></p>
+          <div class="cy-wrap">
+            <div id="cy" role="img" aria-label="Visualização do grafo. A lista de relações ao lado traz o mesmo conteúdo em texto."></div>
+            <p id="graph-empty" class="graph-empty">Faça uma comparação para ver o caminho que a estratégia de grafo percorreu no Neo4j, ou abra “Explorar um produto”.</p>
+            <div class="cy-tools" aria-label="Controles do grafo">
+              <button type="button" class="icon-btn" id="cy-in" aria-label="Aproximar">+</button>
+              <button type="button" class="icon-btn" id="cy-out" aria-label="Afastar">−</button>
+              <button type="button" class="text-btn" id="cy-fit">Ajustar</button>
+            </div>
+          </div>
+        </div>
+        <aside class="graph-side" aria-label="Legenda e detalhes do grafo">
+          <div>
+            <p class="mini-title">Legenda</p>
+            <ul id="legend" class="legend"></ul>
+          </div>
+          <div>
+            <p class="mini-title">Detalhe do item selecionado</p>
+            <div id="graph-detail" class="graph-detail"><p class="muted">Passe o mouse ou clique em um nó ou aresta para ver propriedades e <code>provenance</code>.</p></div>
+          </div>
+          <div>
+            <p class="mini-title">Relações percorridas, em texto</p>
+            <ol id="graph-list" class="graph-list"></ol>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <section class="health" aria-labelledby="t-health">
+      <div class="health-head">
+        <h2 id="t-health">Release &amp; Health</h2>
+        <p class="health-sub">O que cada ambiente diz sobre si mesmo agora. <span id="health-at" class="muted"></span>
+          <button type="button" class="text-btn" id="health-refresh">Verificar de novo</button></p>
+      </div>
+      <div class="health-grid">
+        <div id="env-cards" class="env-cards"></div>
+        <div class="timeline">
+          <h3>Linha do tempo desta sessão</h3>
+          <p class="muted small">Mudanças observadas por esta página (releases, prontidão, versão do grafo e fontes citadas). Fica só neste navegador e some ao recarregar.</p>
+          <ol id="timeline" class="tl"></ol>
+        </div>
+      </div>
+    </section>
+  </div>
+</main>
+
+<footer class="foot">
+  <div class="wrap foot-row">
+    <p><strong>Sem modelo gerativo.</strong> <code>model_version=none</code>: o texto vem de templates. O modelo de embedding (<span id="foot-model">carregando</span>) só transforma texto em vetor; não escreve respostas. Num sistema GenAI, o LLM entraria depois da recuperação, redigindo a partir das fontes já filtradas.</p>
+    <p>Grafo e índice vetorial: Neo4j Community, dentro da task. Visualização: Cytoscape.js 3.34.4 (MIT), servido localmente pela própria imagem.</p>
+  </div>
+</footer>
+
+<div id="tooltip" class="tooltip" role="tooltip" hidden></div>
+</body>
+</html>
