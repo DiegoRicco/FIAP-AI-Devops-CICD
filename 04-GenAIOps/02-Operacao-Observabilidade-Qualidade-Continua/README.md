@@ -805,7 +805,7 @@ Volte à sua resposta à P1 (passo 5). O painel do Diego não vai se mexer.
 
 **Onde:** navegador, Grafana.
 **Por quê:** até aqui **você** olhou e viu. Às 23h ninguém olha. O que avisa é o **probe** rodando na AWS com gabarito, e o monitor comparando a fonte citada com a esperada em janela, com `n` mínimo. O probe faz perguntas do slice de políticas a cada poucos segundos; a janela do monitor é curta de propósito para caber na aula.
-**Execute:** abra os dois dashboards de novo, **Last 15 minutes**. Espere o `qc-probe` completar uma janela: a janela do monitor é de **120 s** e ele só emite veredito com **`n ≥ 20`** probes nela (antes disso, `insufficient_data`); conte **2 a 3 minutos**.
+**Execute:** abra os dois dashboards de novo, **Last 15 minutes**. Espere o `qc-probe` completar uma janela: a janela do monitor é de **120 s** e ele só emite veredito com **`n ≥ 20`** probes nela (antes disso, `insufficient_data`); conte **2 a 3 minutos**. O alerta `QualityProbeDegraded` do Prometheus usa um `n` menor, `≥ 10`: veja o 💡 abaixo.
 
 **Esperado:**
 
@@ -836,7 +836,7 @@ No painel do Diego, os sinais **técnicos** (5xx, p95) não se mexem; o que acus
 
 Os números são **configuração de aula**, não padrão de mercado: janela curta para o alerta aparecer durante a demo (em produção, 30-60 min); `n` mínimo para que uma falha isolada não dispare (com 3 amostras, uma falha é 33%; com 20, é 5%). E o terceiro estado existe porque às 3h, sem tráfego, o `pass_rate` não é 100%: é **indefinido**. Um monitor que trata "sem dados" como "tudo bem" fica cego quando ninguém está olhando.
 
-Duas classes de alerta convivem em `ops/cloud/alert-rules.yml`: **warning** por tendência (`QualityProbeDegraded`: `pass_rate` abaixo do SLO, com `n` mínimo e `for`; `AssistantHigh5xx` e `AssistantLatencyP95High` para o lado técnico) e **critical** por **ocorrência** (`StaleSourceServed`, `TenantAclViolation`, `OrderAuthViolation`, `WrongGraphEdge`, e o agregador `QualityCritical`: qualquer contagem > 0, sem limiar, sem média). `QualityInsufficientData` (`info`) é o terceiro estado em forma de regra. O incidente de hoje é da classe critical.
+Duas classes de alerta convivem em `ops/cloud/alert-rules.yml`: **warning** por tendência (`QualityProbeDegraded`: `pass_rate` abaixo do SLO, com `n` mínimo e `for`; repare que esse `n` mínimo é **10** na regra do Prometheus (`qc:probe_n:2m >= 10`, em `ops/cloud/alert-rules.yml`) e **20** no semáforo do probe (`min_n` em `ops/cloud/scenarios.json`): o alerta de degradação olha 10 amostras para reagir mais cedo, enquanto o monitor exige 20 para decidir verde ou vermelho; `AssistantHigh5xx` e `AssistantLatencyP95High` para o lado técnico) e **critical** por **ocorrência** (`StaleSourceServed`, `TenantAclViolation`, `OrderAuthViolation`, `WrongGraphEdge`, e o agregador `QualityCritical`: qualquer contagem > 0, sem limiar, sem média). `QualityInsufficientData` (`info`) é o terceiro estado em forma de regra. O incidente de hoje é da classe critical.
 
 Limite honesto: 20 probes artificiais por janela não têm validade populacional, e probes **não cobrem perguntas humanas que ninguém previu**. O que eles provam é que os contratos conhecidos continuam valendo. É muito; não é tudo.
 
@@ -1101,23 +1101,31 @@ APP=$(terraform -chdir=infra-ecs output -raw app_url)
 python3 evals/graph_gate.py --target http --url "$APP" --out /tmp/graph-gate-pm.json --junit /tmp/junit-graph-pm.xml; echo "exit=$?"
 ```
 
-**Esperado** (saída real da homologação contra o `live` restaurado, 8 s; a tabela por estratégia é a estrutura real, os números variam com o seu golden):
+**Esperado** (saída real da homologação contra o `live` restaurado, com `gate_strategies: ["graph"]` no caso novo, 8 s; os números são deste golden com o seu caso acrescentado):
 
 > ```text
 > == graph-policy-gate | alvo=http | set=golden_graph_v1 | seed=42
 >    seed/front matter: OK
 >    estrategia  Hit@k  MRR     fonte_vigente  recusa  caminho_grafo  casos
->    bm25        1.0    0.8333  1.0            1.0     None           <taxa>
->    vector      0.8571  0.7857  1.0            1.0     None           <taxa>
+>    bm25        1.0    1.0     1.0            1.0     None           1.0
+>    vector      1.0    0.9167  1.0            1.0     None           0.9565
 >    graph       1.0    1.0     1.0            1.0     1.0            1.0
 >    criticos: tenant_acl_violation_count=0 | stale_source_served_count=0 | wrong_graph_edge_count=0 | order_auth_violation_count=0
 >    slice              n  pass
->    ...
+>    abstention         2  1.0
+>    adversarial        2  1.0
+>    authorization      2  1.0
+>    graph_multi_hop    4  1.0
+>    graph_precedence   4  1.0
+>    orders             3  1.0
+>    temporal           2  1.0
+>    tenant             3  1.0
+>    vector_quality     4  0.75
 > == VEREDITO: PASS
 > exit=0
 > ```
 >
-> O gate decide por **métrica e limiar** (os quatro contadores críticos em zero, pisos por estratégia e por slice), não por "todos os casos passaram": o veredito é `PASS` mesmo que um caso isolado reprove numa estratégia. É por isso que o caso novo cobra **só** `graph` (`"gate_strategies": ["graph"]`, igual ao caso modelo do `head -1`): para esta pergunta, o BM25 cita a garantia de eletrônicos e o vetorial se abstém, exatamente o que você viu na Demo 5.1 (similaridade não é aplicabilidade); cobrar as três faria o seu caso reprovar nelas sem acrescentar nada ao que o incidente ensinou. <!-- CONFIRMAR-SAIDA: a rodada medida usou o caso com as três estratégias (26 casos, 24 pass, 2 fail no bm25/vector, VEREDITO PASS); as taxas por estratégia com "gate_strategies": ["graph"] ainda não foram medidas -->
+> O gate decide por **métrica e limiar** (os quatro contadores críticos em zero, pisos por estratégia e por slice), não por "todos os casos passaram": o veredito é `PASS` mesmo que um caso isolado reprove numa estratégia. É por isso que o caso novo cobra **só** `graph` (`"gate_strategies": ["graph"]`, igual ao caso modelo do `head -1`): para esta pergunta, o BM25 cita a garantia de eletrônicos e o vetorial se abstém, exatamente o que você viu na Demo 5.1 (similaridade não é aplicabilidade); cobrar as três faria o seu caso reprovar nelas sem acrescentar nada ao que o incidente ensinou.
 
 Passou, porque o grafo está restaurado. Repare no que **não** mudou com o seu caso: o `gg-incidente-troca-fone-2026-11-14` já existia, já cobria essa pergunta, e o pipeline verde de hoje passou por ele. O caso não faltava. **O que faltava era o alvo**: rodar o gate `--target http` contra **o que está no ar**, continuamente, e não só contra a semente em disco e o candidate recém-publicado. O caso golden novo é o registro do incidente; a ação preventiva de verdade é o probe que executa esses casos contra o `live` o tempo todo (ele já está rodando desde a Parte 0) e o alerta de drift.
 
