@@ -413,7 +413,7 @@ Saída real do `make help` na homologação (1,8 s). O `Makefile` não tem lógi
   make help               Mostra os alvos
   make bootstrap          Prepara a conta: bucket, rede fiap-lab, API de pedidos, segredos (idempotente)
   make preflight          Confere a conta sem mudar nada (credencial, rede, runner, quotas, API de pedidos)
-  make runner             Garante 1 GitLab Runner pronto (reusa o da Aula 3; senao usa o token do SSM)
+  make runner             Deixa o runner DESTE projeto pronto: make runner TOKEN=glrt-... (mesmo resultado a cada execucao)
   make runner-docker      Instala o Docker no runner (necessario para buildar a imagem)
   make orders-up          Implanta a API de pedidos (Lambda + DynamoDB + API Gateway) e grava a URL no SSM
   make secrets            Cria as senhas do Neo4j e a chave admin no SSM (nunca exibe valor)
@@ -482,7 +482,7 @@ Há duas redes `fiap-lab` na conta. Não apague nada; chame o professor.
 | Comando | O que executa por baixo | Por que existe / quando usar |
 |---|---|---|
 | `make bootstrap` | No próprio Makefile: `sts get-caller-identity`; se não há bucket `base-config-*`, `s3api create-bucket base-config-$(ALUNO_RM)` com versionamento (você digita `RM=<seu-rm>`; o Makefile guarda o valor em `ALUNO_RM`, porque `RM` é uma variável embutida do GNU make que vale `rm -f`) e bloqueio de acesso público; `ec2 describe-vpcs` (tag `Name=fiap-lab`) e, se faltar, `$COURSE_REPO/01-Terraform/scripts/recriar-rede.sh`; depois `make orders-up` (`scripts/cloud/orders-up.sh`: Terraform de `infra/` e URL no SSM `/qc-assistant/orders-base-url`) e `make secrets`. | Garante sozinho tudo o que as aulas anteriores criavam. Rode em toda sessão nova do Academy. |
-| `make runner` | `$COURSE_REPO/04-GenAIOps/shared/runner/runner-preflight.sh` (só leitura: diagnóstico `reuse`, `start`, `restart`, `recreate`...); se o diagnóstico não for `reuse`, `runner-recover.sh --apply` (liga a EC2 parada, reinicia o serviço, ou cria a EC2 com Terraform + Ansible e a registra com o token do SSM); por fim `make runner-docker` (`runner-docker.sh`: instala Docker no runner, se faltar, porque é lá que a imagem é construída). | Nos **dois** caminhos do passo 4: para quem já tem runner, confere e liga se preciso; para quem não tem, cria. Nunca registra runner duplicado. |
+| `make runner` | grava o `TOKEN=` no SSM só se ele mudou (compara o hash) e anota o projeto dono; sem `TOKEN=`, só segue se o token do SSM foi gravado por este projeto. Depois, `$COURSE_REPO/04-GenAIOps/shared/runner/runner-preflight.sh` (só leitura: diagnóstico `reuse`, `start`, `restart`, `recreate`...); se o diagnóstico não for `reuse`, `runner-recover.sh --apply` (liga a EC2 parada, reinicia o serviço, ou cria a EC2 com Terraform + Ansible e a registra com o token do SSM); por fim `make runner-docker` (`runner-docker.sh`: instala Docker no runner, se faltar, porque é lá que a imagem é construída). | Nos **dois** caminhos do passo 4: para quem já tem runner, confere e liga se preciso; para quem não tem, cria. Nunca registra runner duplicado. |
 | `make secrets` | `scripts/cloud/secrets.sh`: `aws ssm put-parameter --type SecureString` em `/qc-assistant/<env>/neo4j-password`, `.../neo4j-auth` e `.../admin-hmac` (live e candidate), valor aleatório de 32 bytes, só se não existir (`--rotate` para girar). | Com a CLI, e não com o Terraform, para a senha **nunca** entrar no state. A task lê o valor na subida (`secrets` da task definition). |
 | `make image` | `scripts/cloud/remote-build.sh`: empacota o projeto → S3 (`quantum-assistant/build-context/<sha>.tgz`) → `aws ssm send-command` no runner, que roda `scripts/cloud/build-push.sh` (`docker buildx build --platform linux/amd64`, baixa o modelo de embeddings **no build**, pré-calcula os embeddings, `docker push` ao ECR) e devolve o **digest**. | Imagem = release. Build onde o pipeline também vai construir (runner, `amd64`), sem Docker no Codespaces. |
 | `make up` | `terraform -chdir=infra-ecs init/apply` (ECR, cluster, dois services com `desired_count = 0`, task definitions **template**, ALB, TGs, SGs, log groups; grava a URL do ALB no SSM `/qc-assistant/ecs/alb-url`) e `make mirror-neo4j` (`scripts/cloud/mirror-neo4j.sh`: copia a imagem oficial do Neo4j para o ECR com o mesmo digest, para a task não depender do Docker Hub). **Não** publica a aplicação. | Terraform cria a **forma** (os services nascem desligados). |
@@ -505,28 +505,30 @@ Há duas redes `fiap-lab` na conta. Não apague nada; chame o professor.
 
 Todos seguem este mesmo passo, tendo feito a Aula 3 ou não. O runner da Aula 3 pode estar ligado a **outro** projeto; o comando descobre isso sozinho.
 
-**4.1.** Abra o link da linha `novo-runner` (criação de runner do **seu** projeto):
+**4.1.** Desligue as máquinas compartilhadas do GitLab (*instance runners*) neste projeto. Rode o comando abaixo e abra o link da linha `runners`:
 
 ```bash
 cd /home/vscode/environment/quantum-ai-assistant && make links
 ```
 
-Em **Tags**, digite `shell, terraform`; marque **Run untagged jobs**; clique em **Create runner**. Copie o token `glrt-...` que aparece na tela seguinte (ele não aparece de novo).
+Na aba **Instance**, desligue **Turn on instance runners for this project**. **Esperado:** a chave fica desligada (cinza).
 
-**4.2.** Rode, colando o seu token no lugar de `glrt-...`:
+**4.2.** Crie o runner do projeto. Abra o link da linha `novo-runner`. Em **Tags**, digite `shell, terraform`; marque **Run untagged jobs**; clique em **Create runner**. Copie o token `glrt-...` que aparece na tela seguinte (ele não aparece de novo). **Esperado:** a tela seguinte mostra um token que começa com `glrt-`.
+
+**4.3.** Rode, colando o seu token no lugar de `glrt-...`:
 
 ```bash
 cd /home/vscode/environment/quantum-ai-assistant
 make runner TOKEN='glrt-...'
 ```
 
-**Esperado:** a última linha do diagnóstico é `Runner pronto e registrado neste projeto.` e, no link `runners` do `make links`, o runner aparece **online** (bolinha verde).
+**Esperado:** a linha `Runner pronto e registrado neste projeto.` e, no link `runners`, o seu runner **online** (bolinha verde) em **Assigned project runners**, com a aba **Instance** desligada.
 
 <details>
 <summary><b>📋 Saída completa esperada</b></summary>
 <blockquote>
 
-O que o comando faz depende do que já existe na sua conta; todos terminam no mesmo lugar:
+A primeira linha é `Token do runner no SSM: gravado` na primeira vez e `ja era este (nada mudou)` nas seguintes. Depois vem o diagnóstico, que depende do que já existe na sua conta; todos terminam no mesmo lugar:
 
 | Diagnóstico | Situação | O que o `make runner` faz | Tempo |
 |---|---|---|---|
@@ -535,7 +537,7 @@ O que o comando faz depende do que já existe na sua conta; todos terminam no me
 | `recreate (instance_missing)` | não há EC2 de runner na conta | cria a EC2 (Terraform do Módulo 02) e registra | ~6-8 min |
 | `reuse (runner_online)` | já está registrada neste projeto | nada | ~25 s |
 
-Depois, em todos os casos, as linhas do Docker do runner (`docker_installed=already` ou `now`, `buildx_installed=...`, `docker_version=...`).
+Depois, em todos os casos, as linhas do Docker do runner (`docker_installed=already` ou `now`, `buildx_installed=...`, `docker_version=...`) e, por último, `Runner pronto e registrado neste projeto.`
 
 </blockquote>
 </details>
@@ -546,7 +548,11 @@ Depois, em todos os casos, as linhas do Docker do runner (`docker_installed=alre
 
 **Um runner, um token.** No GitLab, cada runner criado num projeto tem um token próprio (`glrt-...`). A EC2 guarda o token com que foi registrada em `/etc/gitlab-runner/config.toml`. O `make runner` grava o token deste projeto no **SSM Parameter Store** (`/fiap/gitlab-runner/token`, `SecureString`) e o `runner-preflight.sh` compara o **hash** do token do SSM com o hash do token do `config.toml` (o valor nunca é impresso nem trafega). Hashes diferentes = a EC2 está ligada a outro projeto, e o playbook do Módulo 02 troca o registro, deixando um único `[[runners]]` no arquivo.
 
-**Idempotente.** Rodar de novo com o mesmo token dá `reuse` e não muda nada. O comando nunca registra duas vezes, nunca usa `terraform destroy` e aborta se um plano Terraform fosse apagar algo.
+**Idempotente.** Rodar de novo com o mesmo token dá `reuse`, não regrava o SSM (compara o hash antes) e, da segunda vez em diante, imprime sempre a mesma saída. Depois do 4.3, `make runner` **sem** `TOKEN=` também funciona (ex.: runner desligado entre aulas), porque o SSM anota qual projeto gravou qual token (`/fiap/gitlab-runner/project`, projeto + hash do token); num projeto diferente, ele recusa e pede o token, em vez de dizer "pronto" com o runner de outro projeto. O comando nunca registra duas vezes, nunca usa `terraform destroy` e aborta se um plano Terraform fosse apagar algo.
+
+**Por que desligar os runners do GitLab.** No GitLab.com, todo projeto novo vem com os *instance runners* (as máquinas compartilhadas do próprio GitLab) ligados. Os jobs deste pipeline pedem as tags `shell` e `terraform`, que só o seu runner tem; então um runner do GitLab não pegaria esses jobs. Mesmo assim, desligar garante que **só o seu runner** atende o projeto, como no lab 02.1, e que um job sem tag não vá para uma máquina sem acesso à sua conta AWS. O `make runner` não consegue fazer isso por você: mudar essa opção exige a API do GitLab com um token pessoal, que o lab não usa.
+
+**O token não serve em outro projeto.** O `glrt-` autentica **o runner criado neste projeto**; não é um token de projeto que se reaproveita. Um mesmo runner até pode atender vários projetos (botão **Enable for this project**), mas é mais simples e previsível criar um runner por projeto, como aqui.
 
 **O runner antigo.** Ao re-registrar, o runner do projeto antigo fica **offline** no GitLab (a máquina passou a atender este projeto). Isso é esperado; se quiser, apague-o depois em **Settings → CI/CD → Runners** do projeto antigo.
 
@@ -559,7 +565,16 @@ Depois, em todos os casos, as linhas do Docker do runner (`docker_installed=alre
 <summary><b>⚠ Se der erro: <code>TOKEN invalido: tem que comecar com glrt-</code></b></summary>
 <blockquote>
 
-O valor colado não é o token do runner. Volte à tela **New project runner** do 4.1, copie o token que começa com `glrt-` e rode o 4.2 de novo, entre aspas simples.
+O valor colado não é o token do runner. Volte à tela **New project runner** do 4.2, copie o token que começa com `glrt-` e rode o 4.3 de novo, entre aspas simples.
+
+</blockquote>
+</details>
+
+<details>
+<summary><b>⚠ Se der erro: <code>Falta o TOKEN</code></b></summary>
+<blockquote>
+
+Você rodou `make runner` sem `TOKEN=`. Ainda não há no SSM um token gravado por este projeto (ou outro script o trocou), e é o token que diz a qual projeto o runner pertence. Se ainda tem o seu `glrt-`, repita o 4.3; senão, crie outro runner (4.2) e rode o 4.3.
 
 </blockquote>
 </details>
@@ -568,7 +583,16 @@ O valor colado não é o token do runner. Volte à tela **New project runner** d
 <summary><b>⚠ Se der erro: <code>Bloqueado (token_missing)</code></b></summary>
 <blockquote>
 
-Você rodou `make runner` sem `TOKEN=`. Faça o 4.1 e rode `make runner TOKEN='glrt-...'`.
+O parâmetro do token sumiu do SSM. Rode o 4.3 de novo com o seu token; se não o tem mais, crie outro runner (4.2).
+
+</blockquote>
+</details>
+
+<details>
+<summary><b>⚠ Se der erro: <code>Credencial AWS invalida/expirada</code></b></summary>
+<blockquote>
+
+A sessão do Learner Lab expirou. **Start Lab** → **AWS Details**, cole o bloco em `~/.aws/credentials` e repita o 4.3.
 
 </blockquote>
 </details>
@@ -577,7 +601,7 @@ Você rodou `make runner` sem `TOKEN=`. Faça o 4.1 e rode `make runner TOKEN='g
 <summary><b>⚠ Se der erro: <code>Bloqueado (token_revoked)</code></b></summary>
 <blockquote>
 
-O runner deste token foi apagado no GitLab. Crie outro (4.1) e rode o 4.2 com o token novo.
+O runner deste token foi apagado no GitLab. Crie outro (4.2) e rode o 4.3 com o token novo.
 
 </blockquote>
 </details>
@@ -586,7 +610,16 @@ O runner deste token foi apagado no GitLab. Crie outro (4.1) e rode o 4.2 com o 
 <summary><b>⚠ Se der erro: <code>ERRO: falta o session-manager-plugin neste terminal</code></b></summary>
 <blockquote>
 
-Codespaces anterior a esta versão do devcontainer. **Nada foi criado** (o comando confere o plugin antes de tudo). Rode o comando de instalação que a mensagem imprime e repita o 4.2.
+Codespaces anterior a esta versão do devcontainer. **Nada foi criado** (o comando confere o plugin antes de tudo). Rode o comando de instalação que a mensagem imprime e repita o 4.3.
+
+</blockquote>
+</details>
+
+<details>
+<summary><b>⚠ Se der erro: o job roda num runner <code>saas-linux-...</code> (do GitLab), não no seu</b></summary>
+<blockquote>
+
+Os *instance runners* continuam ligados. Refaça o 4.1 (aba **Instance**, desligue **Turn on instance runners for this project**) e clique em **Retry** no job.
 
 </blockquote>
 </details>
@@ -595,7 +628,7 @@ Codespaces anterior a esta versão do devcontainer. **Nada foi criado** (o coman
 <summary><b>⚠ Se der erro: runner online no GitLab, mas o job fica <code>stuck</code></b></summary>
 <blockquote>
 
-O job pede tags que o runner não tem. Confira no link `runners` que o runner tem `shell` e `terraform` (as tags vêm da criação no 4.1; se faltarem, edite o runner ali e salve).
+O job pede tags que o runner não tem. Confira no link `runners` que o runner tem `shell` e `terraform` (as tags vêm da criação no 4.2; se faltarem, edite o runner ali e salve).
 
 </blockquote>
 </details>

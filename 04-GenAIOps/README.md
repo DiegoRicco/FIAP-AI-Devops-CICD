@@ -80,7 +80,7 @@ cd /home/vscode/environment/quantum-ai-assistant
 make runner
 ```
 
-> Saída esperada: `diagnostico do runner: reuse`, `Runner da EC2 pronto...` e as linhas `docker_installed=already` ... `docker_version=...` do `runner-docker.sh` (25 s na homologação). Se a EC2 estava desligada, o diagnóstico é `start`: o alvo a liga e espera o runner voltar online; por fim confere o Docker no runner. Ele **nunca** registra um runner duplicado. Os scripts por baixo (`runner-preflight.sh`, `runner-recover.sh`) são os de [`shared/runner/`](shared/runner/README.md), lidos do repositório do curso via `COURSE_REPO`.
+> Saída esperada: `Token do runner no SSM: o deste projeto`, `diagnostico do runner: reuse`, as linhas `docker_installed=already` ... `docker_version=...` do `runner-docker.sh` e `Runner pronto e registrado neste projeto.` (25 s na homologação). Sem token deste projeto no SSM, ele para com `Falta o TOKEN deste projeto`: faça o passo 4 da Demo 5.1. Se a EC2 estava desligada, o diagnóstico é `start`: o alvo a liga e espera o runner voltar online; por fim confere o Docker no runner. Ele **nunca** registra um runner duplicado. Os scripts por baixo (`runner-preflight.sh`, `runner-recover.sh`) são os de [`shared/runner/`](shared/runner/README.md), lidos do repositório do curso via `COURSE_REPO`.
 
 <details>
 <summary><b>💡 Clique para entender: reboot, stop/start, terminate, Codespaces parado e sessão do Academy expirada não são a mesma coisa</b></summary>

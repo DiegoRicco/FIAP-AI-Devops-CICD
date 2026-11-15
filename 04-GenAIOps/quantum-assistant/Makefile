@@ -69,21 +69,37 @@ bootstrap: course-repo ## Prepara a conta: bucket, rede fiap-lab, API de pedidos
 preflight: ## Confere a conta sem mudar nada (credencial, rede, runner, quotas, API de pedidos)
 	@bash scripts/cloud/preflight.sh $(if $(BUCKET),--bucket $(BUCKET))
 
-runner: course-repo ## Deixa 1 runner deste projeto pronto: grava TOKEN=glrt-... no SSM, liga, cria ou re-registra a EC2 (idempotente)
-	@if [ -n "$(TOKEN)" ]; then \
-	  case "$(TOKEN)" in glrt-*) ;; *) echo "TOKEN invalido: tem que comecar com glrt- (copie de New project runner)."; exit 1 ;; esac; \
-	  aws ssm put-parameter --name /fiap/gitlab-runner/token --type SecureString --overwrite --value "$(TOKEN)" >/dev/null \
-	    && echo "Token do runner deste projeto gravado no SSM (/fiap/gitlab-runner/token)."; \
-	fi
+runner: course-repo ## Deixa o runner DESTE projeto pronto: make runner TOKEN=glrt-... (mesmo resultado a cada execucao)
+	@aws sts get-caller-identity >/dev/null 2>&1 || { echo "Credencial AWS invalida/expirada: Start Lab e cole AWS Details em ~/.aws/credentials"; exit 1; }
+	@# A marca guarda o projeto E o hash do token que ele gravou. Sem TOKEN, so segue se o
+	@# token do SSM ainda e esse: o da Aula 3 (ou um regravado por outro script) e de outro
+	@# projeto e daria um "pronto" falso.
+	@proj=$$(git remote get-url origin 2>/dev/null); \
+	cur=$$(aws ssm get-parameter --name /fiap/gitlab-runner/token --with-decryption --query Parameter.Value --output text 2>/dev/null | tr -d '\n' | sha256sum | cut -c1-64); \
+	saved=$$(aws ssm get-parameter --name /fiap/gitlab-runner/project --query Parameter.Value --output text 2>/dev/null); \
+	case "$(TOKEN)" in \
+	  glrt-*) ;; \
+	  "") if [ -n "$$proj" ] && [ "$$saved" = "$$proj@$$cur" ]; then echo "Token do runner no SSM: o deste projeto (gravado antes com TOKEN=)."; exit 0; fi; \
+	      echo "Falta o TOKEN deste projeto. Crie o runner no projeto (link novo-runner do make links) e rode: make runner TOKEN='glrt-...'"; exit 1 ;; \
+	  *) echo "TOKEN invalido: tem que comecar com glrt- (copie da tela New project runner)."; exit 1 ;; \
+	esac; \
+	new=$$(printf '%s' '$(TOKEN)' | sha256sum | cut -c1-64); \
+	if [ "$$new" = "$$cur" ]; then echo "Token do runner no SSM: ja era este (nada mudou)."; \
+	else aws ssm put-parameter --name /fiap/gitlab-runner/token --type SecureString --overwrite --value '$(TOKEN)' >/dev/null \
+	  && echo "Token do runner no SSM: gravado (/fiap/gitlab-runner/token)." || exit 1; fi; \
+	if [ -n "$$proj" ] && [ "$$saved" != "$$proj@$$new" ]; then \
+	  aws ssm put-parameter --name /fiap/gitlab-runner/project --type String --overwrite --value "$$proj@$$new" >/dev/null || exit 1; fi
 	@rc=0; bash "$(RUNNER_DIR)/runner-preflight.sh" >/tmp/qc-runner-preflight.txt || rc=$$?; \
 	d=$$(sed -n 's/^diagnosis=//p' /tmp/qc-runner-preflight.txt); r=$$(sed -n 's/^reason=//p' /tmp/qc-runner-preflight.txt); \
 	echo "diagnostico do runner: $$d ($$r)"; \
 	case "$$d" in \
-	  reuse) echo "Runner pronto e registrado neste projeto." ;; \
-	  blocked) echo "Bloqueado ($$r). Sem token? Crie o runner no projeto (link novo-runner do make links) e rode: make runner TOKEN=glrt-..."; exit 1 ;; \
+	  reuse) ;; \
+	  blocked) echo "Bloqueado ($$r). Veja o bloco do erro no passo 4 do README."; exit 1 ;; \
 	  *) echo "Ajustando o runner (passo: $$d)..."; bash "$(RUNNER_DIR)/runner-recover.sh" --apply || exit 1 ;; \
 	esac
 	@$(MAKE) --no-print-directory runner-docker
+	@echo "Runner pronto e registrado neste projeto."
+	@echo "Confira no link runners: o seu runner online em Assigned project runners e a aba Instance desligada."
 
 runner-docker: course-repo ## Instala o Docker no runner (necessario para buildar a imagem)
 	@bash "$(RUNNER_DIR)/runner-docker.sh"
