@@ -667,7 +667,7 @@ O job pede tags que o runner não tem. Confira no link `runners` que o runner te
 
 **5. Crie os segredos e construa a imagem**
 
-No Codespaces: os segredos nascem no SSM e a imagem, que **é** o release, é construída **no runner** (você não instala nada).
+No Codespaces. `make secrets` guarda no SSM, criptografadas, a **senha do Neo4j** (o banco do grafo) e a **chave da porta admin** (usada no incidente da Demo 5.2). `make image` constrói **no runner** a imagem do assistente (código, corpus, grafo e modelo), que **é** o release, e a envia ao ECR.
 
 ```bash
 cd /home/vscode/environment/quantum-ai-assistant
@@ -768,7 +768,7 @@ O push falhou no meio (as credenciais do runner expiram junto com a sessão do A
 
 **6. Suba o runtime, publique o primeiro release e espere o `/ready`**
 
-No Codespaces, os quatro comandos em sequência, no mesmo terminal. Cada `deploy` espera sozinho o cold start (3 a 5 min) e termina com `deploy: pronto em <n>s`:
+No Codespaces. `make up` cria a stack (Terraform): **ECS Fargate** com os services `live` e `candidate` (cada task = app + Neo4j) e um **ALB** na frente (`/` → live, `/candidate` → candidate). Cada `deploy` põe a imagem do passo 5 num service, espera o cold start (3 a 5 min) e termina com `deploy: pronto em <n>s`. Rode os quatro em sequência:
 
 ```bash
 cd /home/vscode/environment/quantum-ai-assistant
