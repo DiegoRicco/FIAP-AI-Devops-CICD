@@ -21,6 +21,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 TF_DIR="$ROOT/infra-obs"
 PROJECT="qc-assistant"
+CLUSTER="${CLUSTER:-$PROJECT}"
 ALB_NAME="${QC_ALB_NAME:-$PROJECT-alb}"
 SSM_GRAFANA="/$PROJECT/obs/grafana-admin"
 SSM_OTLP="/$PROJECT/obs/otlp-endpoint"
@@ -124,12 +125,44 @@ do_apply() {
   tf_init
   # shellcheck disable=SC2046
   tf apply -input=false -auto-approve $(tf_vars) >&2
-  local ip
+  local ip new old
   ip=$(tf output -raw private_ip)
+  new="http://$ip:4318"
+  old=$(aws ssm get-parameter --name "$SSM_OTLP" --query Parameter.Value --output text 2>/dev/null || true)
   # O parametro pertence ao infra-ecs/ (nasce "disabled"); aqui so trocamos o valor.
   aws ssm put-parameter --name "$SSM_OTLP" --type String --overwrite \
-    --value "http://$ip:4318" >/dev/null
-  log "$SSM_OTLP = http://$ip:4318 (o app le no proximo deploy/restart da task)"
+    --value "$new" >/dev/null
+  if [ "$old" = "$new" ]; then
+    log "$SSM_OTLP = $new (sem mudanca: live e candidate nao reiniciados)"
+    return
+  fi
+  log "$SSM_OTLP = $new (era ${old:-ausente})"
+  restart_for_otlp
+}
+
+restart_for_otlp() {
+  # A task le o endpoint via "secrets" do SSM, que o ECS so resolve quando a
+  # task sobe: sem reiniciar, o live e o candidate da 5.1 seguem com "disabled"
+  # e os paineis com metricas do app ficam vazios ate o proximo deploy.
+  # --force-new-deployment reusa a revisao atual do service: mesma imagem, mesmo
+  # digest e mesmo QC_RELEASE_ID; o release nao muda, so o valor lido no boot.
+  local svc desired started=""
+  for svc in "$PROJECT-live" "$PROJECT-candidate"; do
+    desired=$(aws ecs describe-services --cluster "$CLUSTER" --services "$svc" \
+      --query "services[?status=='ACTIVE'].desiredCount | [0]" --output text 2>/dev/null || true)
+    case "$desired" in
+      ""|None|0) log "$svc desligado ou ausente (desired=${desired:-?}): nao reiniciado"; continue ;;
+    esac
+    aws ecs update-service --cluster "$CLUSTER" --service "$svc" --force-new-deployment \
+      --query 'service.serviceName' --output text >/dev/null
+    started="$started $svc"
+  done
+  [ -n "$started" ] || return 0
+  log "reiniciando${started} na mesma revisao: a task so le o endpoint OTLP novo quando sobe (cold start ~3-5 min)"
+  # shellcheck disable=SC2086
+  aws ecs wait services-stable --cluster "$CLUSTER" --services $started \
+    || die "${started# } nao estabilizou em 10 min. O endpoint ja esta gravado, entao repetir o obs.sh nao reinicia de novo; depois de make diagnose ENV=live e make diagnose ENV=candidate, para cada um: aws ecs update-service --cluster $CLUSTER --service <nome> --force-new-deployment"
+  log "${started# } estavel(is) com o endpoint OTLP novo (mesma imagem, mesmo release)"
 }
 
 wait_ssm_online() {

@@ -36,7 +36,7 @@ Os comandos rodam em três lugares, e cada passo diz qual: **Codespaces** (termi
 >
 > Saída esperada: `HTTP 200`. Se vier `HTTP 503` (ou `000`, sem resposta), o runtime está desligado ou doente: `make start` e `make diagnose`, ou volte ao [passo 6 da Demo 5.1](../01-Release-RAG-Quality-Gates/README.md#passo-6).
 >
-> **Tempo de aula: ~72 min, incluindo subir a observabilidade** (Parte 1, ~12 min: `obs.sh up` medido em 125 s com a pilha já de pé e ~7 min na primeira vez, mais o baseline) **e o roteiro das Partes 2 a 7 (60 min)**; o Encerramento (limpeza) leva ~8 min no fim do módulo. Com a 5.1 (~85 min), as duas demos cabem no dia de aula.
+> **Tempo de aula: ~72 min, incluindo subir a observabilidade** (Parte 1, ~12 min: `obs.sh up` medido em 125 s com a pilha já de pé e ~7 min na primeira vez, mais o baseline; some 3 a 5 min na primeira vez pelo restart de `live` e `candidate`, que passam a enviar telemetria) **e o roteiro das Partes 2 a 7 (60 min)**; o Encerramento (limpeza) leva ~8 min no fim do módulo. Com a 5.1 (~85 min), as duas demos cabem no dia de aula.
 
 Cada aluno faz **todas** as Partes no próprio projeto GitLab e na própria conta: o seu pipeline, o seu `candidate`, o seu `live`. Se o seu ambiente travar em algum passo e o **Se falhar** não resolver, acompanhe o roteiro no ambiente que o professor projeta no telão enquanto destrava o seu; o `incident.sh` é idempotente, então dá para retomar de onde parou.
 
@@ -60,7 +60,7 @@ Os blocos **💡 Clique para entender** trazem o aprofundamento; a linha **Se fa
 
 | Parte | Relógio | O que você faz | Passos | Tempo |
 |-------|---------|----------------|--------|-------|
-| [Parte 1](#parte-1---subir-a-observabilidade-dentro-da-aula) | 00–12 | Conferir o grafo, subir a observabilidade na AWS (lendo a arquitetura enquanto ela sobe) e registrar o baseline R1 | [1](#passo-1) · [2](#passo-2) · [3](#passo-3) | 12 min |
+| [Parte 1](#parte-1---subir-a-observabilidade-dentro-da-aula) | 00–12 | Conferir o grafo, subir a observabilidade na AWS (lendo a arquitetura enquanto ela sobe) e registrar o baseline R1 | [1](#passo-1) · [2](#passo-2) · [3](#passo-3) | 12 min (+3 a 5 na 1ª vez: restart das tasks no passo 2) |
 | [Parte 2](#parte-2---pipeline-verde-cliente-errado) | 12–19 | Ver o `live` R1, health 200 e o baseline de qualidade no Grafana | [4](#passo-4) · [5](#passo-5) | 7 min |
 | [Parte 3](#parte-3---o-gate-protege-o-cliente) | 19–32 | Republicar a v2 como vigente no corpus, commit, push, pipeline **vermelho** real, `live` intocado | [6](#passo-6) · [7](#passo-7) · [8](#passo-8) · [9](#passo-9) | 13 min |
 | [Parte 4](#parte-4---a-correção-merece-confiança) | 32–47 | Corrigir e dar push; **enquanto o pipeline verde roda** (10–15 min), ler o 💡 do passo 10 e acompanhar os jobs; candidate → smoke → promote R2, manifesto e digest | [10](#passo-10) · [11](#passo-11) · [12](#passo-12) | 15 min (10 de espera guiada) |
@@ -220,20 +220,20 @@ O Makefile do seu projeto é anterior a esta demo; recopie `Makefile` e `scripts
 
 **2. Suba a observabilidade na AWS**
 
-No Codespaces. A Demo 5.1 já exportava telemetria por OTLP, mas não havia para onde; o `obs.sh up` cria esse destino (idempotente, seguro repetir):
+No Codespaces. `obs.sh up` cria (Terraform) a **EC2 `qc-assistant-obs`**, com as ferramentas que recebem e mostram traces, métricas e logs (o **Grafana** é o painel), o **`qc-probe`** (perguntas com gabarito ao `live`) e a regra `/grafana` no ALB. Na primeira vez, reinicia o `live` e o `candidate` **na mesma imagem** (mesmo release), porque a task só lê o endereço da telemetria ao subir. Seguro repetir: da segunda vez, nada é reiniciado.
 
 ```bash
 cd /home/vscode/environment/quantum-ai-assistant
 bash ops/cloud/obs.sh up
 ```
 
-**Esperado:** a última linha é a URL do Grafana. Enquanto roda (2 a 7 min), abra o ⏳ abaixo e responda à pergunta que o passo 5 cobra.
+**Esperado:** a última linha é a URL do Grafana; antes dela, na primeira vez, `obs: reiniciando qc-assistant-live qc-assistant-candidate na mesma revisao ...` e, ~3 a 5 min depois (cold start: Neo4j + grafo + modelo), `... estavel(is) com o endpoint OTLP novo (mesma imagem, mesmo release)`. Enquanto roda (2 min ao repetir; 10 a 12 min na primeira vez), abra o ⏳ abaixo e responda à pergunta que o passo 5 cobra.
 
 <details>
 <summary><b>📋 Saída completa esperada</b></summary>
 <blockquote>
 
-Saída real da homologação, com a pilha já de pé: 125 s.
+Saída real da homologação, com a pilha já de pé: 125 s. A linha `otlp-endpoint` é a do script atual (endereço igual, nada reiniciado). <!-- CONFIRMAR-SAIDA: linha nova do restart, não executada na AWS -->
 
 ```text
 obs: /qc-assistant/obs/grafana-admin ja existe (nao alterado)
@@ -242,20 +242,30 @@ aws_security_group.obs: Refreshing state... [id=sg-...]
 aws_instance.obs: Refreshing state... [id=i-...]
 No changes. Your infrastructure matches the configuration.
 Apply complete! Resources: 0 added, 0 changed, 0 destroyed.
-obs: /qc-assistant/obs/otlp-endpoint = http://10.0.x.x:4318 (o app le no proximo deploy/restart da task)
+obs: /qc-assistant/obs/otlp-endpoint = http://10.0.x.x:4318 (sem mudanca: live e candidate nao reiniciados)
 obs: rodando o bootstrap na i-... via SSM (primeira vez: ~4 min de docker pull)
 [bootstrap] fim 2026-11-14T12:04:12Z
 http://qc-assistant-alb-<id>.us-east-1.elb.amazonaws.com/grafana/
 ```
 
+Na **primeira vez** (o endereço era `disabled`), no lugar da linha `otlp-endpoint` acima aparecem estas, e o comando leva 3 a 5 min a mais: <!-- CONFIRMAR-SAIDA: linha nova do restart, não executada na AWS -->
+
+```text
+obs: /qc-assistant/obs/otlp-endpoint = http://10.0.x.x:4318 (era disabled)
+obs: reiniciando qc-assistant-live qc-assistant-candidate na mesma revisao: a task so le o endpoint OTLP novo quando sobe (cold start ~3-5 min)
+obs: qc-assistant-live qc-assistant-candidate estavel(is) com o endpoint OTLP novo (mesma imagem, mesmo release)
+```
+
+Se o `candidate` estiver desligado (`desired 0`), ele não é reiniciado e aparece `obs: qc-assistant-candidate desligado ou ausente (desired=0): nao reiniciado`.
+
 </blockquote>
 </details>
 
 <details>
-<summary><b>⏳ Enquanto o <code>obs.sh up</code> roda (2 a 7 min): a pergunta que o passo 5 cobra</b></summary>
+<summary><b>⏳ Enquanto o <code>obs.sh up</code> roda (2 a 12 min): a pergunta que o passo 5 cobra</b></summary>
 <blockquote>
 
-**Enquanto o `obs.sh up` roda** (125 s na homologação com a pilha já de pé; na primeira vez, a sua, cerca de 7 min: o `apply` cria 9 recursos, o Grafana responde pelo ALB ~2 min depois e o bootstrap faz ~4 min de `docker pull`), abra a [arquitetura da demo](img/arquitetura-5-2.png) e siga duas setas: a tracejada **OTLP**, que sai das tasks `live` e `candidate` e chega à EC2 `qc-assistant-obs` (é para lá que os spans e as métricas vão), e a dos **probes rotulados**, que sai dessa EC2 e volta ao ALB (é ela que faz perguntas com gabarito ao `live`). Depois responda no caderno: dos dois painéis que você vai abrir no passo 3 (o do Diego, de engenharia, e o da Helena, de negócio), **qual deles deveria mudar de cor** quando o assistente responder um prazo errado com HTTP 200? O passo 5 cobra a resposta. Você sabe que o comando terminou quando a última linha é a URL do Grafana.
+**Enquanto o `obs.sh up` roda** (125 s na homologação com a pilha já de pé; na primeira vez, a sua, cerca de 10 a 12 min: o `apply` cria 9 recursos, o restart de `live` e `candidate` leva 3 a 5 min de cold start, o Grafana responde pelo ALB ~2 min depois e o bootstrap faz ~4 min de `docker pull`), abra a [arquitetura da demo](img/arquitetura-5-2.png) e siga duas setas: a tracejada **OTLP**, que sai das tasks `live` e `candidate` e chega à EC2 `qc-assistant-obs` (é para lá que os spans e as métricas vão), e a dos **probes rotulados**, que sai dessa EC2 e volta ao ALB (é ela que faz perguntas com gabarito ao `live`). Depois responda no caderno: dos dois painéis que você vai abrir no passo 3 (o do Diego, de engenharia, e o da Helena, de negócio), **qual deles deveria mudar de cor** quando o assistente responder um prazo errado com HTTP 200? O passo 5 cobra a resposta. Você sabe que o comando terminou quando a última linha é a URL do Grafana.
 
 </blockquote>
 </details>
@@ -354,22 +364,54 @@ Os valores acima são os da homologação deste lab, em que um pipeline verde j�
 </blockquote>
 </details>
 
-**3.1. Abra o painel da Helena.** Pegue os links prontos e a senha do Grafana (a senha só aparece no seu terminal, nunca vai para arquivo):
+**3.1. Mostre a senha do Grafana.** Ela só aparece no seu terminal; não a cole em arquivo nenhum.
 
 ```bash
-cd /home/vscode/environment/quantum-ai-assistant && make links
 aws ssm get-parameter --name /qc-assistant/obs/grafana-admin --with-decryption --query Parameter.Value --output text
 ```
 
-**Ctrl+clique** (Cmd+clique no Mac) no link `painel-helena`, entre com `admin` e a senha impressa, e ajuste o intervalo para **Last 15 minutes**.
+**Esperado:** uma linha só, a senha (o usuário é sempre `admin`).
 
-**Esperado:** o semáforo **Confiança do assistente agora** em **Confiável** (verde), e **Amostras na janela (n)** ≥ 20 no painel do Diego.
+**3.2. Abra o painel da Helena:**
+
+```bash
+cd /home/vscode/environment/quantum-ai-assistant && make links painel-helena
+```
+
+Ctrl+clique no link (Cmd+clique no Mac) para abrir no navegador.
+
+**Esperado:** a tela de login do Grafana.
+
+**3.3. Entre no Grafana.** Em **Email or username** digite `admin`; em **Password**, cole a senha do 3.1; clique em **Log in**.
+
+**Esperado:** abre o dashboard **Visão do negócio · Atendimento**, já em **Last 15 minutes** com refresh de 10 s (não precisa mexer no relógio).
+
+**3.4. Leia o semáforo no topo.** Olhe o painel **Confiança do assistente agora**.
+
+**Esperado:** **Confiável** (verde).
+
+**O que observar:**
+- **Política vigente** e **Caminho do grafo** em 100%; **Casos críticos na janela** em 0.
+- Os três números usam a mesma janela do semáforo: os últimos 2 min.
+
+**3.5. Abra o painel do Diego:**
+
+```bash
+cd /home/vscode/environment/quantum-ai-assistant && make links painel-diego
+```
+
+Ctrl+clique no link (Cmd+clique no Mac) para abrir no navegador. O login do 3.3 já vale para esta aba.
+
+**Esperado:** o dashboard **Visão técnica · SRE**, com o painel **Amostras na janela (n)** ≥ 20 na linha de cima.
+
+**O que observar:**
+- `n` baixo quer dizer que o probe acabou de subir: espere 2 min e olhe de novo.
 
 <details>
 <summary><b>📋 Leitura completa esperada do painel</b></summary>
 <blockquote>
 
-O Grafana abre direto na **Visão do negócio · Atendimento** (o painel da Helena). Os links `painel-diego` e `painel-investigacao` abrem os outros dois painéis do mesmo jeito; deixe o terminal à mão.
+O link `painel-helena` abre direto na **Visão do negócio · Atendimento**; `painel-diego` abre a **Visão técnica · SRE** e `painel-investigacao` abre a **Investigação · Incidente**, todos do mesmo jeito. Para ver todos os links de uma vez: `cd /home/vscode/environment/quantum-ai-assistant && make links`. Deixe o terminal à mão.
 
 O semáforo **Confiança do assistente agora** diz **Confiável** (verde), com **Política vigente** e **Caminho do grafo** em 100% e **Casos críticos na janela** em 0 (todos sobre os últimos 2 min, a mesma janela do semáforo). O `n` da janela fica no painel do Diego, **Amostras na janela (n)**, e precisa estar ≥ 20. Se ainda for baixo, o probe acabou de subir; espere 2 min.
 
@@ -483,9 +525,37 @@ Incidente já ativo (alguém pulou para a Parte 5); rode o `restore` do passo 18
 
 No navegador, Grafana. O painel de **engenharia** (Diego) e o de **negócio** (Helena) medem coisas diferentes; um não substitui o outro.
 
-Abra os links `painel-diego` e `painel-helena` do `make links` em duas abas, intervalo **Last 15 minutes**, refresh 10 s.
+**5.1. Abra o painel do Diego:**
 
-**Esperado:** os dois painéis verdes: no do Diego, **Erros 5xx** 0,0% e **Probes corretos** 100%; no da Helena, **Confiável**.
+```bash
+cd /home/vscode/environment/quantum-ai-assistant && make links painel-diego
+```
+
+Ctrl+clique no link (Cmd+clique no Mac) para abrir no navegador. Se pedir login, use `admin` e a senha do passo 3.1.
+
+**Esperado:** o dashboard **Visão técnica · SRE**, em **Last 15 minutes**, refresh 10 s.
+
+**5.2. Leia a linha de cima do painel do Diego.** Olhe **Erros 5xx** e **Probes corretos**.
+
+**Esperado:** **Erros 5xx** em 0,0% e **Probes corretos** em 100%.
+
+**O que observar:**
+- **Latência p95** baixa e **Alertas disparando** em 0: o servidor está saudável.
+- Nada aqui olha para a **versão** da política citada.
+
+**5.3. Abra o painel da Helena, numa segunda aba:**
+
+```bash
+cd /home/vscode/environment/quantum-ai-assistant && make links painel-helena
+```
+
+Ctrl+clique no link (Cmd+clique no Mac) para abrir no navegador.
+
+**Esperado:** o dashboard **Visão do negócio · Atendimento**, com **Confiança do assistente agora** em **Confiável** (verde).
+
+**O que observar:**
+- **Política vigente** e **Caminho do grafo** em 100%: este painel mede se a resposta citou a versão certa.
+- O rodapé **Como ler esta tela** avisa que os números vêm de probes com gabarito, não de clientes reais.
 
 <details>
 <summary><b>📋 Leitura completa esperada dos dois painéis</b></summary>
@@ -523,7 +593,7 @@ Leia o rodapé **Como ler esta tela** do painel da Helena: *"os números de qual
 ### Checkpoint
 
 - `live` responde R1, HTTP 200, 30 dias com `politica-trocas@v3`
-- os dois painéis verdes, com `n ≥ 20` no da Helena, e você escreveu a sua resposta à P1
+- os dois painéis verdes, com `n ≥ 20` no painel do Diego (**Amostras na janela (n)**), e você escreveu a sua resposta à P1
 
 ---
 
@@ -729,7 +799,7 @@ Você usou `--target local` em vez de `--target seed`; o `local` precisa de um N
 
 **8. Publique a regressão como se fosse rotina**
 
-No Codespaces. Na vida real a mudança iria num commit com mensagem plausível (esta é a mensagem real da homologação); quem precisa segurar é o pipeline.
+No Codespaces. O push leva o commit ao GitLab e **dispara o pipeline** no seu runner; quem precisa segurar a mudança é ele (a mensagem é a real da homologação).
 
 ```bash
 cd /home/vscode/environment/quantum-ai-assistant
@@ -739,7 +809,7 @@ eval $(ssh-agent -s) >/dev/null && ssh-add -k /home/vscode/.ssh/gitlab
 git push origin "$(git branch --show-current)"
 ```
 
-**Esperado:** o push termina com `<branch> -> <branch>` e, no link `pipelines` do `make links` (é **Build → Pipelines**), um pipeline novo em execução.
+**Esperado:** o push termina com `<branch> -> <branch>`. O pipeline que ele disparou você abre no passo 9.1.
 
 <details>
 <summary><b>⚠ Se der erro: <code>Permission denied (publickey)</code></b></summary>
@@ -767,20 +837,39 @@ O passo 7 não alterou nada (`git diff --stat -- corpus/`).
 
 No GitLab (navegador) e no Codespaces. A prova de que o gate funciona é o **`deploy-candidate` sem rodar** e o cliente continuar em R1.
 
-Abra o link `pipelines` e o pipeline mais recente. Quando o `evaluate` terminar (~1 min e meio), abra a aba **Tests** → suíte `graph-policy-gate` → o teste em vermelho.
+**9.1. Abra a página de pipelines do seu projeto:**
 
-**Esperado:** os três gates do `evaluate` **vermelhos** e `package`, `deploy-candidate`, `postdeploy-synthetic-gate` e `promote-live` **cinza, skipped**.
+```bash
+cd /home/vscode/environment/quantum-ai-assistant && make links pipelines
+```
 
-<details>
-<summary><b>🧭 Passo a passo no GitLab: do link à mensagem do teste</b></summary>
-<blockquote>
+Ctrl+clique no link (Cmd+clique no Mac) para abrir no navegador.
 
-A reprovação chega em pouco mais de **1 minuto e meio** depois que o runner pega o job; enquanto espera, leia a tabela do passo 6 de novo.
+**Esperado:** a lista de pipelines (**Build → Pipelines**), com o pipeline do seu push na linha de cima.
 
-Abra o link `pipelines` (se fechou o terminal: `cd /home/vscode/environment/quantum-ai-assistant && make links`; é **Build → Pipelines**) e clique no pipeline mais recente (a linha de cima). A página do pipeline mostra os jobs em colunas, uma por stage. Quando os jobs do stage `evaluate` terminarem, clique na aba **Tests** (ao lado de **Pipeline** e **Jobs**, no topo da página): ela lista uma **suíte** por job que publicou relatório JUnit (um arquivo XML com um resultado por teste; é o que o GitLab desenha ali). Clique na suíte `graph-policy-gate` e depois no teste em vermelho para ler a mensagem.
+**9.2. Clique no pipeline da linha de cima** (o número `#...` na coluna **Pipeline**).
 
-</blockquote>
-</details>
+**Esperado:** a página do pipeline, com os jobs em colunas, uma por stage. Em pouco mais de **1 minuto e meio** depois que o runner pega o job, o stage `evaluate` termina; enquanto espera, releia a tabela do passo 6.
+
+**O que observar:**
+- `preflight`, `security-gate` e `api-contract-gate` **verdes**: o código continua correto.
+- `retrieval-quality-gate`, `business-policy-gate` e `graph-policy-gate` **vermelhos**; `package`, `deploy-candidate`, `postdeploy-synthetic-gate` e `promote-live` **cinza, skipped**.
+
+**9.3. Clique na aba Tests**, no topo da página do pipeline (ao lado de **Pipeline** e **Jobs**).
+
+**Esperado:** uma **suíte** por job que publicou JUnit, com **205 testes, 20 falhas** no total.
+
+**9.4. Clique na suíte `graph-policy-gate`.**
+
+**Esperado:** quatro testes em vermelho: `seed.supersedes_invertido`, `seed.substituida_ativa`, `seed.duas_versoes_ativas` e `seed.consistencia`.
+
+**9.5. Clique no teste `seed.supersedes_invertido`** para ler a mensagem.
+
+**Esperado:** `politica-trocas@v2 SUPERSEDES politica-trocas@v3: a versao antiga substitui a nova`.
+
+**O que observar:**
+- O gate reprovou **antes** do `package`: nenhuma imagem desse commit foi construída.
+- A mensagem aponta o arquivo e o campo culpados (`corpus:trocas-v2.md#front_matter.supersedes`).
 
 <details>
 <summary><b>📋 Saída completa esperada</b></summary>
@@ -823,7 +912,7 @@ Leia os três achados: a versão antiga **substitui** a nova (`supersedes_invert
 </blockquote>
 </details>
 
-**9.1. Prove que o `live` não mudou.** No Codespaces:
+**9.6. Prove que o `live` não mudou.** No Codespaces:
 
 ```bash
 cd /home/vscode/environment/quantum-ai-assistant
@@ -871,7 +960,7 @@ Runner offline (`make runner`).
 </blockquote>
 </details>
 
-> 🤔 **Pare e pense (P2):** o `api-contract-gate` passou com 100% e o `retrieval-quality-gate` também. Se o pipeline tivesse **só** esses dois, a mudança iria para o cliente. O que isso diz sobre "cobertura de testes" quando o que muda é **dado**, não código?
+> 🤔 **Pare e pense (P2):** o `api-contract-gate` passou com 100% (o código não mudou). O `retrieval-quality-gate` reprovou, mas por efeito colateral: a v2 republicada como `active` voltou a disputar o ranking do BM25; ele não confere o caminho do grafo. Se o pipeline tivesse **só** o contrato de API, a mudança iria para o cliente. O que isso diz sobre "cobertura de testes" quando o que muda é **dado**, não código?
 
 ### Checkpoint
 
@@ -895,7 +984,7 @@ A correção publicada, um pipeline **verde de verdade** até o `promote-live`, 
 
 **10. Reverta, confira localmente e publique**
 
-No Codespaces. O `git checkout HEAD~1` devolve os dois arquivos ao último commit aprovado (v2 obsoleta, v3 vigente); o commit registra a correção.
+No Codespaces. O `git checkout HEAD~1` devolve os dois arquivos ao último commit aprovado (v2 obsoleta, v3 vigente); o push dispara o pipeline completo: imagem nova no ECR, deploy no `candidate`, smoke (teste rápido pelo ALB) e promoção do **mesmo digest** ao `live` (R2).
 
 ```bash
 cd /home/vscode/environment/quantum-ai-assistant
@@ -972,9 +1061,37 @@ Você não fez o commit do passo 8 (então basta `git checkout -- corpus/`).
 
 **11. Acompanhe candidate → smoke → promote e leia os logs**
 
-No GitLab (navegador). As frases três e quatro do 💡 do passo 6, acontecendo: o candidate é **validado** na AWS e o live é **promovido** para o mesmo digest. Abra, nesta ordem, os logs do `deploy-candidate`, do `postdeploy-synthetic-gate` e do `promote-live`.
+No GitLab (navegador). As frases três e quatro do 💡 do passo 6, acontecendo: o candidate é **validado** na AWS e o live é **promovido** para o mesmo digest.
 
-**Esperado:** `VEREDITO: PASS` no postdeploy e `Job succeeded` no `promote-live`.
+**11.1. Abra a página de pipelines:**
+
+```bash
+cd /home/vscode/environment/quantum-ai-assistant && make links pipelines
+```
+
+Ctrl+clique no link (Cmd+clique no Mac) para abrir no navegador.
+
+**Esperado:** o pipeline do push do passo 10 na linha de cima, em execução (azul) ou já verde.
+
+**11.2. Clique no pipeline da linha de cima.**
+
+**Esperado:** a página do pipeline, com os jobs em colunas, uma por stage.
+
+**11.3. Clique no job `deploy-candidate`** (quando ele ficar verde; o `deploy-candidate` leva cerca de 3 a 4 min, por causa do cold start).
+
+**Esperado:** no fim do log, `/ready=200` com `digest_servido=sha256:...` e `Job succeeded`.
+
+**11.4. Volte à página do pipeline** (botão Voltar do navegador) **e clique no job `postdeploy-synthetic-gate`.**
+
+**Esperado:** `VEREDITO: PASS` no log.
+
+**11.5. Volte ao pipeline e clique no job `promote-live`.**
+
+**Esperado:** a linha `promote: live /ready confere: <release_id> sha256:...` com o release novo e `Job succeeded`.
+
+**O que observar:**
+- O digest que o `promote-live` coloca no `live` é o **mesmo** que o `deploy-candidate` validou: nada é reconstruído.
+- O `promote-live` grava o manifesto em `releases-ecs/live.json`; o passo 12 lê esse arquivo.
 
 <details>
 <summary><b>📋 Saída completa esperada</b></summary>
@@ -990,7 +1107,7 @@ No GitLab (navegador). As frases três e quatro do 💡 do passo 6, acontecendo:
 [postdeploy]        smoke_ecs: health ok | ready ok | versions = release-record ok | compare bm25/vector/graph ok | order Q-1001 ok | tenant parceiro-x blocked ok
 [postdeploy]        == graph-policy-gate | alvo=http | ... == VEREDITO: PASS   (graph_gate_exit=0)
 [promote-live]      live: qc-assistant-live:4 (rel-b8aa56f8-df18cb90) -> qc-assistant-live:6 (sha256:28b7d72a...)   cold_start_s=202
-[promote-live]      GET /health (live) -> release_id=rel-042d7965-28b7d72a
+[promote-live]      promote: live /ready confere: rel-042d7965-28b7d72a sha256:28b7d72a... graph=...
 [promote-live]      manifesto: s3://base-config-<RM>/quantum-assistant/releases-ecs/live.json (+ history/20261114T121319Z-rel-042d7965-28b7d72a.json)
 Job succeeded
 ```
@@ -1016,7 +1133,7 @@ O candidate ainda atendia a task antiga quando o smoke rodou (o `wait` não espe
 <summary><b>⚠ Se der erro: <code>promote-live</code> vermelho em <code>wait services-stable</code></b></summary>
 <blockquote>
 
-O circuit breaker desfez o deploy do live; o `live` **continua em R1** (confira com o bloco do passo 9) e o log do ECS diz por quê.
+O circuit breaker desfez o deploy do live; o `live` **continua em R1** (confira com o bloco do passo 9.6) e o log do ECS diz por quê.
 
 </blockquote>
 </details>
@@ -1135,7 +1252,7 @@ Um incidente injetado **no grafo do `live`, na AWS, sem commit e sem pipeline**:
 
 **13. Injete `stale_graph_policy` no `live`**
 
-No Codespaces. O cenário simula um **sync de catálogo defeituoso**: só o grafo da task `live` muda. **Aposte:** o `/health` vai mudar? O `/ready`? A resposta do grafo? E a do BM25?
+No Codespaces. `incident.sh apply` pede ao runner (via SSM) que chame a porta admin 8001 da task `live`, assinada com a chave HMAC, e mude **só o grafo** dela: simula um **sync de catálogo defeituoso**, sem commit. **Aposte:** o `/health` vai mudar? O `/ready`? A resposta do grafo? E a do BM25?
 
 ```bash
 cd /home/vscode/environment/quantum-ai-assistant
@@ -1285,9 +1402,37 @@ O cenário não pegou (confira `"in_sync": false` com `bash ops/cloud/incident.s
 
 No navegador, Grafana. Às 23h ninguém olha: quem avisa é o **probe** com gabarito rodando na AWS.
 
-Abra os dois dashboards de novo, **Last 15 minutes**, e espere **2 a 3 minutos** (a janela do monitor é de 120 s e exige `n ≥ 20`).
+**15.1. Abra o painel da Helena:**
 
-**Esperado:** o painel da Helena em **Não confiável** (vermelho) e o do Diego com 5xx e p95 iguais ao baseline, mas com alertas disparando.
+```bash
+cd /home/vscode/environment/quantum-ai-assistant && make links painel-helena
+```
+
+Ctrl+clique no link (Cmd+clique no Mac) para abrir no navegador. Se pedir login, use `admin` e a senha do passo 3.1.
+
+**Esperado:** o dashboard **Visão do negócio · Atendimento**, em **Last 15 minutes**, atualizando a cada 10 s.
+
+**15.2. Fique de olho no semáforo.** Olhe o painel **Confiança do assistente agora** (atualiza a cada 10 s; a janela do monitor é de 120 s e exige `n ≥ 20`). Quando ficar vermelho, rode `date -u +%H:%M:%SZ` e anote. **Tempo até detecção** = essa hora − hora do passo 13 (vai para o postmortem). Costuma levar de **segundos a 2 minutos**.
+
+**Esperado:** **Não confiável** (vermelho).
+
+**O que observar:**
+- **Por que o semáforo está assim** passa a listar *Serviu uma política que não vale hoje*, com o release e os probes que erraram.
+- **Política vigente** e **Caminho do grafo** caem; **Perguntas** e **Pedidos sem status** não mudam.
+
+**15.3. Abra o painel do Diego:**
+
+```bash
+cd /home/vscode/environment/quantum-ai-assistant && make links painel-diego
+```
+
+Ctrl+clique no link (Cmd+clique no Mac) para abrir no navegador.
+
+**Esperado:** **Erros 5xx** em 0,0% e **Latência p95** igual ao baseline, mas **Alertas disparando** maior que 0.
+
+**O que observar:**
+- Os sinais técnicos não se mexem; quem acusa são os painéis de probes (**Probes corretos** cai).
+- **Alertas em FIRING agora** (FIRING = alerta disparado agora) lista `QualityCritical`, `StaleSourceServed` e `WrongGraphEdge`.
 
 <details>
 <summary><b>📋 Leitura completa esperada dos dois painéis</b></summary>
@@ -1310,8 +1455,6 @@ O que avisa é o **probe** rodando na AWS com gabarito, e o monitor comparando a
 
 <!-- NOVA-IMAGEM: img/grafana-diego-incidente.png | capturar: dashboard do Diego no mesmo instante: Erros 5xx 0%, Latência p95 inalterada, Probes corretos em queda, Alertas disparando > 0 e a tabela Alertas em FIRING agora | FONTE REAL já capturada (R3): /tmp/qc18/evid/5.2/screenshots/r3/04-diego-incidente-1920.png e 04b-diego-alertas-firing-1920.png (a tabela de alertas) | depois de salvar o arquivo, descomente a linha abaixo -->
 <!-- ![Dashboard do Diego durante o incidente: erros 5xx e latência iguais ao baseline, probes corretos em queda, alertas disparando e a tabela de alertas em FIRING](img/grafana-diego-incidente.png) -->
-
-Anote a hora em que o semáforo ficou vermelho e subtraia a hora da injeção (passo 13): esse é o **tempo até detecção**, e vai para o postmortem. Espere de **segundos a 2 minutos**.
 
 <details>
 <summary><b>💡 Clique para entender: o tempo até detecção, SLI, SLO, janela, n mínimo e os três estados</b></summary>
@@ -1358,7 +1501,7 @@ Espere mais uma janela.
 
 - `"in_sync": false`, `graph_version` ≠ `graph_seed_version`, `release_id` = R2
 - `/health` 200, `/ready` 200, `graph` respondendo **15 dias** com `politica-trocas@v2`; `vector` e `bm25` em v3
-- painel da Helena **critical** por fonte obsoleta servida; painel do Diego inalterado exceto o drift; tempo até detecção anotado
+- painel da Helena **Não confiável** por fonte obsoleta servida; no do Diego, 5xx e p95 iguais ao baseline, mas **Probes corretos** em queda e alertas disparando; tempo até detecção anotado
 
 ---
 
@@ -1378,33 +1521,57 @@ O trace da resposta errada aberto no Jaeger, o span onde a versão errada foi es
 
 No navegador, Grafana. O alerta diz **que** a qualidade caiu; o trace diz **onde**. Sem isso, a mitigação é chute.
 
-Abra o link `painel-investigacao` do `make links` e abra o trace por um de dois caminhos:
+**16.1. Abra o painel de investigação:**
 
-**16.1. Pelo log (um clique).** Em **Buscar no log (caso, motivo)**, digite `stale_source_served`, expanda uma linha e clique em **Ver este trace (Jaeger) no painel**.
+```bash
+cd /home/vscode/environment/quantum-ai-assistant && make links painel-investigacao
+```
+
+Ctrl+clique no link (Cmd+clique no Mac) para abrir no navegador. Se pedir login, use `admin` e a senha do passo 3.1.
+
+**Esperado:** o dashboard **Investigação · Incidente**, com **Como investigar** e a **Linha do tempo do incidente** no topo.
+
+**O que observar:**
+- Na **Linha do tempo do incidente**, a marca do drift e a faixa de fonte obsoleta começam na hora do passo 13.
+
+**16.2. Filtre o log.** No topo do dashboard, no campo **Buscar no log (caso, motivo)**, digite `stale_source_served` e tecle Enter (se não vier nada, tente `fail`).
+
+**Esperado:** o painel **Logs dos probes e do monitor de qualidade** mostra só as linhas com `stale_source_served`.
+
+**16.3. Expanda uma linha do log** (clique nela).
+
+**Esperado:** os campos da linha aparecem, e ao lado de `trace_id` surgem dois links.
+
+**16.4. Clique em Ver este trace (Jaeger) no painel.** Ignore o outro link, **Abrir no Jaeger (via SSM port-forward 16686)**: ele só funciona com um túnel SSM aberto no seu terminal.
+
+**Esperado:** a variável `trace_id` é preenchida e abre a faixa **Trace da requisição escolhida**, com o trace como barras horizontais aninhadas (cada barra é um **span**).
+
+**16.5. Clique no span `policy.version.filter`** para expandir os atributos: nos detalhes que abrem, clique em **Attributes** (ou **Span attributes**) para ver a lista.
+
+**Esperado:** `qc.selected_doc_version=2`.
+
+**16.6. No mesmo span `policy.version.filter`, procure `qc.graph_version` e `qc.graph_seed_version`.**
+
+**Esperado:** são diferentes (o drift).
+
+**O que observar:**
+- O release está certo (R2); o que mudou foi o **grafo**, não o código.
+- É no `policy.version.filter` que a versão errada foi escolhida: esse é o "onde" que o alerta não diz.
 
 <details>
-<summary><b>🧭 Passo a passo detalhado: pelo log</b></summary>
+<summary><b>🧭 Caminho alternativo: pelo Explore, colando o <code>trace_id</code> do passo 14</b></summary>
 <blockquote>
 
-O link `painel-investigacao` é **Dashboards → Investigação · Incidente** (ou use **Explore → datasource Jaeger**). Leia o painel **Como investigar** e a **Linha do tempo do incidente** (a marca do drift e a faixa de fonte obsoleta).
+Se o log não mostrar a linha, use o `trace_id` que você copiou no passo 14:
 
-No topo do dashboard, a variável **Buscar no log (caso, motivo)** filtra o painel **Logs dos probes e do monitor de qualidade**: digite `stale_source_served` (ou `fail`); clique numa linha para expandi-la; ao lado do campo `trace_id` aparece o link **Ver este trace (Jaeger) no painel**, que preenche a variável `trace_id` e abre a faixa recolhida **Trace da requisição escolhida**, logo abaixo dos logs (o segundo link, **Abrir no Jaeger (via SSM port-forward 16686)**, só funciona com um túnel SSM aberto no seu terminal; ignore-o em aula).
+1. No menu lateral do Grafana, clique em **Explore** (ícone de bússola).
+2. No seletor de fonte de dados, no topo à esquerda, escolha **Jaeger**.
+3. Em **Query type**, escolha **TraceID**.
+4. Cole o `trace_id` da linha `graph` do passo 14 (32 caracteres hexadecimais) e clique em **Run query** (ou Shift+Enter).
+5. Clique no nome de um span para expandir e ver, em **Tags**/**Attributes**, os campos `qc.*`. O esperado é o mesmo do 16.5 e do 16.6.
 
 </blockquote>
 </details>
-
-**16.2. Pelo Explore (colando o id).** **Explore** → fonte **Jaeger** → **Query type** `TraceID` → cole o `trace_id` da linha `graph` do passo 14 → **Run query**.
-
-<details>
-<summary><b>🧭 Passo a passo detalhado: pelo Explore</b></summary>
-<blockquote>
-
-Menu lateral **Explore** (ícone de bússola); no seletor de fonte de dados, no topo à esquerda, escolha **Jaeger**; no campo **Query type** escolha **TraceID**; cole o `trace_id` da linha `graph` do passo 14 (32 caracteres hexadecimais) e clique em **Run query** (ou Shift+Enter). O trace aparece como uma lista de barras horizontais aninhadas: cada barra é um **span**; clique no nome de um span para expandir e ver, em **Tags**/**Attributes**, os campos `qc.*`.
-
-</blockquote>
-</details>
-
-**Esperado:** no span `policy.version.filter`, `qc.selected_doc_version=2`; no span raiz, `qc.graph_version` ≠ `qc.graph_seed_version` (o drift).
 
 <details>
 <summary><b>📋 Saída completa esperada</b></summary>
@@ -1414,13 +1581,13 @@ Menu lateral **Explore** (ícone de bússola); no seletor de fonte de dados, no 
 qc-probe       quality.evaluate          case_id=...  outcome=fail  reason=stale_source_served
   qc-assistant   POST /lab/compare
     http.request                         qc.release_id=rel-042d7965-28b7d72a
-                                         qc.graph_version=a445de8d36fc  qc.graph_seed_version=c07dde5b8806   ← drift
     auth.tenant                          tenant=quantum  user_role=customer
     intent.route                         qc.route=knowledge
     entity.link                          product_id=fone-bluetooth-qc  category=audio
     graph.traverse                       cypher_query_id=graph.policy_for_product.v1  candidates=3
     policy.version.filter                candidates_allowed=1  candidates_blocked=2
                                          qc.selected_doc_id=politica-trocas  qc.selected_doc_version=2  qc.path_hops=6   ← AQUI
+                                         qc.graph_version=a445de8d36fc  qc.graph_seed_version=c07dde5b8806   ← drift
     compose.deterministic                abstained=false  citations=1
 ```
 
@@ -1445,7 +1612,7 @@ Compare com um trace **certo** (o caminho **Search** descrito acima): O `policy.
 <summary><b>💡 Clique para entender: o elo quebrado e os spans deste assistente</b></summary>
 <blockquote>
 
-O elo quebrado está em **`policy.version.filter`**: o filtro recebeu três candidatos do `graph.traverse` (a consulta traz candidatos, não decide), bloqueou dois e deixou passar a **versão 2**, porque, **no grafo**, ela está `active` e **supersede** a 3; o atributo `status_source = runtime:sync-catalogo` no nó diz de onde veio o metadado. No corpus (front matter), a v2 segue `obsolete`, e é por isso que `bm25` e `vector`, que leem o front matter, continuam certos. O que mudou foi o **metadado do grafo em runtime**, não o documento; e o span raiz já denunciava isso com `qc.graph_version` ≠ `qc.graph_seed_version`.
+O elo quebrado está em **`policy.version.filter`**: o filtro recebeu três candidatos do `graph.traverse` (a consulta traz candidatos, não decide), bloqueou dois e deixou passar a **versão 2**, porque, **no grafo**, ela está `active` e **supersede** a 3; o atributo `status_source = runtime:sync-catalogo` no nó diz de onde veio o metadado. No corpus (front matter), a v2 segue `obsolete`, e é por isso que `bm25` e `vector`, que leem o front matter, continuam certos. O que mudou foi o **metadado do grafo em runtime**, não o documento; e o próprio span já denunciava isso com `qc.graph_version` ≠ `qc.graph_seed_version`.
 
 Trace real da homologação (`trace_id 408c5d2c98fff815e1bbf2ce2eeaac28`: 9 spans, 2 serviços). Em **todos** os spans do app aparecem `qc.graph_version=a445de8d36fc` e `qc.graph_seed_version=c07dde5b8806`: é aí que se lê "o grafo em runtime não é o da imagem". O trace começa num serviço a mais, `qc-probe`: é o probe, que abriu o span `quality.evaluate` e propagou o contexto para o assistente; por isso o veredito do probe e a execução que o gerou estão no mesmo trace.
 
@@ -1606,7 +1773,23 @@ graph  citacao: politica-trocas@v3 | graph_version: <igual ao seed> | trace_id: 
 </blockquote>
 </details>
 
-No Grafana, espere o painel da Helena voltar a **Confiável** (~2 minutos na homologação) e anote a hora: é o **tempo até recuperação**.
+**19.1. Abra o painel da Helena:**
+
+```bash
+cd /home/vscode/environment/quantum-ai-assistant && make links painel-helena
+```
+
+Ctrl+clique no link (Cmd+clique no Mac) para abrir no navegador. Se pedir login, use `admin` e a senha do passo 3.1.
+
+**Esperado:** o dashboard **Visão do negócio · Atendimento**; o semáforo ainda pode estar vermelho nos primeiros 2 minutos.
+
+**19.2. Espere o semáforo voltar e anote a hora.** Olhe **Confiança do assistente agora** até ficar **Confiável** (~2 minutos na homologação). Quando ficar verde, rode `date -u +%H:%M:%SZ`. **Tempo até recuperação** = essa hora − "hora da mitigação" do passo 18.
+
+**Esperado:** **Confiável** (verde).
+
+**O que observar:**
+- O verde volta sozinho, quando a janela de 120 s desliza sem fonte obsoleta: ninguém "resolve" o alerta num botão.
+- A **Linha do tempo da confiança** mostra o vale do incidente entre o passo 13 e agora.
 
 <!-- NOVA-IMAGEM: img/grafana-helena-restaurado.png | capturar: dashboard da Helena depois do restore: semáforo Confiável de volta, Política vigente e Caminho do grafo em 100%, e a Linha do tempo da confiança mostrando o vale do incidente | FONTE REAL já capturada (R3): /tmp/qc18/evid/5.2/screenshots/r3/06-helena-restaurado-1920.png (versão 1366 ao lado; neste print o live já mostrava o release R1, porque o rollback do cenário E estava em curso) | depois de salvar o arquivo, descomente a linha abaixo -->
 <!-- ![Dashboard da Helena após o restore: semáforo Confiável, contador de fonte obsoleta zerado na janela atual, e o gráfico histórico mostrando a queda e a recuperação](img/grafana-helena-restaurado.png) -->
@@ -1642,7 +1825,7 @@ Confira primeiro `"in_sync": true` (passo 18) e a citação `@v3` acima; se os d
 
 ### Checkpoint
 
-- no trace, `policy.version.filter` escolheu `v2` por metadado do **grafo**, com `qc.graph_version` ≠ `qc.graph_seed_version` no span raiz
+- no trace, `policy.version.filter` escolheu `v2` por metadado do **grafo**, com `qc.graph_version` ≠ `qc.graph_seed_version` no mesmo span
 - você respondeu à P4 e sabe por que restart restauraria **aqui** e por que isso não generaliza
 - `restore` devolveu `"in_sync": true`; replay com `graph` cita `@v3`, 30 dias; painel da Helena voltou ao verde pela janela
 
@@ -1837,7 +2020,7 @@ O `exit=1` é o que, no pipeline, impede o `promote`. O gate offline (`--target 
 </blockquote>
 </details>
 
-**21.2. Publique o caso.** Para o pipeline carregar o caso, ele precisa chegar ao projeto:
+**21.2. Publique o caso.** O push dispara o pipeline completo, agora com o caso novo no gate, até a promoção de **R3** ao `live`:
 
 ```bash
 cd /home/vscode/environment/quantum-ai-assistant
@@ -1847,7 +2030,17 @@ eval $(ssh-agent -s) >/dev/null && ssh-add -k /home/vscode/.ssh/gitlab
 git push origin "$(git branch --show-current)"
 ```
 
-**Esperado:** o push dispara um pipeline que vai até o `promote-live`: **R3**. Não precisa esperá-lo em aula; confira depois que ficou verde.
+**Esperado:** o push termina com `<branch> -> <branch>`.
+
+**21.3. Abra a página de pipelines** (pode ser depois da aula):
+
+```bash
+cd /home/vscode/environment/quantum-ai-assistant && make links pipelines
+```
+
+Ctrl+clique no link (Cmd+clique no Mac) para abrir no navegador.
+
+**Esperado:** o pipeline do seu push na linha de cima, que vai até o `promote-live`: **R3**. Não precisa esperá-lo em aula; confira depois que ficou verde.
 
 <details>
 <summary><b>💡 Clique para entender: o que muda em R3</b></summary>
@@ -2048,7 +2241,17 @@ cd /workspaces/FIAP-AI-Devops-CICD/02-Ansible/01-provisionando-gitlab-runner/ter
 terraform destroy -auto-approve
 ```
 
-**Esperado:** `Destroy complete! Resources: 3 destroyed.` No GitLab, o runner fica offline; pode removê-lo no link `runners` do `make links` (**Settings → CI/CD → Runners**).
+**Esperado:** `Destroy complete! Resources: 3 destroyed.` No GitLab, o runner fica offline.
+
+Para removê-lo da lista do projeto, abra a página de runners:
+
+```bash
+cd /home/vscode/environment/quantum-ai-assistant && make links runners
+```
+
+Ctrl+clique no link (Cmd+clique no Mac) para abrir no navegador (é **Settings → CI/CD → Runners**).
+
+**Esperado:** o seu runner em **Assigned project runners**, offline; é ali que você o remove.
 
 </blockquote>
 </details>
