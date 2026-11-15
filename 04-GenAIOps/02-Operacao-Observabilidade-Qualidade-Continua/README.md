@@ -555,8 +555,9 @@ O semáforo **Confiança do assistente agora** diz **Confiável** (verde), com *
 </blockquote>
 </details>
 
-<!-- NOVA-IMAGEM: img/grafana-helena-baseline.png | capturar: dashboard da Helena no baseline: semáforo Confiável, Perguntas / Política vigente / Caminho do grafo / Pedidos sem status em 100%, Release que está atendendo visível, rodapé dizendo que os números vêm de probes sintéticos | FONTE REAL já capturada (R3, títulos curtos): /tmp/qc18/evid/5.2/screenshots/r3/01-helena-baseline-1920.png (versão 1366 ao lado) | depois de salvar o arquivo, descomente a linha abaixo -->
-<!-- ![Dashboard da Helena no baseline: semáforo Confiável, Política vigente e Caminho do grafo em 100%, zero casos críticos na janela e o release que está atendendo](img/grafana-helena-baseline.png) -->
+![Dashboard da Helena no baseline: semáforo Confiável, 517 perguntas, Política vigente em 100%, Caminho do grafo em 95%, Pedidos sem status em 0% e nenhum probe errado nos últimos 2 minutos](img/grafana-helena-baseline.png)
+
+<!-- PRINT-HOMOLOGACAO: img/grafana-helena-baseline.png veio da rodada R3 (2026-11-14); o professor decide se troca -->
 
 <details>
 <summary><b>⚠ Se der erro: semáforo em cinza com <b>Amostra insuficiente</b></b></summary>
@@ -715,8 +716,9 @@ Os links abrem a **Visão técnica · SRE** (Diego) e a **Visão do negócio · 
 </blockquote>
 </details>
 
-<!-- NOVA-IMAGEM: img/grafana-diego-baseline.png | capturar: dashboard do Diego no baseline: Tráfego, 0% 5xx, p95, Probes corretos 100%, n, Alertas disparando 0 e a latência p95 por etapa | FONTE REAL já capturada (R3): /tmp/qc18/evid/5.2/screenshots/r3/02-diego-baseline-1920.png (versão 1366 ao lado) | depois de salvar o arquivo, descomente a linha abaixo -->
-<!-- ![Dashboard do Diego no baseline: tráfego, zero erros 5xx, latência p95, probes corretos em 100%, amostras na janela e nenhum alerta disparando; abaixo, a latência p95 por etapa do pipeline de recuperação](img/grafana-diego-baseline.png) -->
+![Dashboard do Diego no baseline: 1,20 req/s, Erros 5xx em 0,0%, Latência p95 de 61,67 ms, Probes corretos em 98%, n = 60 de mínimo 20 e Alertas disparando 0](img/grafana-diego-baseline.png)
+
+<!-- PRINT-HOMOLOGACAO: img/grafana-diego-baseline.png veio da rodada R3 (2026-11-14); o professor decide se troca -->
 
 <details>
 <summary><b>💡 Clique para entender: onde ficam os dashboards e o que o rodapé da Helena avisa</b></summary>
@@ -1625,11 +1627,13 @@ O que avisa é o **probe** rodando na AWS com gabarito, e o monitor comparando a
 </blockquote>
 </details>
 
-<!-- NOVA-IMAGEM: img/grafana-helena-incidente.png | capturar: dashboard da Helena durante o stale_graph_policy: semáforo Não confiável, Política vigente e Caminho do grafo em queda, a tabela Por que o semáforo está assim preenchida | FONTE REAL já capturada (R3): /tmp/qc18/evid/5.2/screenshots/r3/03-helena-incidente-1920.png (versão 1366 ao lado) | depois de salvar o arquivo, descomente a linha abaixo -->
-<!-- ![Dashboard da Helena durante o incidente: semáforo Não confiável, Política vigente e Caminho do grafo em queda, a tabela de motivos apontando a política que não vale hoje, e os demais assuntos em 100%](img/grafana-helena-incidente.png) -->
+![Dashboard da Helena durante o incidente: semáforo Não confiável, política vigente em 89% e caminho do grafo em 78%, e a tabela Por que o semáforo está assim com Serviu uma política que não vale hoje (11 probes)](img/grafana-helena-incidente.png)
 
-<!-- NOVA-IMAGEM: img/grafana-diego-incidente.png | capturar: dashboard do Diego no mesmo instante: Erros 5xx 0%, Latência p95 inalterada, Probes corretos em queda, Alertas disparando > 0 e a tabela Alertas em FIRING agora | FONTE REAL já capturada (R3): /tmp/qc18/evid/5.2/screenshots/r3/04-diego-incidente-1920.png e 04b-diego-alertas-firing-1920.png (a tabela de alertas) | depois de salvar o arquivo, descomente a linha abaixo -->
-<!-- ![Dashboard do Diego durante o incidente: erros 5xx e latência iguais ao baseline, probes corretos em queda, alertas disparando e a tabela de alertas em FIRING](img/grafana-diego-incidente.png) -->
+<!-- PRINT-HOMOLOGACAO: img/grafana-helena-incidente.png veio da rodada R3 (2026-11-14); o professor decide se troca -->
+
+![Dashboard do Diego no mesmo instante: Erros 5xx em 0,0% e Latência p95 de 68,57 ms como no baseline, mas Probes corretos em 74% e 8 alertas disparando](img/grafana-diego-incidente.png)
+
+<!-- PRINT-HOMOLOGACAO: img/grafana-diego-incidente.png veio da rodada R3 (2026-11-14); o professor decide se troca -->
 
 <details>
 <summary><b>💡 Clique para entender: o tempo até detecção, SLI, SLO, janela, n mínimo e os três estados</b></summary>
@@ -1782,8 +1786,9 @@ qc-probe       quality.evaluate          case_id=...  outcome=fail  reason=stale
 </blockquote>
 </details>
 
-<!-- NOVA-IMAGEM: img/trace-stale-graph.png | capturar: o trace da resposta errada no Grafana (datasource Jaeger), com o span policy.version.filter aberto mostrando selected_doc_version=2, e graph_version diferente de graph_seed_version nos atributos | FONTE REAL já capturada (R3): /tmp/qc18/evid/5.2/screenshots/r3/05-trace-incidente-1920.png (versão 1366 ao lado) | depois de salvar o arquivo, descomente a linha abaixo -->
-<!-- ![Trace da resposta errada: http.request com graph_version diferente de graph_seed_version, entity.link no fone, graph.traverse trazendo as versões 2 e 3, e policy.version.filter escolhendo a versão 2 por status active e supersedes no grafo](img/trace-stale-graph.png) -->
+![Trace da resposta errada no Grafana: qc-probe quality.evaluate chamando POST /lab/compare, com os spans entity.link, graph.traverse e policy.version.filter, e os atributos do policy.version.filter abertos](img/trace-stale-graph.png)
+
+<!-- PRINT-HOMOLOGACAO: img/trace-stale-graph.png veio da rodada R3 (2026-11-14); o professor decide se troca -->
 
 <details>
 <summary><b>🔎 Opcional: compare com um trace certo</b></summary>
@@ -1985,8 +1990,9 @@ cd /home/vscode/environment/quantum-ai-assistant && make links painel-helena
 - O verde volta sozinho, quando a janela de 120 s desliza sem fonte obsoleta: ninguém "resolve" o alerta num botão.
 - A **Linha do tempo da confiança** mostra o vale do incidente entre o passo 13 e agora.
 
-<!-- NOVA-IMAGEM: img/grafana-helena-restaurado.png | capturar: dashboard da Helena depois do restore: semáforo Confiável de volta, Política vigente e Caminho do grafo em 100%, e a Linha do tempo da confiança mostrando o vale do incidente | FONTE REAL já capturada (R3): /tmp/qc18/evid/5.2/screenshots/r3/06-helena-restaurado-1920.png (versão 1366 ao lado; neste print o live já mostrava o release R1, porque o rollback do cenário E estava em curso) | depois de salvar o arquivo, descomente a linha abaixo -->
-<!-- ![Dashboard da Helena após o restore: semáforo Confiável, contador de fonte obsoleta zerado na janela atual, e o gráfico histórico mostrando a queda e a recuperação](img/grafana-helena-restaurado.png) -->
+![Dashboard da Helena depois do restore: semáforo Confiável de volta, Política vigente e Caminho do grafo em 100% e Pedidos sem status em 0%](img/grafana-helena-restaurado.png)
+
+<!-- PRINT-HOMOLOGACAO: img/grafana-helena-restaurado.png veio da rodada R3 (2026-11-14); o professor decide se troca -->
 
 <details>
 <summary><b>💡 Clique para entender: o replay em escala e por que o alerta resolve pela janela</b></summary>
