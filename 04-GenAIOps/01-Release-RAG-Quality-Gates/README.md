@@ -25,7 +25,7 @@ Nunca usou terminal? Copie o bloco cinza inteiro, cole no terminal indicado e ap
 >
 > - [ ] **Codespaces aberto no fork do repositório da disciplina**, sincronizado hoje pelo [Início de aula](../../00-create-codespaces/Inicio-de-aula.md), com as **credenciais AWS do Academy** atualizadas (elas expiram a cada sessão).
 > - [ ] **Conta no [GitLab](https://gitlab.com/)** (gratuita). Se ainda não tem, o passo 1 cria em um minuto; a chave SSH também é cadastrada lá.
-> - [ ] **Nenhuma aula anterior é obrigatória.** Quem fez a Aula 3 reaproveita o runner (Caminho A do passo 4); quem não fez cria um (Caminho B).
+> - [ ] **Nenhuma aula anterior é obrigatória.** O passo 4 é o mesmo para todos: o `make runner` reaproveita a EC2 da Aula 3 se ela existir (e a registra neste projeto) ou cria uma nova.
 >
 > **Valide rapidamente** (terminal do Codespaces):
 >
@@ -36,7 +36,7 @@ Nunca usou terminal? Copie o bloco cinza inteiro, cole no terminal indicado e ap
 >
 > Saída esperada: o número da sua conta (12 dígitos) e o caminho do `Makefile`. Se o primeiro der `ExpiredToken`, refaça o Início de aula; se o segundo der `No such file or directory`, sincronize o fork.
 >
-> **Tempo de aula: ~85 min, incluindo montar o ambiente** (Parte 1, ~25 min: cerca de 9 min de comandos medidos na homologação, o resto é leitura e espera usada para estudar; mais ~10 min se você criar o runner pelo Caminho B) **mais o roteiro das Partes 2 a 7 (60 min)**. Nada é feito antes da aula: cada aluno sobe o próprio ambiente, na própria conta do Learner Lab, com a turma.
+> **Tempo de aula: ~85 min, incluindo montar o ambiente** (Parte 1, ~25 min: cerca de 9 min de comandos medidos na homologação, o resto é leitura e espera usada para estudar; mais ~5 min se a sua conta ainda não tiver a EC2 do runner) **mais o roteiro das Partes 2 a 7 (60 min)**. Nada é feito antes da aula: cada aluno sobe o próprio ambiente, na própria conta do Learner Lab, com a turma.
 
 ## Principais pontos de aprendizagem
 
@@ -58,7 +58,7 @@ Os blocos **💡 Clique para entender** trazem o aprofundamento; os blocos **⚠
 
 | Parte | Relógio | O que você faz | Passos | Tempo |
 |-------|---------|----------------|--------|-------|
-| [Parte 1](#parte-1---montar-o-ambiente-dentro-da-aula) | 00–25 | Criar o projeto GitLab `quantum-ai-assistant`, rodar `make bootstrap`, habilitar o runner, construir a imagem, subir o ambiente na AWS e esperar o `/ready`; cada espera longa vem com leitura guiada (vale para 5.1 e 5.2) | [1](#passo-1) · [2](#passo-2) · [3](#passo-3) · [4](#passo-4) · [5](#passo-5) · [6](#passo-6) | 25 min (35 com o Caminho B) |
+| [Parte 1](#parte-1---montar-o-ambiente-dentro-da-aula) | 00–25 | Criar o projeto GitLab `quantum-ai-assistant`, rodar `make bootstrap`, criar o runner do projeto, construir a imagem, subir o ambiente na AWS e esperar o `/ready`; cada espera longa vem com leitura guiada (vale para 5.1 e 5.2) | [1](#passo-1) · [2](#passo-2) · [3](#passo-3) · [4](#passo-4) · [5](#passo-5) · [6](#passo-6) | 25 min (35 com o Caminho B) |
 | [Parte 2](#parte-2---a-reclamação-da-cliente) | 25–33 | Abrir a Central, ler `/ready`, release, tenant e data de referência | [7](#passo-7) · [8](#passo-8) | 8 min |
 | [Parte 3](#parte-3---bm25-e-vetorial-a-mesma-pergunta-duas-buscas) | 33–43 | A mesma pergunta no BM25 e no vetorial: trechos, scores, citação e limites | [9](#passo-9) · [10](#passo-10) · [11](#passo-11) | 10 min |
 | [Parte 4](#parte-4---grafo-o-caminho-até-a-política) | 43–58 | Navegar o caminho produto → categoria → campanha → política → versão → trecho e ler o Cypher | [12](#passo-12) · [13](#passo-13) · [14](#passo-14) | 15 min |
@@ -150,11 +150,11 @@ Toda a preparação na AWS passa por **um** arquivo: o `Makefile` na raiz do pro
 |---|---|---|---|
 | 1 e 2 | projeto GitLab, chave SSH, clone e primeiro push | ~5 min de cliques e comandos (não é espera) | |
 | 3 | `make bootstrap` | **32 s** com tudo já criado; na primeira vez, mais o `apply` da API de pedidos e, se faltar, ~1 min recriando a rede <!-- CONFIRMAR-SAIDA: duração do primeiro bootstrap numa conta vazia não foi cronometrada --> | ler a tabela 💡 do `Makefile` |
-| 4 | `make runner` | **25 s** (Caminho A, runner ligado); ~6-8 min no Caminho B | ler o 💡 do runner e do token no SSM |
+| 4 | `make runner TOKEN=...` | **~3-5 min** para re-registrar a EC2 da Aula 3; ~6-8 min se não houver EC2 | ler o 💡 do runner e do token no SSM |
 | 5 | `make image` | **74 s** de build a frio (mais o envio do contexto e o push); **8-30 s** com o cache do runner quente | abrir a arquitetura e apostar numa estratégia |
 | 6 | `make up` + `make deploy-live` + `make deploy-candidate` + `make ready` | `apply` de 28 recursos <!-- CONFIRMAR-SAIDA: duração do apply de infra-ecs não foi cronometrada -->; cold start de **202 s** (`live`) e **190 s** (`candidate`); `ready` 5 s | ler o corpus (v2 × v3, Black Friday) e a semente do grafo |
 
-Somando: cerca de **9 minutos de comandos** (Caminho A) e **25 minutos de relógio** com a leitura, as esperas e os checkpoints; **35 minutos** se você cria o runner (Caminho B). Repetir a Parte 1 numa sessão nova do Academy, com tudo já criado, leva ~2,5 min de comandos (`preflight` 25 s, `bootstrap` 32 s, `runner` 25 s, `image` 30 s, `ready` 5 s).
+Somando: cerca de **9 a 12 minutos de comandos** e **25 minutos de relógio** com a leitura, as esperas e os checkpoints; **~30 minutos** se a sua conta ainda não tem a EC2 do runner. Repetir a Parte 1 numa sessão nova do Academy, com tudo já criado, leva ~2,5 min de comandos (`preflight` 25 s, `bootstrap` 32 s, `runner` 25 s, `image` 30 s, `ready` 5 s).
 
 **Seu ambiente é seu.** Cada aluno tem a própria conta do Learner Lab e o próprio projeto GitLab; ninguém mais altera o seu `live`. Quando este README diz "alguém da sala", na sua conta esse alguém é você mesmo numa tentativa anterior. Se algum passo da Parte 1 travar e não resolver com o bloco **⚠ Se der erro**, não pare a turma: o professor projeta o próprio ambiente no telão, você acompanha o roteiro nele e volta ao seu assim que o passo destravar (quase sempre é credencial expirada ou runner desligado).
 
@@ -175,8 +175,7 @@ No navegador: o repositório **de produto** do assistente, onde roda o pipeline 
 - **Project Configuration**: **desmarque** *Initialize repository with a README* (o código vai entrar pelo seu primeiro push); deixe *Enable Static Application Security Testing (SAST)* e *Enable Secret Detection* desmarcados.
 - Clique em **Create project**.
 
-<!-- NOVA-IMAGEM: img/gitlab-create-blank-project.png | capturar: a tela Create blank project preenchida, com o Project URL mostrando o usuário selecionado no seletor de namespace e a opção Initialize repository with a README DESMARCADA | depois de salvar o arquivo, descomente a linha abaixo -->
-<!-- ![Tela Create blank project do GitLab: Project name quantum-ai-assistant, Project URL com o usuário selecionado, Visibility Private e Initialize repository with a README desmarcado](img/gitlab-create-blank-project.png) -->
+![Tela Create blank project do GitLab: Project name quantum-ai-assistant, Project URL com o usuário selecionado, Visibility Private e Initialize repository with a README desmarcado](img/gitlab-create-blank-project.png)
 
 **1.2. Nada para copiar.** O passo 2 monta o endereço SSH sozinho. Não abra o botão **Code**.
 
@@ -184,7 +183,7 @@ No navegador: o repositório **de produto** do assistente, onde roda o pipeline 
 
 ```bash
 test -f /home/vscode/.ssh/gitlab || ssh-keygen -t rsa -b 2048 -C "gitlab key" -f /home/vscode/.ssh/gitlab -N ""
-cat /home/vscode/.ssh/gitlab.pub
+code /home/vscode/.ssh/gitlab.pub
 ```
 
 Copie a linha inteira que começa com `ssh-rsa` (ou `ssh-ed25519`). Em [Chaves SSH do GitLab](https://gitlab.com/-/user_settings/ssh_keys), clique em **Add new key**, cole em **Key** e clique em **Add key**.
@@ -502,105 +501,83 @@ Há duas redes `fiap-lab` na conta. Não apague nada; chame o professor.
 
 <a id="passo-4"></a>
 
-**4. Habilite (ou crie) o runner do projeto**
+**4. Crie o runner do projeto e deixe o `make runner` fazer o resto**
 
-No GitLab e no Codespaces: o pipeline da Demo 5.2 precisa de um runner **seu**, na sua conta AWS. Fez a Aula 3? Siga o Caminho A (4.1 a 4.3). Não fez, ou destruiu o runner? Abra o Caminho B (4.4 a 4.6) logo abaixo.
+Todos seguem este mesmo passo, tendo feito a Aula 3 ou não. O runner da Aula 3 pode estar ligado a **outro** projeto; o comando descobre isso sozinho.
 
-**Caminho A** (runner `quantum-ai-gitlab-runner` do `primeiro-projeto`): só **habilitá-lo** no projeto novo.
-
-**4.1.** Imprima os links da aula e abra o da linha `runners` (= **Settings → CI/CD → Runners**):
+**4.1.** Abra o link da linha `novo-runner` (criação de runner do **seu** projeto):
 
 ```bash
 cd /home/vscode/environment/quantum-ai-assistant && make links
 ```
 
-Em **Other available runners**, localize o runner com as tags `shell` e `terraform` e clique em **Enable for this project**.
+Em **Tags**, digite `shell, terraform`; marque **Run untagged jobs**; clique em **Create runner**. Copie o token `glrt-...` que aparece na tela seguinte (ele não aparece de novo).
 
-**4.2.** Ele **não aparece**? Abra os runners do projeto antigo com `PROJECT_SLUG=primeiro-projeto make links` (linha `runners`), clique no lápis do runner, **desmarque** *Lock to current projects*, salve e volte ao 4.1.
-
-**4.3.** Confira que a EC2 do runner está ligada e online (se estiver desligada, o alvo a liga):
+**4.2.** Rode, colando o seu token no lugar de `glrt-...`:
 
 ```bash
 cd /home/vscode/environment/quantum-ai-assistant
-make runner
+make runner TOKEN='glrt-...'
 ```
 
-<details>
-<summary><b>Não fez a Aula 3? Caminho B: criar o runner</b></summary>
-<blockquote>
-
-**4.4.** Abra o link da linha `novo-runner` do `make links` (= **Settings → CI/CD → Runners → New project runner**). Em **Tags**, digite `shell, terraform`; marque **Run untagged jobs**; clique em **Create runner**. Copie **agora** o token que começa com `glrt-` (ele não aparece de novo).
-
-**4.5.** Guarde o token no SSM Parameter Store (troque `glrt-...` pelo seu; o token **não** vai para nenhum arquivo):
-
-```bash
-aws ssm put-parameter --name /fiap/gitlab-runner/token --type SecureString --overwrite --value 'glrt-...' --region us-east-1
-```
-
-**4.6.** Suba e registre o runner (~6-8 min de espera: leia o 💡 abaixo e a tabela do `Makefile` do passo 3):
-
-```bash
-cd /home/vscode/environment/quantum-ai-assistant
-make runner
-```
-
-</blockquote>
-</details>
-
-**Esperado (A ou B):** a primeira linha é `diagnostico do runner: reuse` e, no link `runners`, o runner aparece **online** (bolinha verde).
+**Esperado:** a última linha do diagnóstico é `Runner pronto e registrado neste projeto.` e, no link `runners` do `make links`, o runner aparece **online** (bolinha verde).
 
 <details>
 <summary><b>📋 Saída completa esperada</b></summary>
 <blockquote>
 
-Saída real da homologação, Caminho A com o runner já ligado (25 s):
+O que o comando faz depende do que já existe na sua conta; todos terminam no mesmo lugar:
 
-```text
-diagnostico do runner: reuse
-Runner da EC2 pronto. No projeto NOVO: Settings > CI/CD > Runners > habilite o runner existente (tags shell,terraform).
-docker_installed=already
-buildx_installed=already
-swap=already
-group_docker=already
-docker_version=<versão do Docker no runner>
-```
+| Diagnóstico | Situação | O que o `make runner` faz | Tempo |
+|---|---|---|---|
+| `reconfigure (token_from_other_project)` | a EC2 da Aula 3 existe, mas registrada em outro projeto | re-registra a mesma EC2 neste projeto (playbook do Módulo 02) | ~3-5 min |
+| `start (instance_stopped)` | a EC2 existe e está desligada | liga e, se o token for de outro projeto, re-registra | ~1-5 min |
+| `recreate (instance_missing)` | não há EC2 de runner na conta | cria a EC2 (Terraform do Módulo 02) e registra | ~6-8 min |
+| `reuse (runner_online)` | já está registrada neste projeto | nada | ~25 s |
 
-</blockquote>
-</details>
-
-<details>
-<summary><b>💡 Clique para entender: o diagnóstico do <code>make runner</code>, um runner para vários projetos, e por que o token vive no SSM</b></summary>
-<blockquote>
-
-**Os links.** O `make links` monta todos os links da aula com o seu usuário, a partir da chave SSH. No 4.3, se a EC2 estiver desligada, o `make runner` a liga e espera; nada é criado nem registrado de novo.
-
-**No GitLab.** No link `runners` do `make links`, o runner aparece **online** (bolinha verde) com as tags `shell` e `terraform`. O pipeline pendente do passo 2 começa a rodar sozinho e pode ficar **vermelho** agora (ainda não há ambiente na AWS): é esperado.
-
-**A saída.** A primeira linha é o diagnóstico do `runner-preflight.sh` (`reuse` = há um runner ligado e registrado; nada a fazer); as linhas `chave=valor` são do `runner-docker.sh`, que confere o Docker no runner (`already` = já estava instalado). Se a EC2 estava desligada, a primeira linha é `diagnostico do runner: start`, seguida de `Recuperando o runner (menor passo: start)...` e do progresso do `recover` ligando a EC2 (~1-2 min). No Caminho B, o diagnóstico é `recreate`, seguido do Terraform e do Ansible criando e registrando o runner (~6-8 min <!-- CONFIRMAR-SAIDA: Caminho B não foi cronometrado na homologação desta versão -->), e só então as linhas do Docker (`docker_installed=now`). O primeiro pipeline que importa é o da Demo 5.2, com o ambiente de pé.
-
-**Um runner, vários projetos.** Um GitLab Runner é um processo numa máquina (aqui, a EC2 `quantum-ai-gitlab-runner`, na rede `fiap-lab`, com o `LabRole` como instance profile) que **pergunta** ao GitLab se há jobs para rodar. O registro liga o runner a um **projeto** (ou grupo); habilitá-lo em outro projeto é só permissão no GitLab, sem mexer na máquina. Por isso o Caminho A não roda Ansible nenhum.
-
-**O token no SSM.** O token `glrt-` é o segredo que autoriza o registro. Ele vai para o **SSM Parameter Store** (o cofre de parâmetros da AWS; `SecureString` = guardado criptografado) e o playbook Ansible o lê em tempo de execução, dentro da EC2, via SSM; nenhum arquivo do projeto o contém, e o `make runner` nunca o imprime. No Caminho B, o Terraform cria a EC2 na rede `fiap-lab` e o Ansible, via SSM, instala e registra o `gitlab-runner` lendo o token do SSM. O Ansible fala com a EC2 pelo `session-manager-plugin`, que o devcontainer já instala (versão `1.2.896.0`); o `runner-recover.sh` confere o plugin **antes** de criar qualquer coisa. Os scripts `runner-preflight.sh`/`runner-recover.sh` (do repositório do curso) são os mesmos das aulas anteriores: o preflight **só lê**; o recover age conforme o diagnóstico (`start`, `restart`, `reconfigure`, `recreate`), sempre com `--dry-run` antes do `--apply`.
-
-📚 Documentação oficial: [GitLab: enable a runner for another project](https://docs.gitlab.com/ci/runners/runners_scope/#enable-a-project-runner-for-a-different-project), para o Caminho A; [GitLab Runner shell executor](https://docs.gitlab.com/runner/executors/shell/), para o que esse runner executa.
+Depois, em todos os casos, as linhas do Docker do runner (`docker_installed=already` ou `now`, `buildx_installed=...`, `docker_version=...`).
 
 </blockquote>
 </details>
 
 <details>
-<summary><b>⚠ Se der erro: <code>diagnostico do runner: start</code></b></summary>
+<summary><b>💡 Clique para entender: como o comando sabe se o runner é deste projeto</b></summary>
 <blockquote>
 
-A EC2 existe mas está desligada. O próprio `make runner` já a liga (ele roda o `recover --apply` quando o diagnóstico pede); espere terminar.
+**Um runner, um token.** No GitLab, cada runner criado num projeto tem um token próprio (`glrt-...`). A EC2 guarda o token com que foi registrada em `/etc/gitlab-runner/config.toml`. O `make runner` grava o token deste projeto no **SSM Parameter Store** (`/fiap/gitlab-runner/token`, `SecureString`) e o `runner-preflight.sh` compara o **hash** do token do SSM com o hash do token do `config.toml` (o valor nunca é impresso nem trafega). Hashes diferentes = a EC2 está ligada a outro projeto, e o playbook do Módulo 02 troca o registro, deixando um único `[[runners]]` no arquivo.
+
+**Idempotente.** Rodar de novo com o mesmo token dá `reuse` e não muda nada. O comando nunca registra duas vezes, nunca usa `terraform destroy` e aborta se um plano Terraform fosse apagar algo.
+
+**O runner antigo.** Ao re-registrar, o runner do projeto antigo fica **offline** no GitLab (a máquina passou a atender este projeto). Isso é esperado; se quiser, apague-o depois em **Settings → CI/CD → Runners** do projeto antigo.
+
+📚 Documentação oficial: [GitLab: create a project runner](https://docs.gitlab.com/ci/runners/runners_scope/#create-a-project-runner-with-a-runner-authentication-token) e [AWS SSM Parameter Store](https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-parameter-store.html).
 
 </blockquote>
 </details>
 
 <details>
-<summary><b>⚠ Se der erro: <code>Bloqueado: leia a dica acima</code> com <code>token_param=missing</code></b></summary>
+<summary><b>⚠ Se der erro: <code>TOKEN invalido: tem que comecar com glrt-</code></b></summary>
 <blockquote>
 
-O passo 4.5 não rodou (Caminho B). Grave o token no SSM e repita `make runner`.
+O valor colado não é o token do runner. Volte à tela **New project runner** do 4.1, copie o token que começa com `glrt-` e rode o 4.2 de novo, entre aspas simples.
+
+</blockquote>
+</details>
+
+<details>
+<summary><b>⚠ Se der erro: <code>Bloqueado (token_missing)</code></b></summary>
+<blockquote>
+
+Você rodou `make runner` sem `TOKEN=`. Faça o 4.1 e rode `make runner TOKEN='glrt-...'`.
+
+</blockquote>
+</details>
+
+<details>
+<summary><b>⚠ Se der erro: <code>Bloqueado (token_revoked)</code></b></summary>
+<blockquote>
+
+O runner deste token foi apagado no GitLab. Crie outro (4.1) e rode o 4.2 com o token novo.
 
 </blockquote>
 </details>
@@ -609,7 +586,7 @@ O passo 4.5 não rodou (Caminho B). Grave o token no SSM e repita `make runner`.
 <summary><b>⚠ Se der erro: <code>ERRO: falta o session-manager-plugin neste terminal</code></b></summary>
 <blockquote>
 
-Caminho B, Codespaces anterior a esta versão do devcontainer. **Nada foi criado** (o `recover` confere o plugin antes do `terraform apply`). A própria mensagem traz o comando de instalação (`curl` do pacote `.deb` oficial + `sudo dpkg -i`), ~1 min; depois repita `make runner`.
+Codespaces anterior a esta versão do devcontainer. **Nada foi criado** (o comando confere o plugin antes de tudo). Rode o comando de instalação que a mensagem imprime e repita o 4.2.
 
 </blockquote>
 </details>
@@ -618,7 +595,7 @@ Caminho B, Codespaces anterior a esta versão do devcontainer. **Nada foi criado
 <summary><b>⚠ Se der erro: runner online no GitLab, mas o job fica <code>stuck</code></b></summary>
 <blockquote>
 
-O runner está em outro projeto e **não** foi habilitado neste. Refaça o 4.1 (Caminho A). Nunca registre um segundo runner na mesma EC2: registro duplicado cria dois runners no projeto.
+O job pede tags que o runner não tem. Confira no link `runners` que o runner tem `shell` e `terraform` (as tags vêm da criação no 4.1; se faltarem, edite o runner ali e salve).
 
 </blockquote>
 </details>

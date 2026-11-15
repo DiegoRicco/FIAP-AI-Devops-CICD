@@ -146,6 +146,10 @@ if [ -z "$TOKEN_MODIFIED" ] || [ "$TOKEN_MODIFIED" = "None" ]; then
 else
   TOKEN_PARAM=present
   out token_param present
+  # Hash do token, nunca o valor: e o que diz se a EC2 esta registrada NESTE
+  # projeto. O runner da Aula 3 pode estar ligado a outro projeto do GitLab.
+  TOKEN_SHA="$(aws ssm get-parameter --name "$TOKEN_SSM_PATH" --with-decryption \
+    --query Parameter.Value --output text 2>/dev/null | tr -d '\n' | sha256sum | cut -c1-64)"
   TOKEN_EPOCH="$(python3 -c 'import sys,datetime;print(int(datetime.datetime.fromisoformat(sys.argv[1]).timestamp()))' "$TOKEN_MODIFIED" 2>/dev/null || echo 0)"
   log "    parametro presente (ultima alteracao $TOKEN_MODIFIED)"
 fi
@@ -221,6 +225,7 @@ if [ -f "$C" ]; then
   echo config=present
   echo "runners=$(grep -c "^\[\[runners\]\]" "$C")"
   echo "config_mtime=$(stat -c %Y "$C")"
+  echo "config_token_sha=$(sed -n "s/^ *token *= *\"\(.*\)\"/\1/p" "$C" | head -1 | tr -d "\n" | sha256sum | cut -c1-64)"
 else
   echo config=missing; echo runners=0; echo config_mtime=0
 fi
@@ -261,6 +266,13 @@ if [ "$BINARY" = "missing" ] || [ "$CONFIG" = "missing" ] || [ "${RUNNERS:-0}" -
   hint "a EC2 existe mas o runner nao esta instalado/registrado: o playbook do Modulo 02 resolve."
   finish reconfigure runner_not_configured
 fi
+CONFIG_TOKEN_SHA="$(val config_token_sha)"
+if [ -n "${TOKEN_SHA:-}" ] && [ -n "$CONFIG_TOKEN_SHA" ] && [ "$TOKEN_SHA" != "$CONFIG_TOKEN_SHA" ]; then
+  out token_matches_config no
+  hint "a EC2 esta registrada com OUTRO token (outro projeto, ou runner antigo): o playbook troca para o token do SSM."
+  finish reconfigure token_from_other_project
+fi
+[ -n "${TOKEN_SHA:-}" ] && out token_matches_config yes
 if [ "$VERIFY" = "invalid" ]; then
   if [ "$TOKEN_IS_NEWER" = "yes" ]; then
     hint "o token do config.toml foi revogado e ha um token NOVO no SSM: o playbook troca o registro."

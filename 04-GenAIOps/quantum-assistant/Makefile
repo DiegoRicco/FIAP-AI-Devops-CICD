@@ -69,13 +69,19 @@ bootstrap: course-repo ## Prepara a conta: bucket, rede fiap-lab, API de pedidos
 preflight: ## Confere a conta sem mudar nada (credencial, rede, runner, quotas, API de pedidos)
 	@bash scripts/cloud/preflight.sh $(if $(BUCKET),--bucket $(BUCKET))
 
-runner: course-repo ## Garante 1 GitLab Runner pronto (reusa o da Aula 3; senao usa o token do SSM)
+runner: course-repo ## Deixa 1 runner deste projeto pronto: grava TOKEN=glrt-... no SSM, liga, cria ou re-registra a EC2 (idempotente)
+	@if [ -n "$(TOKEN)" ]; then \
+	  case "$(TOKEN)" in glrt-*) ;; *) echo "TOKEN invalido: tem que comecar com glrt- (copie de New project runner)."; exit 1 ;; esac; \
+	  aws ssm put-parameter --name /fiap/gitlab-runner/token --type SecureString --overwrite --value "$(TOKEN)" >/dev/null \
+	    && echo "Token do runner deste projeto gravado no SSM (/fiap/gitlab-runner/token)."; \
+	fi
 	@rc=0; bash "$(RUNNER_DIR)/runner-preflight.sh" >/tmp/qc-runner-preflight.txt || rc=$$?; \
-	d=$$(sed -n 's/^diagnosis=//p' /tmp/qc-runner-preflight.txt); echo "diagnostico do runner: $$d"; \
+	d=$$(sed -n 's/^diagnosis=//p' /tmp/qc-runner-preflight.txt); r=$$(sed -n 's/^reason=//p' /tmp/qc-runner-preflight.txt); \
+	echo "diagnostico do runner: $$d ($$r)"; \
 	case "$$d" in \
-	  reuse) echo "Runner da EC2 pronto. No projeto NOVO: Settings > CI/CD > Runners > habilite o runner existente (tags shell,terraform)." ;; \
-	  blocked) echo "Bloqueado: leia a dica acima. Sem runner, crie um no projeto novo (tags shell,terraform) e grave o glrt- em /fiap/gitlab-runner/token"; exit 1 ;; \
-	  *) echo "Recuperando o runner (menor passo: $$d)..."; bash "$(RUNNER_DIR)/runner-recover.sh" --apply ;; \
+	  reuse) echo "Runner pronto e registrado neste projeto." ;; \
+	  blocked) echo "Bloqueado ($$r). Sem token? Crie o runner no projeto (link novo-runner do make links) e rode: make runner TOKEN=glrt-..."; exit 1 ;; \
+	  *) echo "Ajustando o runner (passo: $$d)..."; bash "$(RUNNER_DIR)/runner-recover.sh" --apply || exit 1 ;; \
 	esac
 	@$(MAKE) --no-print-directory runner-docker
 
