@@ -115,10 +115,14 @@ mirror-neo4j: ## Copia o Neo4j pinado (infra-ecs/neo4j-image.json) para o ECR
 
 up: ## Cria ECR, cluster ECS, ALB e services (Terraform, state quantum-assistant/ecs/)
 	@$(TF_ECS) init -input=false -backend-config=bucket=$(BUCKET) >/dev/null
-	@$(TF_ECS) apply -input=false
+	@# -auto-approve: o bloco do passo 5 e colado inteiro; sem ele o apply pede "yes",
+	@# recebe a linha seguinte como resposta, cancela, e o make image falha sem ECR.
+	@$(TF_ECS) apply -input=false -auto-approve
 	@$(MAKE) --no-print-directory mirror-neo4j
 
 image: ## Builda a imagem do app NO RUNNER e envia ao ECR (digest no SSM /qc-assistant/image-digest)
+	@aws ecr describe-repositories --repository-names qc-assistant-app >/dev/null 2>&1 \
+	  || { echo "ECR qc-assistant-app nao existe: rode make up antes (passo 5) e confira o Apply complete!"; exit 1; }
 	@bash scripts/cloud/remote-build.sh $(if $(BUCKET),--bucket $(BUCKET))
 
 deploy: ## Implanta DIGEST (ou o ultimo make image) em ENV=live|candidate e espera /ready

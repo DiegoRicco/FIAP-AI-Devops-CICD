@@ -260,7 +260,7 @@ branch 'main' set up to track 'origin/main'.
 </blockquote>
 </details>
 
-**2.1. Ligue o terminal ao state da AWS.** Só **lê** o state do bucket `base-config-<SEU RM>` (não cria nada); seguro repetir em todo terminal novo:
+**2.1. Ligue o terminal ao state da AWS.** Só **lê** o state do bucket `base-config-<SEU RM>` (não cria nada):
 
 ```bash
 cd /home/vscode/environment/quantum-ai-assistant
@@ -792,7 +792,7 @@ Não é erro: você já tinha rodado o `make up`. É esperado e seguro; siga par
 </details>
 
 <details>
-<summary><b>⚠ Se der erro: <code>RepositoryNotFoundException</code> ou <code>name unknown</code> no push do <code>make image</code></b></summary>
+<summary><b>⚠ Se der erro: <code>ECR qc-assistant-app nao existe</code>, <code>RepositoryNotFoundException</code> ou <code>does not exist in the registry</code> no <code>make image</code></b></summary>
 <blockquote>
 
 O repositório ECR ainda não existe: o `make up` não rodou ou falhou antes do fim. Rode `make up`, confira o `Apply complete!` e repita o `make image`.
