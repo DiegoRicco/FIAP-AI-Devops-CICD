@@ -43,7 +43,7 @@ TF_ECS := terraform -chdir=infra-ecs
 # nem lock no repositorio do aluno.
 export TF_DATA_DIR := $(HOME)/.cache/qc-assistant/tf-ecs
 
-.PHONY: links down-dry-run help bootstrap preflight runner runner-docker orders-up secrets mirror-neo4j up image deploy deploy-live deploy-candidate ready diagnose down start plan destroy-dry-run course-repo
+.PHONY: links down-dry-run help bootstrap preflight runner runner-docker orders-up secrets mirror-neo4j up image deploy deploy-live deploy-candidate deploy-all ready diagnose down start plan destroy-dry-run course-repo
 
 help: ## Mostra os alvos
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-18s %s\n", $$1, $$2}'
@@ -131,8 +131,27 @@ deploy-live: ## Atalho: make deploy ENV=live
 deploy-candidate: ## Atalho: make deploy ENV=candidate
 	@$(MAKE) --no-print-directory deploy ENV=candidate
 
-links: ## Imprime os links ja montados: projeto, pipelines e runners no GitLab; Central e Grafana
-	@bash scripts/cloud/links.sh
+# Os dois ambientes nao dividem nada (task definition, service, target group e
+# mktemp sao de cada um), entao os dois cold starts correm juntos: espera-se o
+# maior, nao a soma. O digest e lido uma vez para os dois receberem a mesma imagem.
+# O prefixo sai de um "while read" do bash, e nao de "sed -u": o sed do Mac nao tem -u.
+# set -m poe cada deploy no seu grupo de processos, porque em segundo plano o
+# Ctrl+C nao chega neles; o trap mata o grupo inteiro (deploy.sh, aws, sleep).
+# O </dev/null evita que um deploy fora do primeiro plano pare ao ler o terminal.
+deploy-all: ## Implanta DIGEST (ou o ultimo make image) em live e candidate ao mesmo tempo e espera os dois /ready
+	@d="$(DIGEST)"; [ -n "$$d" ] || d=$$(aws ssm get-parameter --name /qc-assistant/image-digest --query Parameter.Value --output text) || exit 1; \
+	pre() { while IFS= read -r l || [ -n "$$l" ]; do printf '[%s] %s\n' "$$1" "$$l"; done; }; \
+	run() { set -o pipefail; { bash scripts/cloud/deploy.sh "$$1" "$$d" </dev/null 2>&1 1>&3 3>&- | pre "$$1" >&2; } 3>&1 | pre "$$1"; }; \
+	pl=; pc=; trap 'for p in $$pl $$pc; do kill -TERM -- -$$p 2>/dev/null; done; exit 130' INT TERM; \
+	set -m; run live & pl=$$!; run candidate & pc=$$!; set +m; \
+	rl=0; rc=0; wait $$pl || rl=$$?; wait $$pc || rc=$$?; \
+	f=; [ $$rl = 0 ] || f=live; [ $$rc = 0 ] || f="$${f:+$$f e }candidate"; \
+	if [ -z "$$f" ]; then echo "deploy-all: live e candidate prontos" >&2; \
+	else echo "deploy-all: FALHOU em $$f (veja as linhas [$$f] acima e rode make diagnose ENV=...)" >&2; exit 1; fi
+
+# LINK_NAMES vem do bloco no fim do arquivo (make links central-live).
+links: ## Lista os links montados (GitLab, Central, Grafana); com um nome, so ele: make links central-live
+	@bash scripts/cloud/links.sh $(LINK_NAMES)
 
 ready: ## GET /ready do ambiente ENV pelo ALB
 	@u=$$(aws ssm get-parameter --name /qc-assistant/ecs/alb-url --query Parameter.Value --output text); \
@@ -155,3 +174,14 @@ destroy-dry-run: ## Lista o que o cleanup apagaria (so o state do runtime ECS)
 	@bash scripts/cloud/cleanup.sh --dry-run $(if $(BUCKET),--bucket $(BUCKET))
 
 down-dry-run: destroy-dry-run
+
+# `make links central-live` e mais facil de digitar que `make links N=central-live`,
+# mas o Make tomaria central-live por um alvo. Por isso, so quando links e o
+# primeiro alvo, cada palavra depois dele vira um alvo vazio e segue como argumento
+# do script. Fica no fim do arquivo para o alvo vazio ganhar de um alvo real de mesmo
+# nome: `make links down` nao pode derrubar nada. Nao se usa a regra coringa `%:`:
+# ela engoliria em silencio qualquer alvo digitado errado no resto do Makefile.
+ifeq (links,$(firstword $(MAKECMDGOALS)))
+LINK_NAMES := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
+$(foreach n,$(LINK_NAMES),$(eval $(n):;@:))
+endif
