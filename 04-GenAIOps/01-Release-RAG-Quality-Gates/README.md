@@ -152,7 +152,7 @@ Toda a preparação na AWS passa por **um** arquivo: o `Makefile` na raiz do pro
 | 3 | `make bootstrap` | **32 s** com tudo já criado; na primeira vez, mais o `apply` da API de pedidos e, se faltar, ~1 min recriando a rede <!-- CONFIRMAR-SAIDA: duração do primeiro bootstrap numa conta vazia não foi cronometrada --> | ler a tabela 💡 do `Makefile` |
 | 4 | `make runner TOKEN=...` | **~3-5 min** para re-registrar a EC2 da Aula 3; ~6-8 min se não houver EC2 | ler o 💡 do runner e do token no SSM |
 | 5 | `make secrets` + `make up` + `make image` | `apply` de 28 recursos <!-- CONFIRMAR-SAIDA: duração do apply de infra-ecs não foi cronometrada -->; **74 s** de build a frio (mais o envio do contexto e o push); **8-30 s** com o cache do runner quente | abrir a arquitetura e apostar numa estratégia |
-| 6 | `make deploy-live` + `make deploy-candidate` + `make ready` | cold start de **202 s** (`live`) e **190 s** (`candidate`); `ready` 5 s | ler o corpus (v2 × v3, Black Friday) e a semente do grafo |
+| 6 | `make deploy-all` + `make ready` | os dois cold starts correm juntos: ~**3,5 min** (o mais lento: **202 s** do `live`; o `candidate` levou **190 s**), em vez de ~6,5 min um depois do outro <!-- CONFIRMAR-SAIDA: tempo do deploy-all paralelo nao cronometrado; 202 s e 190 s foram medidos em sequencia -->; `ready` 5 s | ler o corpus (v2 × v3, Black Friday) e a semente do grafo |
 
 Somando: cerca de **9 a 12 minutos de comandos** e **25 minutos de relógio** com a leitura, as esperas e os checkpoints; **~30 minutos** se a sua conta ainda não tem a EC2 do runner. Repetir a Parte 1 numa sessão nova do Academy, com tudo já criado, leva ~2,5 min de comandos (`preflight` 25 s, `bootstrap` 32 s, `runner` 25 s, `image` 30 s, `ready` 5 s).
 
@@ -422,6 +422,7 @@ Saída real do `make help` na homologação (1,8 s). O `Makefile` não tem lógi
   make deploy             Implanta DIGEST (ou o ultimo make image) em ENV=live|candidate e espera /ready
   make deploy-live        Atalho: make deploy ENV=live
   make deploy-candidate   Atalho: make deploy ENV=candidate
+  make deploy-all         Implanta DIGEST (ou o ultimo make image) em live e candidate ao mesmo tempo e espera os dois /ready
   make ready              GET /ready do ambiente ENV pelo ALB
   make diagnose           Estado do service, tasks, target group, eventos e logs (sem segredos)
   make down               Desliga as tasks (desired 0) dos dois ambientes; nada e apagado
@@ -487,6 +488,7 @@ Há duas redes `fiap-lab` na conta. Não apague nada; chame o professor.
 | `make image` | `scripts/cloud/remote-build.sh`: empacota o projeto → S3 (`quantum-assistant/build-context/<sha>.tgz`) → `aws ssm send-command` no runner, que roda `scripts/cloud/build-push.sh` (`docker buildx build --platform linux/amd64`, baixa o modelo de embeddings **no build**, pré-calcula os embeddings, `docker push` ao ECR) e devolve o **digest**. | Imagem = release. Build onde o pipeline também vai construir (runner, `amd64`), sem Docker no Codespaces. |
 | `make up` | `terraform -chdir=infra-ecs init/apply` (ECR, cluster, dois services com `desired_count = 0`, task definitions **template**, ALB, TGs, SGs, log groups; grava a URL do ALB no SSM `/qc-assistant/ecs/alb-url`) e `make mirror-neo4j` (`scripts/cloud/mirror-neo4j.sh`: copia a imagem oficial do Neo4j para o ECR com o mesmo digest, para a task não depender do Docker Hub). **Não** publica a aplicação. | Terraform cria a **forma** (os services nascem desligados). |
 | `make deploy-live` (= `make deploy ENV=live`) | `scripts/cloud/deploy.sh live <digest>` com o digest do último `make image` (lido do SSM `/qc-assistant/image-digest`; ou `DIGEST=sha256:...`): copia a task definition template, troca só a imagem do contêiner `app` por `repo@sha256:...`, registra uma revisão nova, `update-service` com `desired 1`, e espera `services-stable`, target saudável e `/ready` 200 **servido por esse digest**. | Publica o **release**. É o mesmo script que o pipeline da 5.2 usa para candidate, promote e rollback. |
+| `make deploy-all` | Lê o digest **uma vez** (SSM `/qc-assistant/image-digest`, ou `DIGEST=sha256:...`) e roda `scripts/cloud/deploy.sh live <digest>` e `scripts/cloud/deploy.sh candidate <digest>` **em paralelo**, prefixando cada linha (stderr e o JSON do stdout) com `[live] ` ou `[candidate] `; espera os dois e termina com `deploy-all: live e candidate prontos` ou `deploy-all: FALHOU em <env>` (saída com erro). | O passo 6 em um comando: os dois ambientes têm task definition, service e target group próprios, então os cold starts correm juntos. Para refazer só um, `make deploy-live` ou `make deploy-candidate`. |
 | `make ready` | Um `curl` em `GET /ready` pelo ALB (`ENV=candidate` para `/candidate/ready`), com o código HTTP na última linha. | Conferência rápida; a espera está no `make deploy`. |
 | `make down` / `make start` | `scripts/cloud/stop.sh all` / `start.sh $(ENV)` (`scale.sh 0|1`): só muda o `desired_count` dos services. | Desligar ao fim da aula e ligar no começo da próxima custa minutos de boot, não um deploy: a **mesma** revisão volta. |
 | `make diagnose` | `scripts/cloud/diagnose.sh $(ENV)`. | Quando o `/ready` não chega a 200. |
@@ -831,16 +833,15 @@ O push falhou no meio (as credenciais do runner expiram junto com a sessão do A
 
 **6. Publique o primeiro release e espere o `/ready`**
 
-No Codespaces. Cada `deploy` liga um service do passo 5 (`live`, depois `candidate`) com a imagem do `make image`, espera o cold start (3 a 5 min) e termina com `deploy: pronto em <n>s`. Rode os três em sequência:
+No Codespaces. `make deploy-all` sobe `live` e `candidate` juntos (3 a 5 min). Cada linha sai com `[live]` ou `[candidate]`, intercaladas. Depois, `make ready` confere o `live`:
 
 ```bash
 cd /home/vscode/environment/quantum-ai-assistant
-make deploy-live
-make deploy-candidate
+make deploy-all
 make ready
 ```
 
-**Enquanto espera, num segundo terminal** (botão `+` no painel do terminal): durante o `make deploy-live`, compare o front matter das duas versões da política de trocas (a v2 diz 15 dias, a v3 diz 30):
+**Enquanto espera, num segundo terminal** (botão `+` no painel do terminal): durante o `make deploy-all`, compare primeiro o front matter das duas versões da política de trocas (a v2 diz 15 dias, a v3 diz 30):
 
 ```bash
 cd /home/vscode/environment/quantum-ai-assistant
@@ -848,7 +849,7 @@ cat corpus/trocas-v2.md
 cat corpus/trocas-v3.md
 ```
 
-Durante o `make deploy-candidate`, a campanha e a semente do grafo:
+Em seguida, ainda durante o `make deploy-all`, a campanha e a semente do grafo:
 
 ```bash
 cd /home/vscode/environment/quantum-ai-assistant
@@ -856,20 +857,42 @@ cat corpus/black-friday-2027.md
 grep -n -E 'fone-bluetooth-qc|black-friday-2027|politica-trocas' graph/seed/catalog.json
 ```
 
-**Esperado:** o `make ready` termina com `HTTP 200`; o `url` do JSON do deploy é o mesmo `app_url` que você anotou no passo 5.
+**Esperado:** o `make deploy-all` termina com `deploy-all: live e candidate prontos`, depois de imprimir dois JSON, um em linhas `[live] ...` e outro em linhas `[candidate] ...` (cada JSON ocupa várias linhas, todas com o prefixo); em cada um, procure a linha `"ok": true`. O `make ready` termina com `HTTP 200`; o `"url"` do JSON `[live]` é o mesmo `app_url` que você anotou no passo 5.
 
 <details>
 <summary><b>📋 Saída completa esperada</b></summary>
 <blockquote>
 
-Linhas-chave da saída real:
+<!-- CONFIRMAR-SAIDA: deploy-all paralelo ainda nao executado na AWS -->
+
+Linhas-chave da saída. Como os dois deploys correm juntos, as linhas de `[live]` e de `[candidate]` aparecem intercaladas, e a ordem entre elas muda a cada execução. Cada JSON sai em várias linhas, todas com o mesmo prefixo; abaixo, só as linhas que importam:
 
 ```text
-deploy: t=10s rollout=IN_PROGRESS healthy_targets=0 /ready=503 digest_servido=
+[live] deploy: t=10s rollout=IN_PROGRESS healthy_targets=0 /ready=503 digest_servido=
+[candidate] deploy: t=10s rollout=IN_PROGRESS healthy_targets=0 /ready=503 digest_servido=
 ...
-deploy: t=<n>s rollout=COMPLETED healthy_targets=1 /ready=200 digest_servido=sha256:<19 primeiros>
-deploy: pronto em <n>s: http://qc-assistant-alb-<id>.us-east-1.elb.amazonaws.com
-{"ok": true, "environment": "live", "service": "qc-assistant-live", "task_definition_revision": "<n>", "image_digest": "sha256:<...>", "served_digest": "sha256:<o mesmo>", "release_id": "<id>", "rollout_state": "COMPLETED", "ready_http": 200, "cold_start_s": <n>, "url": "http://..."}
+[candidate] deploy: t=<n>s rollout=COMPLETED healthy_targets=1 /ready=200 digest_servido=sha256:<19 primeiros>
+[candidate] deploy: pronto em <n>s: http://qc-assistant-alb-<id>.us-east-1.elb.amazonaws.com/candidate
+[candidate] {
+[candidate]   "ok": true,
+[candidate]   "environment": "candidate",
+[candidate]   ...
+[candidate]   "url": "http://qc-assistant-alb-<id>.us-east-1.elb.amazonaws.com/candidate"
+[candidate] }
+[live] deploy: t=<n>s rollout=COMPLETED healthy_targets=1 /ready=200 digest_servido=sha256:<19 primeiros>
+[live] deploy: pronto em <n>s: http://qc-assistant-alb-<id>.us-east-1.elb.amazonaws.com
+[live] {
+[live]   "ok": true,
+[live]   "environment": "live",
+[live]   ...
+[live]   "url": "http://qc-assistant-alb-<id>.us-east-1.elb.amazonaws.com"
+[live] }
+deploy-all: live e candidate prontos
+```
+
+E o `make ready` em seguida (sem prefixo, porque é um comando só):
+
+```text
 {"ready": true, "environment": "live", "checks": {...}, "versions": {..., "image_digest": "sha256:<o mesmo do passo 5>", "model_version": "none", ...}}
 HTTP 200
 ```
@@ -883,11 +906,13 @@ HTTP 200
 
 **As leituras.** Nas duas versões da política de trocas, compare só o front matter entre `---`: `version`, `status`, `effective_date` e, na v3, `supersedes`; a v2 está `obsolete` e diz 15 dias, a v3 está vigente e diz 30; é a v2 que a cliente recebeu. Na campanha, repare nas datas de vigência; cada linha do `grep` é uma relação que o grafo percorre na Parte 4.
 
-**O endereço.** O `app_url` do `apply` (passo 5) também aparece como `url` no JSON do deploy. Se perder, `terraform -chdir=infra-ecs output -raw app_url` (passo 2.1) o devolve.
+**O endereço.** O `app_url` do `apply` (passo 5) também aparece como `url` no JSON `[live]` do deploy (o do `[candidate]` termina em `/candidate`). Se perder, `terraform -chdir=infra-ecs output -raw app_url` (passo 2.1) o devolve.
 
-**Os três comandos.** O `make up` do passo 5 deixou os dois serviços criados e **desligados**. `make deploy-live` e `make deploy-candidate` publicam o release: registram a task definition com o digest do `make image`, ligam cada serviço e **esperam** o `/ready` responder 200 pelo ALB. `make ready` é a conferência final; enquanto o `/ready` responder 503, nada adiante funciona.
+**Os dois comandos.** O `make up` do passo 5 deixou os dois serviços criados e **desligados**. `make deploy-all` publica o release nos dois: para cada ambiente, registra a task definition com o digest do `make image`, liga o serviço e **espera** o `/ready` responder 200 pelo ALB. `make ready` é a conferência final; enquanto o `/ready` responder 503, nada adiante funciona.
 
-**A saída.** As linhas `deploy: t=...` são o progresso (a cada 10 s: estado do rollout do ECS, targets saudáveis no ALB, código do `/ready` e o digest que respondeu); o JSON do `deploy` é o resultado, e `cold_start_s` é o tempo real da task nova até o `/ready` 200. O `make ready` imprime o JSON do `/ready` e `HTTP 200` na última linha. Na homologação deste lab, o `cold_start_s` dos deploys ficou entre **190 s** (`candidate`) e **202 s** (`live`), do `update-service` ao `/ready` 200 servido pelo digest novo; conte com **3 a 5 minutos** por deploy, porque varia por execução (puxar a imagem, subir o Neo4j, reconstruir o grafo, esperar o índice, aquecer as consultas), e o `READY_TIMEOUT` do script é de 10 minutos. O `make ready` levou 5 s.
+**Por que rodar os dois ao mesmo tempo é seguro.** `live` e `candidate` não dividem nada que um deploy mude: cada um tem a **sua** task definition, o **seu** service e o **seu** target group no ALB (o `candidate` atende em `/candidate`). Um deploy não espera pelo outro nem mexe no que é do outro; os dois usam o mesmo digest, lido uma vez do SSM no início. Por isso o `make deploy-all` dispara os dois juntos e o tempo total fica perto do cold start mais lento, não da soma dos dois. Para refazer **só um** ambiente, `make deploy-live` e `make deploy-candidate` continuam existindo e fazem exatamente o mesmo deploy, um de cada vez.
+
+**A saída.** O prefixo `[live]` ou `[candidate]` diz de qual deploy é cada linha. As linhas `deploy: t=...` são o progresso (a cada 10 s: estado do rollout do ECS, targets saudáveis no ALB, código do `/ready` e o digest que respondeu); o JSON de cada deploy é o resultado, e `cold_start_s` é o tempo real da task nova até o `/ready` 200. A última linha, `deploy-all: live e candidate prontos`, só aparece se os **dois** terminaram com `"ok": true`. O `make ready` imprime o JSON do `/ready` e `HTTP 200` na última linha. Na homologação deste lab, rodando um deploy depois do outro, o `cold_start_s` ficou entre **190 s** (`candidate`) e **202 s** (`live`), do `update-service` ao `/ready` 200 servido pelo digest novo; conte com **3 a 5 minutos** para o `make deploy-all`, porque varia por execução (puxar a imagem, subir o Neo4j, reconstruir o grafo, esperar o índice, aquecer as consultas), e o `READY_TIMEOUT` do script é de 10 minutos por ambiente. O `make ready` levou 5 s.
 
 Por que `/ready` e não `/health` no health check: `/health` diz que o processo está vivo; `/ready` diz que o Neo4j conectou, o índice vetorial está `ONLINE`, o modelo carregou e o grafo foi reconstruído. O ALB só manda tráfego para uma task que responde `/ready` com `200`; durante um deploy, a task nova só recebe clientes quando está realmente pronta.
 
@@ -901,6 +926,34 @@ Por que `/ready` e não `/health` no health check: `/health` diz que o processo 
 <blockquote>
 
 O `make image` não terminou; rode-o de novo (passo 5).
+
+</blockquote>
+</details>
+
+<details>
+<summary><b>⚠ Se der erro: <code>deploy-all: FALHOU em &lt;env&gt;</code></b></summary>
+<blockquote>
+
+Um dos dois deploys (ou os dois) não terminou com `"ok": true`; o `<env>` da mensagem diz qual (`live`, `candidate` ou `live e candidate`). O outro ambiente, se não aparece na mensagem, ficou pronto e não precisa ser refeito.
+
+1. Leia, na saída, só as linhas que começam com `[<env>]`: o motivo está na última linha `[<env>] deploy:`, que vem depois do JSON (por exemplo, `deploy: o ambiente live NAO ficou pronto em 600s (rollout=..., /ready=503).`).
+2. Veja o service, as tasks, o target group, os eventos e os logs desse ambiente. Rode só a linha do ambiente que falhou:
+
+   ```bash
+   cd /home/vscode/environment/quantum-ai-assistant
+   make diagnose ENV=live
+   make diagnose ENV=candidate
+   ```
+
+3. Corrigida a causa (o bloco abaixo lista as mais comuns), tente de novo **só esse ambiente**, com o mesmo digest. Rode só a linha do ambiente que falhou:
+
+   ```bash
+   cd /home/vscode/environment/quantum-ai-assistant
+   make deploy-live
+   make deploy-candidate
+   ```
+
+   Ele termina com `deploy: pronto em <n>s` e um JSON com `"ok": true`.
 
 </blockquote>
 </details>
@@ -934,7 +987,7 @@ Se o service entrou em `deployment failed` (circuit breaker), a task morreu ante
 
 - o projeto `quantum-ai-assistant` existe no GitLab com o código na raiz, e o runner aparece **online** nele
 - `make bootstrap` terminou com `Bootstrap ok`; `make up` aplicou sem erro e `make image` imprimiu um digest
-- `make deploy-live` e `make deploy-candidate` terminaram com `"ok": true`, e `make ready` devolveu `HTTP 200`
+- `make deploy-all` terminou com `deploy-all: live e candidate prontos` (os JSON `[live]` e `[candidate]` com `"ok": true`), e `make ready` devolveu `HTTP 200`
 - você tem a `app_url` anotada, a sua aposta de estratégia no caderno, e **nada foi destruído**
 
 ---
@@ -953,19 +1006,28 @@ A Central de Evidências aberta no navegador, e você sabendo **exatamente** o q
 
 **7. Abra a Central de Evidências**
 
-No Codespaces, imprima os links e abra o da linha `central-live` (**Ctrl+clique**, ou **Cmd+clique** no Mac). Deixe a aba aberta: é a tela dos próximos 60 minutos.
+É a tela dos próximos 60 minutos: deixe a aba aberta.
+
+**7.1.** Abra a Central de Evidências (live). No terminal do Codespaces:
 
 ```bash
-cd /home/vscode/environment/quantum-ai-assistant && make links
+cd /home/vscode/environment/quantum-ai-assistant && make links central-live
 ```
 
-**Esperado:** a aba do navegador diz **LIVE · Central de Evidências · Quantum Commerce**.
+**Esperado:** a linha `Abra no navegador (Ctrl+clique; no Mac, Cmd+clique):` e, abaixo dela, um único endereço `http://...elb.amazonaws.com/`.
+
+**7.2.** Ctrl+clique no link (Cmd+clique no Mac) para abrir no navegador.
+
+**Esperado:** a aba do navegador diz **LIVE · Central de Evidências · Quantum Commerce**, com o selo `LIVE` em magenta no cabeçalho e as três colunas, ainda sem resposta, com o aviso *"Escolha uma pergunta do roteiro ou escreva a sua e clique em “Comparar as três”."*
+
+> [!TIP]
+> Quer todos os links de uma vez? `make links`, sem nome, imprime a lista inteira: os 4 do GitLab (projeto, pipelines, runners, novo-runner) e os 6 do ALB (central-live, central-candidate, grafana, painel-helena, painel-diego, painel-investigacao).
 
 <details>
 <summary><b>📋 Saída completa esperada</b></summary>
 <blockquote>
 
-No cabeçalho, o selo `LIVE`, **Release**, **Imagem** (digest curto) e **/ready** (`pronto (200)`); abaixo, o campo **Pergunta**, o seletor **Data simulada da pergunta** em **14/11/2026 regular**, **Tenant** `quantum`, e as três colunas (**BM25**, **Vetorial (Neo4j)**, **Grafo (Neo4j)**) vazias.
+No cabeçalho, o selo `LIVE`, **Release**, **Imagem** (digest curto) e **/ready** (`pronto (200)`); abaixo, o campo **Pergunta**, o seletor **Data simulada da pergunta** em **14/11/2026 regular**, **Tenant** `quantum`, e as três colunas (**BM25**, **Vetorial (Neo4j)**, **Grafo (Neo4j)**), cada uma com o aviso *"Escolha uma pergunta do roteiro ou escreva a sua e clique em “Comparar as três”."*
 
 </blockquote>
 </details>
@@ -981,7 +1043,7 @@ A data no seletor é a **data simulada da pergunta**, não a do seu computador: 
 
 O `make links` lê o endereço do ALB direto do SSM; não precisa copiar nada do log do passo 5. A linha `central-candidate` é a mesma tela no ambiente candidate; você vai usá-la na Demo 5.2.
 
-No cabeçalho: **Quantum Commerce / Central de Evidências do AI Customer Assistant** e, à direita, **Ambiente** (selo `LIVE` em magenta), **Release**, **Imagem** (digest curto) e **/ready** (`pronto (200)`). Logo abaixo, uma linha recolhida **+ Versões deste release**: ao abrir, todas as versões (`release_id`, `image_digest`, `git_sha`, `corpus_version`, `graph_version`, `graph_seed_version`, `embedding_model_id`, `model_version`...) e o bloco **Checks de /ready**. Depois, o título **Mesma pergunta, três estratégias**, o grupo **Perguntas do roteiro** (botões prontos: *Fone de ouvido · troca*, *Black Friday · fone*, *Black Friday · sem produto*, *Política antiga · 15 dias*, *Parceiro X*, *Manual interno de reembolso*, *Cashback*, *Injeção no documento*, *Pedido Q-1001 · token da Ana*, *Pedido Q-2001 · token da Ana*), o campo **Pergunta**, o seletor **Data simulada da pergunta (não é o relógio do sistema)** com três botões (**14/11/2026 regular**, selecionado; **26/11/2027 Black Friday 2027**; **06/12/2027 após a campanha**), **Tenant** (`quantum`/`parceiro-x`), **Papel** (`customer · cliente`/`agent · atendente`) e **Pedido (opcional)**. O painel **Resultado lado a lado** tem três colunas, vazias até a primeira consulta. No fim da página, a seção **Release & Health** repete as versões por ambiente; o rodapé lembra: *"Sem modelo gerativo. model_version=none: o texto vem de templates."*
+No cabeçalho: **Quantum Commerce / Central de Evidências do AI Customer Assistant** e, à direita, **Ambiente** (selo `LIVE` em magenta), **Release**, **Imagem** (digest curto) e **/ready** (`pronto (200)`). Logo abaixo, uma linha recolhida **+ Versões deste release**: ao abrir, todas as versões (`release_id`, `image_digest`, `git_sha`, `corpus_version`, `graph_version`, `graph_seed_version`, `embedding_model_id`, `model_version`...) e o bloco **Checks de /ready**. Depois, o título **Mesma pergunta, três estratégias**, o grupo **Perguntas do roteiro** (botões prontos: *Fone de ouvido · troca*, *Black Friday · fone*, *Black Friday · sem produto*, *Política antiga · 15 dias*, *Parceiro X*, *Manual interno de reembolso*, *Cashback*, *Injeção no documento*, *Pedido Q-1001 · token da Ana*, *Pedido Q-2001 · token da Ana*), o campo **Pergunta**, o seletor **Data simulada da pergunta (não é o relógio do sistema)** com três botões (**14/11/2026 regular**, selecionado; **26/11/2027 Black Friday 2027**; **06/12/2027 após a campanha**), **Tenant** (`quantum`/`parceiro-x`), **Papel** (`customer · cliente`/`agent · atendente`) e **Pedido (opcional)**. O painel **Resultado lado a lado** tem três colunas que, até a primeira consulta, só mostram o aviso *"Escolha uma pergunta do roteiro ou escreva a sua e clique em “Comparar as três”."* No fim da página, a seção **Release & Health** repete as versões por ambiente; o rodapé lembra: *"Sem modelo gerativo. model_version=none: o texto vem de templates."*
 
 </blockquote>
 </details>
@@ -1125,11 +1187,45 @@ A pergunta da cliente respondida pelo BM25 e pelo vetorial, com os trechos recup
 
 **9. Faça a pergunta da cliente na Central**
 
-No navegador: a pergunta da cliente, nas três estratégias de uma vez.
+Na aba da Central (passo 7): a pergunta da cliente, nas três estratégias de uma vez.
 
-Em **Perguntas do roteiro**, clique no botão pronto **Fone de ouvido · troca** (preenche *"Comprei um fone de ouvido bluetooth. Em quantos dias posso trocar?"*). Mantenha **14/11/2026 regular** e o tenant `quantum`, e clique em **Comparar as três** (ou `Ctrl`/`Cmd`+`Enter`).
+> [!IMPORTANT]
+> **O que cada coluna é** (as três recebem a mesma pergunta, a mesma data e os mesmos filtros):
+>
+> | Coluna na tela | Como busca, em linguagem de negócio |
+> |---|---|
+> | **BM25** | Busca por **palavras**, como um Ctrl+F esperto: pontua os trechos que repetem os termos da pergunta. Não sabe de qual produto a pergunta fala. |
+> | **Vetorial (Neo4j)** | Busca por **significado**: acha frases parecidas mesmo com palavras diferentes. "Parece com" não quer dizer "vale para". |
+> | **Grafo (Neo4j)** | Segue **relações explícitas**: produto → categoria → política → versão vigente → trecho. Não compara texto. |
+>
+> **Em cada coluna, olhe duas coisas:** 1) a caixa da resposta diz **30 dias**? 2) em **Citações**, de qual trecho veio (o que vem depois do `#`; passe o mouse sobre a citação, ou veja a linha `citada` em **Trechos considerados**)?
 
-**Esperado:** as três colunas **não dizem a mesma coisa**, e só o **Grafo** responde 30 dias.
+**9.1.** Em **Perguntas do roteiro**, clique no botão **Fone de ouvido · troca**.
+
+**Esperado:** o campo **Pergunta** fica com *"Comprei um fone de ouvido bluetooth. Em quantos dias posso trocar?"*.
+
+**9.2.** Em **Data simulada da pergunta**, deixe selecionado **14/11/2026 regular**. Em **Tenant**, deixe `quantum`; em **Papel**, `customer · cliente`.
+
+**Antes de clicar, aposte:** qual coluna vai dizer 30 dias?
+
+**9.3.** Clique em **Comparar as três** (ou, com o cursor no campo **Pergunta**, `Ctrl`+`Enter`; `Cmd`+`Enter` no Mac).
+
+**Esperado:** o botão mostra *Consultando…* por um instante e aparecem três colunas, **BM25**, **Vetorial (Neo4j)** e **Grafo (Neo4j)**, com uma faixa em cima: *"As estratégias divergiram: ..."*.
+
+**9.4.** Em cada coluna, leia a caixa da resposta e a linha **Citações**.
+
+**Esperado:** só a coluna **Grafo** diz **30 dias**, citando `politica-trocas@v3#prazo-para-troca`. O BM25 junta troca de presente com garantia de 90 dias e cita `politica-trocas@v3#troca-de-presente` e `politica-garantia-eletronicos@v1#garantia-legal`; o Vetorial mostra *Absteve-se · insufficient_evidence*, sem citação. Na tela, **Citações** mostra só `doc@vN`; o `#` aparece ao passar o mouse sobre a citação ou na linha `citada` de **Trechos considerados**. A faixa em cima compara só a versão, por isso BM25 e Grafo parecem empatados.
+
+**9.5.** Na coluna **Grafo (Neo4j)**, clique em **Por que esta fonte?**, no fim da coluna. Repita na coluna **BM25**.
+
+**Esperado:** abre uma explicação curta embaixo do botão; no BM25 ela diz *"A resposta juntou 2 trechos: palavras em comum bastam para o BM25..."*.
+
+**O que observar:**
+
+- Mesma pergunta, três respostas diferentes, todas em HTTP 200: "o sistema respondeu" não quer dizer "respondeu certo".
+- O BM25 errou com fontes **vigentes**: a garantia ganhou por palavras, não por ser a regra de troca.
+- O BM25 também cita a `politica-trocas@v3`, mas a seção errada (troca de presente), somada à garantia: versão certa, regra errada. Só o Grafo chega em `#prazo-para-troca` porque **partiu do produto**: sabe que o fone é da categoria áudio, à qual a política de trocas se aplica. BM25 e Vetorial só comparam texto.
+- Em **Bloqueados**, nas três colunas, a `politica-trocas@v2` (15 dias) aparece só com id e motivo, sem o texto: o filtro de vigência funcionou. Por isso, aqui, a versão sozinha não separa a resposta certa da errada; o trecho separa.
 
 <details>
 <summary><b>📋 Saída completa esperada</b></summary>
@@ -1139,7 +1235,7 @@ Homologação, pelo ALB:
 
 | Coluna | O que respondeu | Fonte citada |
 |---|---|---|
-| **BM25** | Junta **dois** trechos: a seção *"Troca de presente"* da política de trocas e *"Todo eletrônico vendido pela Quantum Commerce tem garantia de 90 dias contra defeitos..."* | `politica-trocas@v3` **e** `politica-garantia-eletronicos@v1#garantia-legal` |
+| **BM25** | Junta **dois** trechos: a seção *"Troca de presente"* da política de trocas e *"Todo eletrônico vendido pela Quantum Commerce tem garantia de 90 dias contra defeitos..."* | `politica-trocas@v3#troca-de-presente` **e** `politica-garantia-eletronicos@v1#garantia-legal` |
 | **Vetorial** | **Abstém**: *"Nao encontrei essa informacao nas politicas vigentes..."* (`insufficient_evidence`) | nenhuma |
 | **Grafo** | *"Você tem até 30 dias corridos, contados a partir da data de recebimento, para trocar qualquer produto..."* | `politica-trocas@v3#prazo-para-troca` |
 
@@ -1157,7 +1253,7 @@ A faixa-resumo acima das colunas diz: *"As estratégias divergiram: BM25 politic
 
 **Isso é intencional, e é a aula inteira em uma tela.** O BM25 achou trechos **parecidos** e compôs uma resposta que mistura a seção errada da política certa com a **garantia**; o vetorial preferiu recusar; só o grafo, que **partiu do fone** e percorreu as relações até a política de trocas, chegou à resposta **aplicável**: 30 dias.
 
-**Por que a redação importa.** Use o botão, não uma redação sua: a tabela da saída esperada foi medida com esse texto. Digitar outra redação muda o que o BM25 encontra (ele depende das palavras, e esse é o ponto da aula): com `Qual o prazo para trocar um fone de ouvido?`, a redação que os passos 10 e 14 mandam pela API, o BM25 cita **só** a garantia de eletrônicos, em vez de juntar dois trechos. Enquanto consulta, o botão mostra *Consultando…*; os passos seguintes chamam esse botão só de **Comparar**. Quando as três concordam, a faixa diz *"Concordar não prova que está certo; confira a versão e a data."*
+**Por que a redação importa.** Use o botão, não uma redação sua: a tabela da saída esperada foi medida com esse texto. Digitar outra redação muda o que o BM25 encontra (ele depende das palavras, e esse é o ponto da aula): com `Qual o prazo para trocar um fone de ouvido?`, a redação que os passos 10 e 14 mandam pela API, o BM25 cita **só** a garantia de eletrônicos, em vez de juntar dois trechos. Enquanto consulta, o botão mostra *Consultando…*. Quando as três concordam, a faixa diz *"Concordar não prova que está certo; confira a versão e a data."*
 
 **O que aconteceu.** O BM25 achou trechos **parecidos** (falam de fone, eletrônico, dias, prazo); ao clicar em **Por que esta fonte?**, a coluna explica: *"A resposta juntou 2 trechos: palavras em comum bastam para o BM25, mesmo quando o trecho fala de outra regra."* Repare: a garantia **passou no filtro** (está vigente, é da Quantum, é pública: perfeitamente aplicável a fones); ela não foi barrada, ela **venceu o ranking** por palavras. A `politica-trocas@v3` também passou no filtro, e ficou em 2º. O vetorial achou trechos de significado próximo (entrega, prazos), também todos permitidos pelo filtro, mas nenhum passou do mínimo de evidência, e preferiu recusar. Nenhuma das três mentiu; duas delas não sabiam que "fone" é um produto da categoria áudio, à qual a política de trocas se aplica.
 
@@ -1170,7 +1266,7 @@ A faixa-resumo acima das colunas diz: *"As estratégias divergiram: BM25 politic
 <summary><b>⚠ Se der erro: colunas vazias com uma faixa vermelha</b></summary>
 <blockquote>
 
-O `/ready` caiu (task reiniciando). Espere 1 min e repita o **Comparar**.
+O `/ready` caiu (task reiniciando). Espere 1 min e clique de novo em **Comparar as três**.
 
 </blockquote>
 </details>
@@ -1364,9 +1460,29 @@ O caminho **Produto → Categoria → (Campanha) → Política → Versão → D
 
 **12. Abra a coluna do grafo e navegue o caminho**
 
-No navegador, role até a seção **Caminho no grafo**, abaixo das três colunas: a aba **Caminho desta resposta** já desenha o caminho real da coluna Grafo. Passe o mouse em cada nó e aresta e clique para abrir **Detalhe do item selecionado**.
+Na mesma aba da Central, com o resultado do passo 9 ainda na tela.
+
+**12.1.** Role a página até a seção **Caminho no grafo**, logo abaixo das três colunas. Deixe selecionada a aba **Caminho desta resposta**.
+
+**Esperado:** um desenho com nós coloridos ligados por setas rotuladas, partindo do nó **Fone de ouvido Bluetooth QC Sound**.
+
+**12.2.** Clique no nó **politica-trocas v3 · active**.
+
+**Esperado:** o quadro **Detalhe do item selecionado**, à direita, mostra as propriedades e a `provenance` desse nó.
+
+**12.3.** Clique na seta **SUPERSEDES**.
+
+**Esperado:** o mesmo quadro passa a mostrar as propriedades e a `provenance` da seta.
+
+**12.4.** Se o desenho ficar fora da tela, clique em **Ajustar** (ou use **+** e **−**). A mesma informação, em texto, está em **Relações percorridas, em texto**.
 
 **Esperado:** o caminho escolhido sai em **traço sólido** (`path_hops = 6`); a v2 e o ramo da campanha saem **tracejados e esmaecidos**.
+
+**O que observar:**
+
+- O grafo **partiu do produto**, não do texto da pergunta: fone → áudio → política de trocas → v3 → trecho.
+- A v2 (15 dias) está no desenho, mas **bloqueada**: a v3 a substitui (`SUPERSEDES`).
+- A Black Friday 2027 aparece esmaecida: em 14/11/2026 a campanha ainda não vale.
 
 <details>
 <summary><b>📋 Saída completa esperada</b></summary>
@@ -1616,11 +1732,28 @@ A mesma pergunta respondida em 2026, dentro da Black Friday de 2027 e depois del
 
 **15. Viaje para a Black Friday de 2027**
 
-No navegador: a política da Black Friday já está aprovada no corpus, mas só vale de 22/11/2027 a 05/12/2027. **Antes de clicar, aposte:** o prazo de troca muda para o quê?
+Na aba da Central: a política da Black Friday já está aprovada no corpus, mas só vale de 22/11/2027 a 05/12/2027. **Antes de clicar, aposte:** o prazo de troca muda para o quê?
 
-Mude **Data simulada da pergunta** para `26/11/2027`, digite em **Pergunta** `Qual o prazo para trocar um fone de ouvido?` e clique em **Comparar**.
+**15.1.** Em **Data simulada da pergunta**, clique no botão **26/11/2027 Black Friday 2027**.
+
+**15.2.** Apague o campo **Pergunta** e digite (sem usar botão pronto):
+
+```text
+Qual o prazo para trocar um fone de ouvido?
+```
+
+**15.3.** Clique em **Comparar as três**.
 
 **Esperado:** na coluna **Grafo**, a campanha **acende** e a resposta passa a ser *"Produtos comprados durante a Black Friday podem ser trocados até 10 de janeiro..."*.
+
+**15.4.** Role até **Caminho no grafo**.
+
+**Esperado:** o nó **Black Friday 2027** agora está em traço sólido, no caminho escolhido.
+
+**O que observar:**
+
+- Só a **data** mudou, e o Grafo mudou de política: a campanha vigente tem precedência.
+- BM25 cita só a garantia (a pergunta tem outra redação que a do botão do passo 9); Vetorial se abstém: a vigência mudou, a similaridade não.
 
 <details>
 <summary><b>📋 Saída completa esperada</b></summary>
@@ -1662,9 +1795,18 @@ A data não mudou (confira o seletor) ou o seletor não enviou `as_of_date` (abr
 
 **16. Um dia depois do fim da campanha**
 
-No navegador: o corpus diz `expires_date: 2027-12-05`. Mude a data para `06/12/2027` e compare de novo.
+Na aba da Central: o corpus diz `expires_date: 2027-12-05`. A pergunta do passo 15 continua no campo.
 
-**Esperado:** em `blocked` das três colunas, `campanha-black-friday@v1` aparece com **`reason=expired`**, e o grafo volta a **30 dias**.
+**16.1.** Em **Data simulada da pergunta**, clique no botão **06/12/2027 após a campanha**.
+
+**16.2.** Clique em **Comparar as três**.
+
+**Esperado:** em **Bloqueados** das três colunas, `campanha-black-friday@v1` aparece com *já expirada nesta data (expired)*, e o grafo volta a **30 dias**.
+
+**O que observar:**
+
+- O mesmo documento foi bloqueado por motivos opostos: `future` em 14/11/2026, `expired` agora.
+- O Grafo voltou sozinho à `politica-trocas@v3`, sem ninguém mexer no sistema.
 
 <details>
 <summary><b>📋 Saída completa esperada</b></summary>
@@ -1773,13 +1915,29 @@ Na vetorial o mesmo filtro vale, e aparece em `blocked` quando o documento entra
 
 **18. Quatro coisas que a cliente misturou: troca, arrependimento, regra de campanha, status do pedido**
 
-No navegador e no Codespaces: troca, arrependimento, regra de campanha e status do pedido, separados com evidência. Na Central, em `14/11/2026`, faça as três perguntas, uma por vez:
+Na aba da Central e depois no terminal do Codespaces: troca, arrependimento, regra de campanha e status do pedido, separados com evidência.
 
-- `Qual o prazo para trocar um fone de ouvido?` → esperado no **grafo**: `politica-trocas@v3`, **30 dias**
-- `Posso desistir da compra depois de receber?` → esperado: `politica-devolucoes@v4`, **7 dias**, no BM25 e no vetorial; o **grafo abstém**
-- `Onde está o meu pedido Q-1001?` → esperado: **nenhuma das três busca o status em documento**; a rota vira `order_status`
+**18.1.** Na Central, em **Data simulada da pergunta**, clique em **14/11/2026 regular**.
 
-Para a terceira, use a API com o token de laboratório da dona do pedido (todos fictícios):
+**18.2.** Apague o campo **Pergunta** e digite `Qual o prazo para trocar um fone de ouvido?`.
+
+**18.3.** Clique em **Comparar as três**.
+
+**Esperado:** na coluna **Grafo**, `politica-trocas@v3`, **30 dias**.
+
+**18.4.** Apague o campo **Pergunta** e digite `Posso desistir da compra depois de receber?`.
+
+**18.5.** Clique em **Comparar as três**.
+
+**Esperado:** `politica-devolucoes@v4`, **7 dias**, no BM25 e no Vetorial; o **Grafo** mostra *Absteve-se · entity_not_found*.
+
+**18.6.** Apague o campo **Pergunta** e digite `Onde está o meu pedido Q-1001?`.
+
+**18.7.** Clique em **Comparar as três**.
+
+**Esperado:** **nenhuma das três busca o status em documento**; a rota vira `order_status` (aparece no texto ao lado de **Resultado lado a lado**).
+
+**18.8.** No terminal do Codespaces, peça o pedido pela API, com o token de laboratório da dona do pedido (todos fictícios):
 
 ```bash
 cd /home/vscode/environment/quantum-ai-assistant
@@ -1974,11 +2132,32 @@ Nome digitado errado. Os dois cenários são `remove_campaign_edge` e `stale_gra
 
 **21. Veja o impacto na resposta e no caminho**
 
-No navegador: a resposta deve mudar **só** onde a relação era necessária.
+Na aba da Central: a resposta deve mudar **só** onde a relação era necessária.
 
-Clique no botão pronto **Black Friday · fone**, com a data em **14/11/2026 regular**, e **Comparar as três**; depois mude para **26/11/2027 Black Friday 2027** e compare de novo.
+**21.1.** Em **Perguntas do roteiro**, clique no botão **Black Friday · fone**.
+
+**Esperado:** o campo **Pergunta** fica com *"Comprei um fone de ouvido na Black Friday. Até quando posso trocar?"*.
+
+**21.2.** Em **Data simulada da pergunta**, clique em **14/11/2026 regular**.
+
+**21.3.** Clique em **Comparar as três**.
+
+**Esperado:** nada muda nas três colunas em relação a antes da remoção (a campanha ainda não vale nesta data).
+
+**21.4.** Em **Data simulada da pergunta**, clique em **26/11/2027 Black Friday 2027**.
+
+**21.5.** Clique em **Comparar as três**.
 
 **Esperado:** em `26/11/2027`, a coluna **Grafo** volta a `politica-trocas@v3`, **30 dias**, e o cabeçalho mostra o selo âmbar *"grafo em runtime difere da imagem"*.
+
+**21.6.** Role até **Caminho no grafo**.
+
+**Esperado:** o nó **Black Friday 2027** sumiu do desenho.
+
+**O que observar:**
+
+- Só o **Grafo** mudou; BM25 e Vetorial não usam relações, então não perceberam nada.
+- A resposta errada (30 dias dentro da Black Friday) saiu com a mesma confiança, em HTTP 200: só o selo âmbar denuncia a mudança.
 
 <details>
 <summary><b>📋 Saída completa esperada</b></summary>
