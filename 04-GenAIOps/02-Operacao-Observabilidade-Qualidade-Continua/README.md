@@ -857,7 +857,7 @@ No Codespaces. Sem tocar em código, alguém "sincroniza o catálogo": marca a v
 ```bash
 cd /home/vscode/environment/quantum-ai-assistant
 sed -i 's/^status: obsolete$/status: active/' corpus/trocas-v2.md
-sed -i 's/^category: policy$/category: policy\nsupersedes: politica-trocas@v3/' corpus/trocas-v2.md
+grep -q '^supersedes: politica-trocas@v3' corpus/trocas-v2.md || sed -i 's/^category: policy$/category: policy\nsupersedes: politica-trocas@v3/' corpus/trocas-v2.md
 sed -i '/^supersedes: politica-trocas@v2$/d' corpus/trocas-v3.md
 git diff --stat -- corpus/
 git diff -- corpus/ | grep '^[+-][^+-]'
@@ -1141,18 +1141,24 @@ A correção publicada, um pipeline **verde de verdade** até o `promote-live`, 
 
 **10. Reverta, confira localmente e publique**
 
-No Codespaces. O `git checkout HEAD~1` devolve os dois arquivos ao último commit aprovado (v2 obsoleta, v3 vigente); o push dispara o pipeline completo: imagem nova no ECR, deploy no `candidate`, smoke (teste rápido pelo ALB) e promoção do **mesmo digest** ao `live` (R2).
+No Codespaces. O bloco acha pelo título o commit da sincronização do passo 8 (`SYNC` guarda o hash dele; `$SYNC~1` é o commit anterior) e devolve os dois arquivos a esse commit **anterior**, o último aprovado (v2 obsoleta, v3 vigente). Por apontar sempre para esse commit (e não para "o penúltimo"), o bloco pode ser colado de novo sem restaurar o estado errado; se o commit de correção já existir, o `git commit` só avisa `nothing to commit` e o push segue. O push dispara o pipeline completo: imagem nova no ECR, deploy no `candidate`, smoke (teste rápido pelo ALB) e promoção do **mesmo digest** ao `live` (R2).
 
 ```bash
 cd /home/vscode/environment/quantum-ai-assistant
-git checkout HEAD~1 -- corpus/trocas-v2.md corpus/trocas-v3.md
-git diff --stat HEAD -- corpus/
-mkdir -p reports
-python3 evals/graph_gate.py --target seed --out reports/graph-gate.json --junit reports/junit-graph.xml >/dev/null; echo "exit code local: $?"
-git add corpus/trocas-v2.md corpus/trocas-v3.md
-git commit -m "fix(corpus): desfaz a sincronizacao do catalogo; v3 continua a vigente"
-eval $(ssh-agent -s) >/dev/null && ssh-add -k /home/vscode/.ssh/gitlab
-git push origin "$(git branch --show-current)"
+SYNC=$(git log -1 --format=%H -F --grep='docs(corpus): sincroniza politica de trocas do catalogo (v2 volta a vigente)')
+echo "commit da sincronizacao: ${SYNC:-NAO ENCONTRADO}"
+if [ -n "$SYNC" ]; then
+  git checkout "$SYNC~1" -- corpus/trocas-v2.md corpus/trocas-v3.md
+  git diff --stat HEAD -- corpus/
+  mkdir -p reports
+  python3 evals/graph_gate.py --target seed --out reports/graph-gate.json --junit reports/junit-graph.xml >/dev/null; echo "exit code local: $?"
+  git add corpus/trocas-v2.md corpus/trocas-v3.md
+  git commit -m "fix(corpus): desfaz a sincronizacao do catalogo; v3 continua a vigente" || true
+  eval $(ssh-agent -s) >/dev/null && ssh-add -k /home/vscode/.ssh/gitlab
+  git push origin "$(git branch --show-current)"
+else
+  echo "Passo 8 nao foi feito (nao ha commit da sincronizacao): nada foi alterado. Desfaca o passo 7 com: git checkout -- corpus/"
+fi
 ```
 
 **Esperado:** `exit code local: 0` e um pipeline novo, que vai **até o fim** em 10 a 15 minutos (10,5 na homologação). Enquanto ele roda, leia os dois 💡 abaixo e siga para o passo 11, que acompanha os jobs.
@@ -1189,7 +1195,7 @@ Outra alteração ficou em `corpus/` ou `graph/seed/`; `git diff HEAD` mostra qu
 </details>
 
 <details>
-<summary><b>⚠ Se der erro: <code>pathspec ... did not match</code> no <code>checkout</code></b></summary>
+<summary><b>⚠ Se der erro: <code>commit da sincronizacao: NAO ENCONTRADO</code> ou <code>invalid reference</code> no <code>checkout</code></b></summary>
 <blockquote>
 
 Você não fez o commit do passo 8 (então basta `git checkout -- corpus/`).
@@ -2038,11 +2044,11 @@ No Codespaces (editor). Copie o modelo `ops/postmortem-template.md` (oito seçõ
 ```bash
 cd /home/vscode/environment/quantum-ai-assistant
 ls ops/postmortem-template.md
-cp ops/postmortem-template.md ops/postmortem-stale-graph-policy.md
+[ -f ops/postmortem-stale-graph-policy.md ] || cp ops/postmortem-template.md ops/postmortem-stale-graph-policy.md
 code ops/postmortem-stale-graph-policy.md
 ```
 
-**Esperado:** o arquivo aberto com as oito seções do modelo.
+**Esperado:** o arquivo aberto com as oito seções do modelo. Se você colar o bloco de novo, a cópia **não** é refeita: o editor reabre o postmortem que você já preencheu.
 
 **20.1. Preencha o que é seu.** A tabela abaixo já rascunha cada seção (é o que a homologação observou). Você completa os horários dos passos 13, 15, 18 e 19, o `trace_id` do passo 14 e os `graph_version` do passo 13; o resto, confira e ajuste:
 
