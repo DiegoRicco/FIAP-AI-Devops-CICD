@@ -505,17 +505,19 @@ Há duas redes `fiap-lab` na conta. Não apague nada; chame o professor.
 
 Todos seguem este mesmo passo, tendo feito a Aula 3 ou não. O runner da Aula 3 pode estar ligado a **outro** projeto; o comando descobre isso sozinho.
 
-**4.1.** Desligue as máquinas compartilhadas do GitLab (*instance runners*) neste projeto. Rode o comando abaixo e abra o link da linha `runners`:
+**4.1.** Mostre os links do seu projeto:
 
 ```bash
 cd /home/vscode/environment/quantum-ai-assistant && make links
 ```
 
-Na aba **Instance**, desligue **Turn on instance runners for this project**. **Esperado:** a chave fica desligada (cinza).
+**Esperado:** as linhas `projeto`, `pipelines`, `runners` e `novo-runner`, cada uma com `https://gitlab.com/<seu-usuario>/quantum-ai-assistant/...`. O aviso `links: o ALB ainda nao existe nesta conta (rode make up)...` é normal aqui: **não** rode `make up` agora; a Central e o Grafana nascem no passo 6.
 
-**4.2.** Crie o runner do projeto. Abra o link da linha `novo-runner`. Em **Tags**, digite `shell, terraform`; marque **Run untagged jobs**; clique em **Create runner**. Copie o token `glrt-...` que aparece na tela seguinte (ele não aparece de novo). **Esperado:** a tela seguinte mostra um token que começa com `glrt-`.
+**4.2.** Abra o link da linha `runners`. Na aba **Instance**, desligue **Turn on instance runners for this project** (as máquinas compartilhadas do GitLab). **Esperado:** a chave fica desligada (cinza).
 
-**4.3.** Rode, colando o seu token no lugar de `glrt-...`:
+**4.3.** Abra o link da linha `novo-runner`. Em **Tags**, digite `shell, terraform`; marque **Run untagged jobs**; clique em **Create runner**. Copie o token `glrt-...` (ele não aparece de novo). **Esperado:** a tela seguinte mostra um token que começa com `glrt-`.
+
+**4.4.** Rode, colando o seu token no lugar de `glrt-...`:
 
 ```bash
 cd /home/vscode/environment/quantum-ai-assistant
@@ -548,7 +550,7 @@ Depois, em todos os casos, as linhas do Docker do runner (`docker_installed=alre
 
 **Um runner, um token.** No GitLab, cada runner criado num projeto tem um token próprio (`glrt-...`). A EC2 guarda o token com que foi registrada em `/etc/gitlab-runner/config.toml`. O `make runner` grava o token deste projeto no **SSM Parameter Store** (`/fiap/gitlab-runner/token`, `SecureString`) e o `runner-preflight.sh` compara o **hash** do token do SSM com o hash do token do `config.toml` (o valor nunca é impresso nem trafega). Hashes diferentes = a EC2 está ligada a outro projeto, e o playbook do Módulo 02 troca o registro, deixando um único `[[runners]]` no arquivo.
 
-**Idempotente.** Rodar de novo com o mesmo token dá `reuse`, não regrava o SSM (compara o hash antes) e, da segunda vez em diante, imprime sempre a mesma saída. Depois do 4.3, `make runner` **sem** `TOKEN=` também funciona (ex.: runner desligado entre aulas), porque o SSM anota qual projeto gravou qual token (`/fiap/gitlab-runner/project`, projeto + hash do token); num projeto diferente, ele recusa e pede o token, em vez de dizer "pronto" com o runner de outro projeto. O comando nunca registra duas vezes, nunca usa `terraform destroy` e aborta se um plano Terraform fosse apagar algo.
+**Idempotente.** Rodar de novo com o mesmo token dá `reuse`, não regrava o SSM (compara o hash antes) e, da segunda vez em diante, imprime sempre a mesma saída. Depois do 4.4, `make runner` **sem** `TOKEN=` também funciona (ex.: runner desligado entre aulas), porque o SSM anota qual projeto gravou qual token (`/fiap/gitlab-runner/project`, projeto + hash do token); num projeto diferente, ele recusa e pede o token, em vez de dizer "pronto" com o runner de outro projeto. O comando nunca registra duas vezes, nunca usa `terraform destroy` e aborta se um plano Terraform fosse apagar algo.
 
 **Por que desligar os runners do GitLab.** No GitLab.com, todo projeto novo vem com os *instance runners* (as máquinas compartilhadas do próprio GitLab) ligados. Os jobs deste pipeline pedem as tags `shell` e `terraform`, que só o seu runner tem; então um runner do GitLab não pegaria esses jobs. Mesmo assim, desligar garante que **só o seu runner** atende o projeto, como no lab 02.1, e que um job sem tag não vá para uma máquina sem acesso à sua conta AWS. O `make runner` não consegue fazer isso por você: mudar essa opção exige a API do GitLab com um token pessoal, que o lab não usa.
 
@@ -557,6 +559,15 @@ Depois, em todos os casos, as linhas do Docker do runner (`docker_installed=alre
 **O runner antigo.** Ao re-registrar, o runner do projeto antigo fica **offline** no GitLab (a máquina passou a atender este projeto). Isso é esperado; se quiser, apague-o depois em **Settings → CI/CD → Runners** do projeto antigo.
 
 📚 Documentação oficial: [GitLab: create a project runner](https://docs.gitlab.com/ci/runners/runners_scope/#create-a-project-runner-with-a-runner-authentication-token) e [AWS SSM Parameter Store](https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-parameter-store.html).
+
+</blockquote>
+</details>
+
+<details>
+<summary><b>⚠ Se der erro: <code>nao descobri seu usuario do GitLab pela chave SSH</code></b></summary>
+<blockquote>
+
+A chave não está carregada neste terminal. Rode `eval $(ssh-agent -s) && ssh-add -k /home/vscode/.ssh/gitlab` e repita o 4.1.
 
 </blockquote>
 </details>
@@ -573,7 +584,7 @@ cd /home/vscode/environment/quantum-ai-assistant
 git add -A && git commit -m "atualiza o assistente com a versao do curso" && git push
 ```
 
-O pipeline desse push fica pendente até o runner existir (4.3). Depois repita o sub-passo em que parou.
+O pipeline desse push fica pendente até o runner existir (4.4). Depois repita o sub-passo em que parou.
 
 </blockquote>
 </details>
@@ -582,7 +593,7 @@ O pipeline desse push fica pendente até o runner existir (4.3). Depois repita o
 <summary><b>⚠ Se der erro: <code>TOKEN invalido: tem que comecar com glrt-</code></b></summary>
 <blockquote>
 
-O valor colado não é o token do runner. Volte à tela **New project runner** do 4.2, copie o token que começa com `glrt-` e rode o 4.3 de novo, entre aspas simples.
+O valor colado não é o token do runner. Volte à tela **New project runner** do 4.3, copie o token que começa com `glrt-` e rode o 4.4 de novo, entre aspas simples.
 
 </blockquote>
 </details>
@@ -591,7 +602,7 @@ O valor colado não é o token do runner. Volte à tela **New project runner** d
 <summary><b>⚠ Se der erro: <code>Falta o TOKEN</code></b></summary>
 <blockquote>
 
-Você rodou `make runner` sem `TOKEN=`. Ainda não há no SSM um token gravado por este projeto (ou outro script o trocou), e é o token que diz a qual projeto o runner pertence. Se ainda tem o seu `glrt-`, repita o 4.3; senão, crie outro runner (4.2) e rode o 4.3.
+Você rodou `make runner` sem `TOKEN=`. Ainda não há no SSM um token gravado por este projeto (ou outro script o trocou), e é o token que diz a qual projeto o runner pertence. Se ainda tem o seu `glrt-`, repita o 4.4; senão, crie outro runner (4.3) e rode o 4.4.
 
 </blockquote>
 </details>
@@ -600,7 +611,7 @@ Você rodou `make runner` sem `TOKEN=`. Ainda não há no SSM um token gravado p
 <summary><b>⚠ Se der erro: <code>Bloqueado (token_missing)</code></b></summary>
 <blockquote>
 
-O parâmetro do token sumiu do SSM. Rode o 4.3 de novo com o seu token; se não o tem mais, crie outro runner (4.2).
+O parâmetro do token sumiu do SSM. Rode o 4.4 de novo com o seu token; se não o tem mais, crie outro runner (4.3).
 
 </blockquote>
 </details>
@@ -609,7 +620,7 @@ O parâmetro do token sumiu do SSM. Rode o 4.3 de novo com o seu token; se não 
 <summary><b>⚠ Se der erro: <code>Credencial AWS invalida/expirada</code></b></summary>
 <blockquote>
 
-A sessão do Learner Lab expirou. **Start Lab** → **AWS Details**, cole o bloco em `~/.aws/credentials` e repita o 4.3.
+A sessão do Learner Lab expirou. **Start Lab** → **AWS Details**, cole o bloco em `~/.aws/credentials` e repita o 4.4.
 
 </blockquote>
 </details>
@@ -618,7 +629,7 @@ A sessão do Learner Lab expirou. **Start Lab** → **AWS Details**, cole o bloc
 <summary><b>⚠ Se der erro: <code>Bloqueado (token_revoked)</code></b></summary>
 <blockquote>
 
-O runner deste token foi apagado no GitLab. Crie outro (4.2) e rode o 4.3 com o token novo.
+O runner deste token foi apagado no GitLab. Crie outro (4.3) e rode o 4.4 com o token novo.
 
 </blockquote>
 </details>
@@ -627,7 +638,7 @@ O runner deste token foi apagado no GitLab. Crie outro (4.2) e rode o 4.3 com o 
 <summary><b>⚠ Se der erro: <code>ERRO: falta o session-manager-plugin neste terminal</code></b></summary>
 <blockquote>
 
-Codespaces anterior a esta versão do devcontainer. **Nada foi criado** (o comando confere o plugin antes de tudo). Rode o comando de instalação que a mensagem imprime e repita o 4.3.
+Codespaces anterior a esta versão do devcontainer. **Nada foi criado** (o comando confere o plugin antes de tudo). Rode o comando de instalação que a mensagem imprime e repita o 4.4.
 
 </blockquote>
 </details>
@@ -636,7 +647,7 @@ Codespaces anterior a esta versão do devcontainer. **Nada foi criado** (o coman
 <summary><b>⚠ Se der erro: o job roda num runner <code>saas-linux-...</code> (do GitLab), não no seu</b></summary>
 <blockquote>
 
-Os *instance runners* continuam ligados. Refaça o 4.1 (aba **Instance**, desligue **Turn on instance runners for this project**) e clique em **Retry** no job.
+Os *instance runners* continuam ligados. Refaça o 4.2 (aba **Instance**, desligue **Turn on instance runners for this project**) e clique em **Retry** no job.
 
 </blockquote>
 </details>
@@ -645,7 +656,7 @@ Os *instance runners* continuam ligados. Refaça o 4.1 (aba **Instance**, deslig
 <summary><b>⚠ Se der erro: runner online no GitLab, mas o job fica <code>stuck</code></b></summary>
 <blockquote>
 
-O job pede tags que o runner não tem. Confira no link `runners` que o runner tem `shell` e `terraform` (as tags vêm da criação no 4.2; se faltarem, edite o runner ali e salve).
+O job pede tags que o runner não tem. Confira no link `runners` que o runner tem `shell` e `terraform` (as tags vêm da criação no 4.3; se faltarem, edite o runner ali e salve).
 
 </blockquote>
 </details>
