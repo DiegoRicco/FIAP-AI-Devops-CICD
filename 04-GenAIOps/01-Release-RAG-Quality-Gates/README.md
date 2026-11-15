@@ -58,7 +58,7 @@ Os blocos **💡 Clique para entender** trazem o aprofundamento; os blocos **⚠
 
 | Parte | Relógio | O que você faz | Passos | Tempo |
 |-------|---------|----------------|--------|-------|
-| [Parte 1](#parte-1---montar-o-ambiente-dentro-da-aula) | 00–25 | Criar o projeto GitLab `quantum-ai-assistant`, rodar `make bootstrap`, criar o runner do projeto, construir a imagem, subir o ambiente na AWS e esperar o `/ready`; cada espera longa vem com leitura guiada (vale para 5.1 e 5.2) | [1](#passo-1) · [2](#passo-2) · [3](#passo-3) · [4](#passo-4) · [5](#passo-5) · [6](#passo-6) | 25 min (35 com o Caminho B) |
+| [Parte 1](#parte-1---montar-o-ambiente-dentro-da-aula) | 00–25 | Criar o projeto GitLab `quantum-ai-assistant`, rodar `make bootstrap`, criar o runner do projeto, subir o ambiente na AWS, construir a imagem e esperar o `/ready`; cada espera longa vem com leitura guiada (vale para 5.1 e 5.2) | [1](#passo-1) · [2](#passo-2) · [3](#passo-3) · [4](#passo-4) · [5](#passo-5) · [6](#passo-6) | 25 min (35 com o Caminho B) |
 | [Parte 2](#parte-2---a-reclamação-da-cliente) | 25–33 | Abrir a Central, ler `/ready`, release, tenant e data de referência | [7](#passo-7) · [8](#passo-8) | 8 min |
 | [Parte 3](#parte-3---bm25-e-vetorial-a-mesma-pergunta-duas-buscas) | 33–43 | A mesma pergunta no BM25 e no vetorial: trechos, scores, citação e limites | [9](#passo-9) · [10](#passo-10) · [11](#passo-11) | 10 min |
 | [Parte 4](#parte-4---grafo-o-caminho-até-a-política) | 43–58 | Navegar o caminho produto → categoria → campanha → política → versão → trecho e ler o Cypher | [12](#passo-12) · [13](#passo-13) · [14](#passo-14) | 15 min |
@@ -151,8 +151,8 @@ Toda a preparação na AWS passa por **um** arquivo: o `Makefile` na raiz do pro
 | 1 e 2 | projeto GitLab, chave SSH, clone e primeiro push | ~5 min de cliques e comandos (não é espera) | |
 | 3 | `make bootstrap` | **32 s** com tudo já criado; na primeira vez, mais o `apply` da API de pedidos e, se faltar, ~1 min recriando a rede <!-- CONFIRMAR-SAIDA: duração do primeiro bootstrap numa conta vazia não foi cronometrada --> | ler a tabela 💡 do `Makefile` |
 | 4 | `make runner TOKEN=...` | **~3-5 min** para re-registrar a EC2 da Aula 3; ~6-8 min se não houver EC2 | ler o 💡 do runner e do token no SSM |
-| 5 | `make image` | **74 s** de build a frio (mais o envio do contexto e o push); **8-30 s** com o cache do runner quente | abrir a arquitetura e apostar numa estratégia |
-| 6 | `make up` + `make deploy-live` + `make deploy-candidate` + `make ready` | `apply` de 28 recursos <!-- CONFIRMAR-SAIDA: duração do apply de infra-ecs não foi cronometrada -->; cold start de **202 s** (`live`) e **190 s** (`candidate`); `ready` 5 s | ler o corpus (v2 × v3, Black Friday) e a semente do grafo |
+| 5 | `make secrets` + `make up` + `make image` | `apply` de 28 recursos <!-- CONFIRMAR-SAIDA: duração do apply de infra-ecs não foi cronometrada -->; **74 s** de build a frio (mais o envio do contexto e o push); **8-30 s** com o cache do runner quente | abrir a arquitetura e apostar numa estratégia |
+| 6 | `make deploy-live` + `make deploy-candidate` + `make ready` | cold start de **202 s** (`live`) e **190 s** (`candidate`); `ready` 5 s | ler o corpus (v2 × v3, Black Friday) e a semente do grafo |
 
 Somando: cerca de **9 a 12 minutos de comandos** e **25 minutos de relógio** com a leitura, as esperas e os checkpoints; **~30 minutos** se a sua conta ainda não tem a EC2 do runner. Repetir a Parte 1 numa sessão nova do Academy, com tudo já criado, leva ~2,5 min de comandos (`preflight` 25 s, `bootstrap` 32 s, `runner` 25 s, `image` 30 s, `ready` 5 s).
 
@@ -362,7 +362,7 @@ As credenciais expiraram ou a conta ainda não tem bucket (o `make bootstrap` do
 
 **3. Rode o bootstrap da conta AWS**
 
-No Codespaces, com as credenciais do Academy atualizadas ([Início de aula](../../00-create-codespaces/Inicio-de-aula.md)): confere a conta e **cria o que faltar**; rodar de novo é seguro.
+No Codespaces, com as credenciais do Academy atualizadas ([Início de aula](../../00-create-codespaces/Inicio-de-aula.md)): cria o que faltar das aulas anteriores (bucket do state, rede `fiap-lab`, **API de pedidos** que o assistente consulta, segredos no SSM); rodar de novo é seguro.
 
 ```bash
 cd /home/vscode/environment/quantum-ai-assistant
@@ -503,7 +503,7 @@ Há duas redes `fiap-lab` na conta. Não apague nada; chame o professor.
 
 **4. Crie o runner do projeto e deixe o `make runner` fazer o resto**
 
-Todos seguem este mesmo passo, tendo feito a Aula 3 ou não. O runner da Aula 3 pode estar ligado a **outro** projeto; o comando descobre isso sozinho.
+Liga ao seu projeto um **runner** (EC2 da Aula 3, ou uma nova): é ele que roda o pipeline e, no passo 5, constrói a imagem. Todos seguem este mesmo passo, tendo feito a Aula 3 ou não; o comando descobre sozinho se o runner está ligado a **outro** projeto.
 
 **4.1.** Mostre os links do seu projeto:
 
@@ -511,7 +511,7 @@ Todos seguem este mesmo passo, tendo feito a Aula 3 ou não. O runner da Aula 3 
 cd /home/vscode/environment/quantum-ai-assistant && make links
 ```
 
-**Esperado:** as linhas `projeto`, `pipelines`, `runners` e `novo-runner`, cada uma com `https://gitlab.com/<seu-usuario>/quantum-ai-assistant/...`. O aviso `links: o ALB ainda nao existe nesta conta (rode make up)...` é normal aqui: **não** rode `make up` agora; a Central e o Grafana nascem no passo 6.
+**Esperado:** as linhas `projeto`, `pipelines`, `runners` e `novo-runner`, cada uma com `https://gitlab.com/<seu-usuario>/quantum-ai-assistant/...`. O aviso `links: o ALB ainda nao existe nesta conta (rode make up)...` é normal aqui: **não** rode `make up` agora; o ALB nasce no passo 5 e a Central responde no passo 6.
 
 **4.2.** Abra o link da linha `runners`. Na aba **Instance**, desligue **Turn on instance runners for this project** (as máquinas compartilhadas do GitLab). **Esperado:** a chave fica desligada (cinza).
 
@@ -665,23 +665,24 @@ O job pede tags que o runner não tem. Confira no link `runners` que o runner te
 
 <a id="passo-5"></a>
 
-**5. Crie os segredos e construa a imagem**
+**5. Crie os segredos, suba o runtime e construa a imagem**
 
-No Codespaces. `make secrets` guarda no SSM, criptografadas, a **senha do Neo4j** (o banco do grafo) e a **chave da porta admin** (usada no incidente da Demo 5.2). `make image` constrói **no runner** a imagem do assistente (código, corpus, grafo e modelo), que **é** o release, e a envia ao ECR.
+No Codespaces. `make secrets` confere (cria se faltar) no SSM a **senha do Neo4j** (o banco do grafo) e a **chave da porta admin** (incidente da Demo 5.2). `make up` cria o **ECR**, o **ECS Fargate** (`live` e `candidate`, ainda desligados; cada task = app + Neo4j) e o **ALB** na frente. `make image` constrói **no runner** a imagem (o release) e a envia ao ECR; por isso o `up` vem antes.
 
 ```bash
 cd /home/vscode/environment/quantum-ai-assistant
 make secrets
+make up
 make image
 ```
 
-**Esperado:** a última linha é o digest `sha256:<64 caracteres hex>`, o identificador do release de hoje.
+**Esperado:** o `apply` termina com `Apply complete!` e o `app_url` (anote: é o endereço da Central de Evidências para a aula inteira); a última linha do `make image` é o digest `sha256:<64 caracteres hex>`, o identificador do release de hoje.
 
 <details>
 <summary><b>📋 Saída completa esperada</b></summary>
 <blockquote>
 
-Saída real da homologação (`make image` em 30 s com o cache do runner quente; na primeira vez o build demora vários minutos):
+Linhas-chave da saída real da homologação (`make image` em 30 s com o cache do runner quente; na primeira vez o build demora vários minutos):
 
 ```text
 /qc-assistant/live/neo4j-password exists
@@ -690,6 +691,13 @@ Saída real da homologação (`make image` em 30 s com o cache do runner quente;
 /qc-assistant/candidate/neo4j-password exists
 /qc-assistant/candidate/neo4j-auth exists
 /qc-assistant/candidate/admin-hmac exists
+Apply complete! Resources: 28 added, 0 changed, 0 destroyed.
+app_url = "http://qc-assistant-alb-<id>.us-east-1.elb.amazonaws.com"
+candidate_url = "http://qc-assistant-alb-<id>.us-east-1.elb.amazonaws.com/candidate"
+cluster = "qc-assistant"
+cost_warning = "Cobra por hora: ALB (~US$ 0,0225/h) + cada task ligada (1 vCPU + 3 GB ~US$ 0,053/h). ..."
+...
+mirror-neo4j: neo4j:5.26.x ja no ECR com o digest certo (ou copiando...)
 remote-build: contexto 448K -> s3://base-config-<SEU RM>/quantum-assistant/build-context/<sha>.tgz
 remote-build: build no runner i-... (SSM <id do comando>); 1 a 3 min...
 build-push: build qc-assistant-app:<tag> (linux/amd64, commit <12 hex>)...
@@ -701,7 +709,7 @@ sha256:<64 caracteres hex>
 </blockquote>
 </details>
 
-**Enquanto o build roda (1 a 3 min):** abra a [arquitetura da demo](img/arquitetura-5-1.png) e aposte no caderno: para *"quantos dias eu tenho para trocar um fone?"*, **qual das três estratégias cita a política certa** (`politica-trocas@v3`, 30 dias)? Os passos 9 e 12 dão a resposta.
+**Enquanto o `apply` e o build rodam:** abra a [arquitetura da demo](img/arquitetura-5-1.png) e aposte no caderno: para *"quantos dias eu tenho para trocar um fone?"*, **qual das três estratégias cita a política certa** (`politica-trocas@v3`, 30 dias)? Os passos 9 e 12 dão a resposta.
 
 <details>
 <summary><b>💡 Clique para entender: os seis segredos, o que vai dentro da imagem e por que o modelo é baixado no build</b></summary>
@@ -727,10 +735,65 @@ Resultado: a task não depende de internet para ficar pronta, o cold start cabe 
 </details>
 
 <details>
+<summary><b>💡 Clique para entender: por que o <code>make up</code> vem antes do <code>make image</code>, o que o <code>terraform apply</code> cria e o que ele só lê</b></summary>
+<blockquote>
+
+**A ordem.** O `make image` envia a imagem ao repositório ECR `qc-assistant-app`, e quem cria esse repositório é o Terraform do `make up`. Já o `make up` não precisa da imagem: os services nascem com `desired_count = 0` e uma task definition **template**, e quem os liga com o release é o `make deploy` do passo 6. No fim, o `make up` chama o `make mirror-neo4j`, que copia, do Codespaces, a imagem oficial do Neo4j para o ECR com o mesmo digest (a task não depende do Docker Hub).
+
+**A saída.** O `apply` lista 28 recursos e os outputs (entre eles `app_url` e um `cost_warning`).
+
+**Lê (data sources):** a VPC `fiap-lab` (tag `Name`), as subnets com `Tier=Public`, o `LabRole` (`data aws_iam_role`), o security group do runner (para liberar a porta administrativa só para ele).
+
+**Cria:** repositórios ECR `qc-assistant-app` e `qc-assistant-neo4j`, cluster `qc-assistant`, uma **task definition** por ambiente com dois contêineres (`app` na porta 8000 e `neo4j` ouvindo só em `localhost:7687`, com a senha vinda do SSM via `secrets`), dois **services** (`qc-assistant-live` e `qc-assistant-candidate`, Fargate `1.4.0`) que nascem com `desired_count = 0` (o `deploy.sh` é quem sobe para 1 ao publicar um release), deployment circuit breaker **com rollback automático** e 240 s de carência para o health check (o tempo do Neo4j e do índice subirem); um **ALB** `qc-assistant-alb` HTTP:80 com regra `/candidate*` → TG candidate e default → TG live, health check em `GET /ready`; security group da task aceitando 8000 **só do SG do ALB** e 8001 **só do SG do runner**; log groups com retenção curta; a URL do ALB no SSM `/qc-assistant/ecs/alb-url`.
+
+**Não cria:** nenhuma IAM role (as tasks usam o `LabRole` como execution role e task role), nenhum NAT Gateway (a task em subnet pública usa IP público **de saída** para alcançar ECR, CloudWatch e SSM; nenhuma porta de entrada além das duas acima), nenhum recurso fora do prefixo `qc-assistant-`.
+
+📚 Documentação oficial: [Fargate task networking](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/fargate-task-networking.html), para o IP público de saída sem NAT; [ALB listener rules](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/listener-update-rules.html), para a regra de path `/candidate*`.
+
+</blockquote>
+</details>
+
+<details>
 <summary><b>⚠ Se der erro: <code>AccessDenied</code> em <code>ssm:PutParameter</code></b></summary>
 <blockquote>
 
 Credenciais de outra sessão. Refaça o Início de aula e repita.
+
+</blockquote>
+</details>
+
+<details>
+<summary><b>⚠ Se der erro: <code>the ECS service linked role could not be assumed</code></b></summary>
+<blockquote>
+
+A service-linked role do ECS ainda não existia na conta nova. **Rode `make up` de novo** (o guia do Learner Lab documenta exatamente isso).
+
+</blockquote>
+</details>
+
+<details>
+<summary><b>⚠ Se der erro: <code>Error: creating ECS Service ... PassRole</code> ou <code>not authorized to perform: elasticloadbalancing:CreateLoadBalancer</code></b></summary>
+<blockquote>
+
+A conta não permite. **Pare e avise o professor** (não tente criar role).
+
+</blockquote>
+</details>
+
+<details>
+<summary><b>⚠ Se der erro: <code>No changes</code> no <code>apply</code> e <code>mirror-neo4j: ... ja no ECR</code></b></summary>
+<blockquote>
+
+Não é erro: você já tinha rodado o `make up`. É esperado e seguro; siga para o `make image`.
+
+</blockquote>
+</details>
+
+<details>
+<summary><b>⚠ Se der erro: <code>RepositoryNotFoundException</code> ou <code>name unknown</code> no push do <code>make image</code></b></summary>
+<blockquote>
+
+O repositório ECR ainda não existe: o `make up` não rodou ou falhou antes do fim. Rode `make up`, confira o `Apply complete!` e repita o `make image`.
 
 </blockquote>
 </details>
@@ -766,13 +829,12 @@ O push falhou no meio (as credenciais do runner expiram junto com a sessão do A
 
 <a id="passo-6"></a>
 
-**6. Suba o runtime, publique o primeiro release e espere o `/ready`**
+**6. Publique o primeiro release e espere o `/ready`**
 
-No Codespaces. `make up` cria a stack (Terraform): **ECS Fargate** com os services `live` e `candidate` (cada task = app + Neo4j) e um **ALB** na frente (`/` → live, `/candidate` → candidate). Cada `deploy` põe a imagem do passo 5 num service, espera o cold start (3 a 5 min) e termina com `deploy: pronto em <n>s`. Rode os quatro em sequência:
+No Codespaces. Cada `deploy` liga um service do passo 5 (`live`, depois `candidate`) com a imagem do `make image`, espera o cold start (3 a 5 min) e termina com `deploy: pronto em <n>s`. Rode os três em sequência:
 
 ```bash
 cd /home/vscode/environment/quantum-ai-assistant
-make up
 make deploy-live
 make deploy-candidate
 make ready
@@ -794,7 +856,7 @@ cat corpus/black-friday-2027.md
 grep -n -E 'fone-bluetooth-qc|black-friday-2027|politica-trocas' graph/seed/catalog.json
 ```
 
-**Esperado:** o `make ready` termina com `HTTP 200`. Copie o `app_url` do `apply`: é o endereço da Central de Evidências para a aula inteira.
+**Esperado:** o `make ready` termina com `HTTP 200`; o `url` do JSON do deploy é o mesmo `app_url` que você anotou no passo 5.
 
 <details>
 <summary><b>📋 Saída completa esperada</b></summary>
@@ -803,13 +865,6 @@ grep -n -E 'fone-bluetooth-qc|black-friday-2027|politica-trocas' graph/seed/cata
 Linhas-chave da saída real:
 
 ```text
-Apply complete! Resources: 28 added, 0 changed, 0 destroyed.
-app_url = "http://qc-assistant-alb-<id>.us-east-1.elb.amazonaws.com"
-candidate_url = "http://qc-assistant-alb-<id>.us-east-1.elb.amazonaws.com/candidate"
-cluster = "qc-assistant"
-cost_warning = "Cobra por hora: ALB (~US$ 0,0225/h) + cada task ligada (1 vCPU + 3 GB ~US$ 0,053/h). ..."
-...
-mirror-neo4j: neo4j:5.26.x ja no ECR com o digest certo (ou copiando...)
 deploy: t=10s rollout=IN_PROGRESS healthy_targets=0 /ready=503 digest_servido=
 ...
 deploy: t=<n>s rollout=COMPLETED healthy_targets=1 /ready=200 digest_servido=sha256:<19 primeiros>
@@ -823,44 +878,20 @@ HTTP 200
 </details>
 
 <details>
-<summary><b>💡 Clique para entender: o que cada comando faz, o que o <code>terraform apply</code> cria e o que ele só lê</b></summary>
+<summary><b>💡 Clique para entender: o que cada comando faz e por que o health check é o <code>/ready</code></b></summary>
 <blockquote>
 
 **As leituras.** Nas duas versões da política de trocas, compare só o front matter entre `---`: `version`, `status`, `effective_date` e, na v3, `supersedes`; a v2 está `obsolete` e diz 15 dias, a v3 está vigente e diz 30; é a v2 que a cliente recebeu. Na campanha, repare nas datas de vigência; cada linha do `grep` é uma relação que o grafo percorre na Parte 4.
 
-**O endereço.** O `app_url` do `apply` também aparece como `url` no JSON do deploy. Se perder, `terraform -chdir=infra-ecs output -raw app_url` (passo 2.1) o devolve.
+**O endereço.** O `app_url` do `apply` (passo 5) também aparece como `url` no JSON do deploy. Se perder, `terraform -chdir=infra-ecs output -raw app_url` (passo 2.1) o devolve.
 
-**Os quatro comandos.** `make up` é o Terraform de `infra-ecs/`: cria cluster, os dois serviços (desligados), ALB, target groups, security groups e logs, só **lendo** a rede `fiap-lab`. `make deploy-live` e `make deploy-candidate` publicam o release: registram a task definition com o digest do `make image`, ligam cada serviço e **esperam** o `/ready` responder 200 pelo ALB. `make ready` é a conferência final; enquanto o `/ready` responder 503, nada adiante funciona.
+**Os três comandos.** O `make up` do passo 5 deixou os dois serviços criados e **desligados**. `make deploy-live` e `make deploy-candidate` publicam o release: registram a task definition com o digest do `make image`, ligam cada serviço e **esperam** o `/ready` responder 200 pelo ALB. `make ready` é a conferência final; enquanto o `/ready` responder 503, nada adiante funciona.
 
-**A saída.** O `apply` lista 28 recursos e os outputs (entre eles `app_url` e um `cost_warning`). As linhas `deploy: t=...` são o progresso (a cada 10 s: estado do rollout do ECS, targets saudáveis no ALB, código do `/ready` e o digest que respondeu); o JSON do `deploy` é o resultado, e `cold_start_s` é o tempo real da task nova até o `/ready` 200. O `make ready` imprime o JSON do `/ready` e `HTTP 200` na última linha. Na homologação deste lab, o `cold_start_s` dos deploys ficou entre **190 s** (`candidate`) e **202 s** (`live`), do `update-service` ao `/ready` 200 servido pelo digest novo; conte com **3 a 5 minutos** por deploy, porque varia por execução (puxar a imagem, subir o Neo4j, reconstruir o grafo, esperar o índice, aquecer as consultas), e o `READY_TIMEOUT` do script é de 10 minutos. O `make ready` levou 5 s.
-
-**Lê (data sources):** a VPC `fiap-lab` (tag `Name`), as subnets com `Tier=Public`, o `LabRole` (`data aws_iam_role`), o security group do runner (para liberar a porta administrativa só para ele).
-
-**Cria:** repositório ECR `qc-assistant-app` (ou adota o existente), cluster `qc-assistant`, uma **task definition** por ambiente com dois contêineres (`app` na porta 8000 e `neo4j` ouvindo só em `localhost:7687`, com a senha vinda do SSM via `secrets`), dois **services** (`qc-assistant-live` e `qc-assistant-candidate`, Fargate `1.4.0`) que nascem com `desired_count = 0` (o `deploy.sh` é quem sobe para 1 ao publicar um release), deployment circuit breaker **com rollback automático** e 240 s de carência para o health check (o tempo do Neo4j e do índice subirem), e `RegisterTaskDefinition`/`UpdateService` a cada mudança de digest; um **ALB** `qc-assistant-alb` HTTP:80 com regra `/candidate*` → TG candidate e default → TG live, health check em `GET /ready`; security group da task aceitando 8000 **só do SG do ALB** e 8001 **só do SG do runner**; log groups com retenção curta.
-
-**Não cria:** nenhuma IAM role (as tasks usam o `LabRole` como execution role e task role), nenhum NAT Gateway (a task em subnet pública usa IP público **de saída** para alcançar ECR, CloudWatch e SSM; nenhuma porta de entrada além das duas acima), nenhum recurso fora do prefixo `qc-assistant-`.
+**A saída.** As linhas `deploy: t=...` são o progresso (a cada 10 s: estado do rollout do ECS, targets saudáveis no ALB, código do `/ready` e o digest que respondeu); o JSON do `deploy` é o resultado, e `cold_start_s` é o tempo real da task nova até o `/ready` 200. O `make ready` imprime o JSON do `/ready` e `HTTP 200` na última linha. Na homologação deste lab, o `cold_start_s` dos deploys ficou entre **190 s** (`candidate`) e **202 s** (`live`), do `update-service` ao `/ready` 200 servido pelo digest novo; conte com **3 a 5 minutos** por deploy, porque varia por execução (puxar a imagem, subir o Neo4j, reconstruir o grafo, esperar o índice, aquecer as consultas), e o `READY_TIMEOUT` do script é de 10 minutos. O `make ready` levou 5 s.
 
 Por que `/ready` e não `/health` no health check: `/health` diz que o processo está vivo; `/ready` diz que o Neo4j conectou, o índice vetorial está `ONLINE`, o modelo carregou e o grafo foi reconstruído. O ALB só manda tráfego para uma task que responde `/ready` com `200`; durante um deploy, a task nova só recebe clientes quando está realmente pronta.
 
-📚 Documentação oficial: [Fargate task networking](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/fargate-task-networking.html), para o IP público de saída sem NAT; [ECS deployment circuit breaker](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/deployment-circuit-breaker.html), para o que acontece quando a task nova nunca fica saudável; [ALB listener rules](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/listener-update-rules.html), para a regra de path `/candidate*`.
-
-</blockquote>
-</details>
-
-<details>
-<summary><b>⚠ Se der erro: <code>the ECS service linked role could not be assumed</code></b></summary>
-<blockquote>
-
-A service-linked role do ECS ainda não existia na conta nova. **Rode `make up` de novo** (o guia do Learner Lab documenta exatamente isso).
-
-</blockquote>
-</details>
-
-<details>
-<summary><b>⚠ Se der erro: <code>Error: creating ECS Service ... PassRole</code> ou <code>not authorized to perform: elasticloadbalancing:CreateLoadBalancer</code></b></summary>
-<blockquote>
-
-A conta não permite. **Pare e avise o professor** (não tente criar role).
+📚 Documentação oficial: [ECS deployment circuit breaker](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/deployment-circuit-breaker.html), para o que acontece quando a task nova nunca fica saudável.
 
 </blockquote>
 </details>
@@ -870,15 +901,6 @@ A conta não permite. **Pare e avise o professor** (não tente criar role).
 <blockquote>
 
 O `make image` não terminou; rode-o de novo (passo 5).
-
-</blockquote>
-</details>
-
-<details>
-<summary><b>⚠ Se der erro: <code>No changes</code> no <code>apply</code> e <code>mirror-neo4j: ... ja no ECR</code></b></summary>
-<blockquote>
-
-Não é erro: você já tinha rodado o `make up`. É esperado e seguro; siga para o `make deploy-live`.
 
 </blockquote>
 </details>
@@ -911,8 +933,8 @@ Se o service entrou em `deployment failed` (circuit breaker), a task morreu ante
 ### Checkpoint
 
 - o projeto `quantum-ai-assistant` existe no GitLab com o código na raiz, e o runner aparece **online** nele
-- `make bootstrap` terminou com `Bootstrap ok`; `make image` imprimiu um digest
-- `make up` aplicou sem erro, `make deploy-live` e `make deploy-candidate` terminaram com `"ok": true`, e `make ready` devolveu `HTTP 200`
+- `make bootstrap` terminou com `Bootstrap ok`; `make up` aplicou sem erro e `make image` imprimiu um digest
+- `make deploy-live` e `make deploy-candidate` terminaram com `"ok": true`, e `make ready` devolveu `HTTP 200`
 - você tem a `app_url` anotada, a sua aposta de estratégia no caderno, e **nada foi destruído**
 
 ---
@@ -957,7 +979,7 @@ No cabeçalho, o selo `LIVE`, **Release**, **Imagem** (digest curto) e **/ready*
 
 A data no seletor é a **data simulada da pergunta**, não a do seu computador: o sistema responde "como se" a pergunta fosse feita naquele dia. Hoje começamos em 14/11/2026, o dia da reclamação.
 
-O `make links` lê o endereço do ALB direto do SSM; não precisa copiar nada do log do passo 6. A linha `central-candidate` é a mesma tela no ambiente candidate; você vai usá-la na Demo 5.2.
+O `make links` lê o endereço do ALB direto do SSM; não precisa copiar nada do log do passo 5. A linha `central-candidate` é a mesma tela no ambiente candidate; você vai usá-la na Demo 5.2.
 
 No cabeçalho: **Quantum Commerce / Central de Evidências do AI Customer Assistant** e, à direita, **Ambiente** (selo `LIVE` em magenta), **Release**, **Imagem** (digest curto) e **/ready** (`pronto (200)`). Logo abaixo, uma linha recolhida **+ Versões deste release**: ao abrir, todas as versões (`release_id`, `image_digest`, `git_sha`, `corpus_version`, `graph_version`, `graph_seed_version`, `embedding_model_id`, `model_version`...) e o bloco **Checks de /ready**. Depois, o título **Mesma pergunta, três estratégias**, o grupo **Perguntas do roteiro** (botões prontos: *Fone de ouvido · troca*, *Black Friday · fone*, *Black Friday · sem produto*, *Política antiga · 15 dias*, *Parceiro X*, *Manual interno de reembolso*, *Cashback*, *Injeção no documento*, *Pedido Q-1001 · token da Ana*, *Pedido Q-2001 · token da Ana*), o campo **Pergunta**, o seletor **Data simulada da pergunta (não é o relógio do sistema)** com três botões (**14/11/2026 regular**, selecionado; **26/11/2027 Black Friday 2027**; **06/12/2027 após a campanha**), **Tenant** (`quantum`/`parceiro-x`), **Papel** (`customer · cliente`/`agent · atendente`) e **Pedido (opcional)**. O painel **Resultado lado a lado** tem três colunas, vazias até a primeira consulta. No fim da página, a seção **Release & Health** repete as versões por ambiente; o rodapé lembra: *"Sem modelo gerativo. model_version=none: o texto vem de templates."*
 

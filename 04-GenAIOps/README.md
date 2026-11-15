@@ -92,7 +92,7 @@ make runner
 | **EC2 stop/start** (entre aulas) | O IP público do runner muda; ID, disco, `config.toml` e token continuam. | Sim. O runner **chama** o GitLab (saída 443); IP novo não é runner perdido. | Fargate não para com a EC2; continua cobrando. |
 | **EC2 terminate** | Instância e disco somem. | Não. `make runner` recria (Terraform + Ansible). | Não se aplica. |
 | **Codespaces parado** | Só o seu terminal parou. | Sim. Refaça `ssh-add` e `export`. | Continuam de pé na AWS. |
-| **Sessão do Learner Lab expirada** | `ExpiredToken` no Codespaces. Ao encerrar o Lab, o Academy **para** as EC2. | Sim, parado. | **Tasks Fargate param também** quando o Lab encerra; `make up && make ready` sobe de novo. |
+| **Sessão do Learner Lab expirada** | `ExpiredToken` no Codespaces. Ao encerrar o Lab, o Academy **para** as EC2. | Sim, parado. | **Tasks Fargate param também** quando o Lab encerra; `make start ENV=all` sobe de novo, na mesma revisão; espere 3 a 5 min (cold start) e confira com `make ready`. |
 
 📚 Documentação oficial: [ciclo de vida da instância EC2](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-lifecycle.html); [GitLab Runner commands](https://docs.gitlab.com/runner/commands/).
 
@@ -153,7 +153,7 @@ Tudo com prefixo **`qc-assistant-`**, tags `Project=quantum-commerce`, `Lab=05-x
 | Lambda + API Gateway + DynamoDB (pedidos) | ~US$ 0 parados | Por chamada. |
 
 > [!CAUTION]
-> Diferente da versão anterior (quase tudo serverless), **este módulo cobra por hora enquanto estiver de pé**. Entre a 5.1 e a 5.2 no mesmo dia, deixe tudo como está. Se as demos forem em dias diferentes, confirme com o professor: `make down` escala os services a zero (as tasks param de cobrar) e mantém ALB, ECR e state (volta com `make up`); `make destroy-dry-run` mostra o que a destruição completa faria; `make down` **não** toca na EC2 de observabilidade (ela é de outro state, `infra-obs/`; para ela, `bash ops/cloud/obs.sh destroy --apply`, ou `stop-instances` na instância `qc-assistant-obs`); desligue o runner com `stop-instances`. A limpeza completa (`scripts/cloud/cleanup.sh`) começa sempre em `--dry-run` e está no fim da Demo 5.2. A rede `fiap-lab` **nunca** é destruída: o Trabalho Final a usa.
+> Diferente da versão anterior (quase tudo serverless), **este módulo cobra por hora enquanto estiver de pé**. Entre a 5.1 e a 5.2 no mesmo dia, deixe tudo como está. Se as demos forem em dias diferentes, confirme com o professor: `make down` escala os services a zero (as tasks param de cobrar) e mantém ALB, ECR e state (volta com `make start ENV=all`); `make destroy-dry-run` mostra o que a destruição completa faria; `make down` **não** toca na EC2 de observabilidade (ela é de outro state, `infra-obs/`; para ela, `bash ops/cloud/obs.sh destroy --apply`, ou `stop-instances` na instância `qc-assistant-obs`); desligue o runner com `stop-instances`. A limpeza completa (`scripts/cloud/cleanup.sh`) começa sempre em `--dry-run` e está no fim da Demo 5.2. A rede `fiap-lab` **nunca** é destruída: o Trabalho Final a usa.
 
 ## Decisões pedagógicas
 
