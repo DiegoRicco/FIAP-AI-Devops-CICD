@@ -1764,8 +1764,7 @@ Homologação, 26/11/2027: na coluna **Grafo**, a aresta `Product(fone-bluetooth
 </blockquote>
 </details>
 
-<!-- NOVA-IMAGEM: img/grafo-black-friday-2027.png | capturar: a Central com a data 26/11/2027, o nó Campaign black-friday-2027 aceso no caminho do grafo e a resposta citando a regra Trocas na Black Friday (até 10 de janeiro) | FONTE REAL já capturada (live R3): /tmp/qc18/evid/5.1/screenshots/r3/grafo-black-friday-2027-1920.png (grafo) e grafo-black-friday-2027-comparar-1920.png (colunas); versões 1366 ao lado | depois de salvar o arquivo, descomente a linha abaixo -->
-<!-- ![Central em 26/11/2027: o caminho do grafo passa por Campaign black-friday-2027, agora vigente, e a resposta cita as regras da Black Friday (troca até 10 de janeiro, arrependimento de 7 dias inalterado)](img/grafo-black-friday-2027.png) -->
+![Central em 26/11/2027: o caminho do grafo passa por Campaign black-friday-2027, agora vigente, e a resposta cita as regras da Black Friday (troca até 10 de janeiro, arrependimento de 7 dias inalterado)](img/grafo-black-friday-2027.png)
 
 <details>
 <summary><b>💡 Clique para entender: precedência da campanha, a seção errada do documento certo, e um limite honesto do modelo</b></summary>
@@ -2168,8 +2167,7 @@ Homologação, live com a aresta removida: em `14/11/2026`, **nada muda** nas tr
 </blockquote>
 </details>
 
-<!-- NOVA-IMAGEM: img/grafo-sem-aresta-campanha.png | capturar: a Central em 26/11/2027 com a aresta PARTICIPATES_IN removida: o caminho do grafo sem o nó Campaign, resposta 30 dias, e o selo âmbar de drift no cabeçalho | FONTE REAL já capturada: /tmp/qc18/evid/5.1/screenshots/r3/grafo-sem-aresta-campanha-1920.png (grafo 2027), -cabecalho-1920.png (selo de drift), -health-1920.png (Release & Health), -comparar-1920.png (colunas 2027), -2026-1920.png (grafo 2026); versões 1366 ao lado | depois de salvar o arquivo, descomente a linha abaixo -->
-<!-- ![Central em 26/11/2027 depois da remoção da aresta: o caminho do grafo vai da categoria à política de trocas v3 (30 dias) sem passar pela campanha, que sumiu do desenho; no cabeçalho, o selo âmbar indica que graph_version diverge de graph_seed_version](img/grafo-sem-aresta-campanha.png) -->
+![Caminho do grafo depois da remoção da aresta: do fone à categoria áudio, à política de trocas v3 (30 dias) e ao trecho Prazo para troca; a campanha Black Friday 2027 sumiu do desenho, porque a relação PARTICIPATES_IN não existe mais](img/grafo-sem-aresta-campanha.png)
 
 <details>
 <summary><b>💡 Clique para entender: o que muda em cada tela, e como a Central denuncia o drift</b></summary>
