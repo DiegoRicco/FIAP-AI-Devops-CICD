@@ -128,7 +128,7 @@ Quatro decisões que explicam esse desenho, e que você vai ver na prática:
 | Projeto GitLab `quantum-ai-assistant` + runner EC2 | GitLab + AWS | O repositório **de produto** do assistente (criado na Parte 1) e o runner que roda o pipeline da Demo 5.2. |
 
 > [!CAUTION]
-> **Custo enquanto estiver de pé.** Cada task Fargate ligada (1 vCPU + 3 GB, app + Neo4j juntos: ~US$ 0,053/h), o ALB (~US$ 0,0225/h) e a EC2 do runner (`t3.small`, ~US$ 0,02/h) cobram **por hora, com ou sem uso**. Com os preços públicos de `us-east-1` de novembro de 2026 (vCPU-hora US$ 0,04048; GB-hora US$ 0,004445; ALB-hora US$ 0,0225), cada task custa **US$ 0,054/h** e o ALB **US$ 0,0225/h**: **US$ 0,13/h** com as duas tasks ligadas, **US$ 0,08/h** só com o `live`. Em números de aula: uma sessão de **4 horas** com as duas tasks custa **≈ US$ 0,52** por aluno (0,215 por task + 0,09 do ALB + centavos de LCU e ECR); desligando o `candidate` após a promoção, **≈ US$ 0,36**. Para uma turma de 40, ≈ US$ 21 ou ≈ US$ 14. Fora dessa conta, porque são de outros states: o runner `t3.small` (~US$ 0,02/h) e a EC2 de observabilidade da 5.2 (`t3.medium`, ~US$ 0,04/h) (preços de lista de `us-east-1`; o `terraform output cost_warning` repete o lembrete). A API de pedidos (Lambda, API Gateway, DynamoDB) custa ~US$ 0 parada. **Não destrua nada entre a 5.1 e a 5.2**: a 5.2 opera exatamente este ambiente. A limpeza segura está na Parte 7 e sempre começa em `--dry-run`.
+> **Custo enquanto estiver de pé.** Cada task Fargate ligada (1 vCPU + 3 GB, app + Neo4j juntos: ~US$ 0,053/h), o ALB (~US$ 0,0225/h) e a EC2 do runner (`t3.small`, ~US$ 0,02/h) cobram **por hora, com ou sem uso**. Com os preços públicos de `us-east-1` de novembro de 2026 (vCPU-hora US$ 0,04048; GB-hora US$ 0,004445; ALB-hora US$ 0,0225), cada task custa **US$ 0,054/h** e o ALB **US$ 0,0225/h**: **US$ 0,13/h** com as duas tasks ligadas, **US$ 0,08/h** só com o `live`. Em números de aula: uma sessão de **4 horas** com as duas tasks custa **≈ US$ 0,52** por aluno (0,215 por task + 0,09 do ALB + centavos de LCU e ECR); desligando o `candidate` após a promoção, **≈ US$ 0,36**. Para uma turma de 40, ≈ US$ 21 ou ≈ US$ 14. Fora dessa conta, porque são de outros states: o runner `t3.small` (~US$ 0,02/h) e a EC2 de observabilidade da 5.2 (`t3.medium`, ~US$ 0,04/h) (preços de lista de `us-east-1`; o `cost_warning` no fim do `apply` do `make up` repete o lembrete). A API de pedidos (Lambda, API Gateway, DynamoDB) custa ~US$ 0 parada. **Não destrua nada entre a 5.1 e a 5.2**: a 5.2 opera exatamente este ambiente. A limpeza segura está na Parte 7 e sempre começa em `--dry-run`.
 
 ---
 
@@ -260,17 +260,6 @@ branch 'main' set up to track 'origin/main'.
 </blockquote>
 </details>
 
-**2.1. Ligue o terminal ao state da AWS.** Só **lê** o state do bucket `base-config-<SEU RM>` (não cria nada):
-
-```bash
-cd /home/vscode/environment/quantum-ai-assistant
-BUCKET=$(aws s3 ls | awk '{print $3}' | grep '^base-config' | head -1); echo "bucket: $BUCKET"
-terraform -chdir=infra-ecs init -input=false -reconfigure -backend-config="bucket=$BUCKET" >/dev/null && echo "init: ok"
-terraform -chdir=infra-ecs output -raw app_url 2>/dev/null; echo
-```
-
-**Esperado:** `bucket: base-config-<RM>` e `init: ok`; na primeira vez a última linha vem **vazia**.
-
 <details>
 <summary><b>💡 Clique para entender: o que cada linha do bloco faz</b></summary>
 <blockquote>
@@ -282,7 +271,6 @@ terraform -chdir=infra-ecs output -raw app_url 2>/dev/null; echo
 - O `cp -r .../quantum-assistant/.` (com o ponto no fim) copia o **conteúdo** da pasta, inclusive o `.gitlab-ci.yml` oculto, para a raiz.
 - A branch pode se chamar `main` ou `master` conforme a configuração da sua conta; os comandos usam `$(git branch --show-current)` para não depender disso.
 - A partir daqui, tudo roda em `/home/vscode/environment/quantum-ai-assistant`.
-- No 2.1, os comandos da aula leem a URL do assistente com `terraform -chdir=infra-ecs output`; para isso o Terraform precisa conhecer o state que fica no bucket `base-config-<SEU RM>` da **sua** conta. Se o ambiente já existe (sessão repetida), a última linha traz a `app_url` (`http://qc-assistant-alb-...`); na primeira vez ela vem vazia porque o ambiente ainda não existe, e é o que os passos 3 a 6 criam.
 
 </blockquote>
 </details>
@@ -319,15 +307,6 @@ O projeto foi criado com outro nome ou em outro namespace (passo 1.1). Confira o
 <blockquote>
 
 Repositório do curso desatualizado: `cd /workspaces/FIAP-AI-Devops-CICD && git pull origin master` e repita o bloco.
-
-</blockquote>
-</details>
-
-<details>
-<summary><b>⚠ Se der erro: <code>bucket:</code> vazio no 2.1</b></summary>
-<blockquote>
-
-As credenciais expiraram ou a conta ainda não tem bucket (o `make bootstrap` do passo 3 cria). Repita o 2.1 depois do passo 3.
 
 </blockquote>
 </details>
@@ -371,6 +350,8 @@ make bootstrap
 ```
 
 **Esperado:** a última linha é `Bootstrap ok. Proximo: make runner e depois make preflight.`
+
+Se aparecer `Nenhum bucket base-config-*`, rode `make bootstrap RM=` seguido do seu RM, por exemplo `make bootstrap RM=123456`.
 
 <details>
 <summary><b>📋 Saída completa esperada</b></summary>
@@ -453,7 +434,7 @@ Refaça o [Início de aula](../../00-create-codespaces/Inicio-de-aula.md) e repi
 <summary><b>⚠ Se der erro: <code>Nenhum bucket base-config-* na conta. Rode: make bootstrap RM=&lt;seu-rm&gt;</code></b></summary>
 <blockquote>
 
-Faça exatamente isso, com o seu RM: `make bootstrap RM=<seu-rm>`.
+A conta ainda não tem o bucket do state. Rode `make bootstrap RM=` seguido do seu RM, por exemplo `make bootstrap RM=123456`; o bootstrap cria o bucket `base-config-` + RM e segue.
 
 </blockquote>
 </details>
@@ -581,9 +562,12 @@ A chave não está carregada neste terminal. Rode `eval $(ssh-agent -s) && ssh-a
 A sua cópia do projeto (passo 2) é anterior a uma atualização do curso: o `git pull` atualiza só `/workspaces/FIAP-AI-Devops-CICD`, não a cópia. Copie de novo e publique:
 
 ```bash
+eval $(ssh-agent -s) >/dev/null && ssh-add -k /home/vscode/.ssh/gitlab
 cp -r /workspaces/FIAP-AI-Devops-CICD/04-GenAIOps/quantum-assistant/. /home/vscode/environment/quantum-ai-assistant/
 cd /home/vscode/environment/quantum-ai-assistant
-git add -A && git commit -m "atualiza o assistente com a versao do curso" && git push
+git add -A
+git commit -m "atualiza o assistente com a versao do curso" || true
+git push
 ```
 
 O pipeline desse push fica pendente até o runner existir (4.4). Depois repita o sub-passo em que parou.
@@ -743,6 +727,8 @@ Resultado: a task não depende de internet para ficar pronta, o cold start cabe 
 **A ordem.** O `make image` envia a imagem ao repositório ECR `qc-assistant-app`, e quem cria esse repositório é o Terraform do `make up`. Já o `make up` não precisa da imagem: os services nascem com `desired_count = 0` e uma task definition **template**, e quem os liga com o release é o `make deploy` do passo 6. No fim, o `make up` chama o `make mirror-neo4j`, que copia, do Codespaces, a imagem oficial do Neo4j para o ECR com o mesmo digest (a task não depende do Docker Hub).
 
 **A saída.** O `apply` lista 28 recursos e os outputs (entre eles `app_url` e um `cost_warning`).
+
+**O state.** Fica no bucket da sua conta, em `s3://base-config-<SEU RM>/quantum-assistant/ecs/terraform.tfstate`; o `make up` faz o `init` sozinho, com o cache local em `~/.cache/qc-assistant/tf-ecs`. Por isso os passos seguintes leem a URL do assistente no SSM (`/qc-assistant/ecs/alb-url`), e não pelo Terraform.
 
 **Lê (data sources):** a VPC `fiap-lab` (tag `Name`), as subnets com `Tier=Public`, o `LabRole` (`data aws_iam_role`), o security group do runner (para liberar a porta administrativa só para ele).
 
@@ -923,7 +909,7 @@ HTTP 200
 
 **As leituras.** Nas duas versões da política de trocas, compare só o front matter entre `---`: `version`, `status`, `effective_date` e, na v3, `supersedes`; a v2 está `obsolete` e diz 15 dias, a v3 está vigente e diz 30; é a v2 que a cliente recebeu. Na campanha, repare nas datas de vigência; cada linha do `grep` é uma relação que o grafo percorre na Parte 4.
 
-**O endereço.** O `app_url` do `apply` (passo 5) também aparece como `url` no JSON `[live]` do deploy (o do `[candidate]` termina em `/candidate`). Se perder, `terraform -chdir=infra-ecs output -raw app_url` (passo 2.1) o devolve.
+**O endereço.** O `app_url` do `apply` (passo 5) também aparece como `url` no JSON `[live]` do deploy (o do `[candidate]` termina em `/candidate`). Se perder, `aws ssm get-parameter --name /qc-assistant/ecs/alb-url --query Parameter.Value --output text` o devolve (é o mesmo comando que os passos seguintes usam para preencher `APP`).
 
 **Os dois comandos.** O `make up` do passo 5 deixou os dois serviços criados e **desligados**. `make deploy-all` publica o release nos dois: para cada ambiente, registra a task definition com o digest do `make image`, liga o serviço e **espera** o `/ready` responder 200 pelo ALB. `make ready` é a conferência final; enquanto o `/ready` responder 503, nada adiante funciona.
 
@@ -1049,8 +1035,7 @@ No cabeçalho, o selo `LIVE`, **Release**, **Imagem** (digest curto) e **/ready*
 </blockquote>
 </details>
 
-<!-- NOVA-IMAGEM: img/central-evidencias-inicial.png | capturar: a Central de Evidências recém-aberta, com o seletor de data em 14/11/2026, tenant quantum e o painel das três estratégias vazio | FONTE REAL já capturada (live R3, pelo ALB): /tmp/qc18/evid/5.1/screenshots/r3/central-evidencias-inicial-1920.png (versão 1366 ao lado; release-health-1920.png para a seção Release & Health) | depois de salvar o arquivo, descomente a linha abaixo -->
-<!-- ![Central de Evidências recém-aberta: cabeçalho com ambiente LIVE, release, imagem e /ready; campo de pergunta, data simulada 14/11/2026, tenant quantum e três colunas vazias (BM25, Vetorial, Grafo)](img/central-evidencias-inicial.png) -->
+![Central de Evidências recém-aberta: cabeçalho com ambiente LIVE, release, imagem e /ready; campo de pergunta, data simulada 14/11/2026, tenant quantum e três colunas vazias (BM25, Vetorial, Grafo)](img/central-evidencias-inicial.png)
 
 <details>
 <summary><b>💡 Clique para entender: o que há em cada parte da tela</b></summary>
@@ -1093,7 +1078,7 @@ No Codespaces: **qual** release, corpus, grafo e índice estão atendendo; é co
 
 ```bash
 cd /home/vscode/environment/quantum-ai-assistant
-APP=$(terraform -chdir=infra-ecs output -raw app_url)
+APP=$(aws ssm get-parameter --name /qc-assistant/ecs/alb-url --query Parameter.Value --output text)
 curl -s "$APP/ready" | python3 -m json.tool
 ```
 
@@ -1261,8 +1246,7 @@ A faixa-resumo acima das colunas diz: *"As estratégias divergiram: BM25 politic
 </blockquote>
 </details>
 
-<!-- NOVA-IMAGEM: img/tres-estrategias-fone-2026.png | capturar: Resultado lado a lado para a pergunta do fone em 14/11/2026, com a faixa-resumo As estratégias divergiram, BM25 juntando troca de presente + garantia, Vetorial abstendo e Grafo respondendo 30 dias, com os blocos Bloqueados visíveis | FONTE REAL já capturada (live R3): /tmp/qc18/evid/5.1/screenshots/r3/tres-estrategias-30-dias-1920.png (e a versão 1366; conferir que é a pergunta do fone em 14/11/2026) | depois de salvar o arquivo, descomente a linha abaixo -->
-<!-- ![Painel das três estratégias para a pergunta do fone em 14/11/2026: BM25 junta dois trechos (troca de presente + garantia de 90 dias) citando politica-trocas@v3 e politica-garantia-eletronicos, Vetorial abstém por falta de evidência e só o Grafo responde 30 dias pelo trecho certo de politica-trocas@v3; cada coluna lista trechos com score, a citação e os documentos bloqueados com motivo](img/tres-estrategias-fone-2026.png) -->
+![Painel das três estratégias para a pergunta do fone em 14/11/2026: BM25 junta dois trechos (troca de presente + garantia de 90 dias) citando politica-trocas@v3 e politica-garantia-eletronicos, Vetorial abstém por falta de evidência e só o Grafo responde 30 dias pelo trecho certo de politica-trocas@v3; cada coluna lista trechos com score, a citação e os documentos bloqueados com motivo](img/tres-estrategias-fone-2026.png)
 
 <details>
 <summary><b>💡 Clique para entender: por que cada coluna respondeu assim, e o que cada coluna mostra</b></summary>
@@ -1318,7 +1302,7 @@ No Codespaces: a API mostra **tudo** o que a tela resume, e é o que o pipeline 
 
 ```bash
 cd /home/vscode/environment/quantum-ai-assistant
-APP=$(terraform -chdir=infra-ecs output -raw app_url)
+APP=$(aws ssm get-parameter --name /qc-assistant/ecs/alb-url --query Parameter.Value --output text)
 curl -s -X POST "$APP/lab/compare" -H 'content-type: application/json' -d '{
   "question": "Qual o prazo para trocar um fone de ouvido?",
   "as_of_date": "2026-11-14",
@@ -1522,8 +1506,7 @@ fone-bluetooth-qc ─PARTICIPATES_IN→ black-friday-2027 · bloqueado        (t
 </blockquote>
 </details>
 
-<!-- NOVA-IMAGEM: img/grafo-caminho-fone-2026.png | capturar: o painel do grafo (Cytoscape) com o caminho Product → Category → Policy → PolicyVersion v3 → Document → Chunk destacado, a v2 em cinza como superseded e a campanha Black Friday esmaecida por vigência | FONTE REAL já capturada (live R3): /tmp/qc18/evid/5.1/screenshots/r3/grafo-caminho-fone-2026-1920.png (e a versão 1366) | depois de salvar o arquivo, descomente a linha abaixo -->
-<!-- ![Caminho do grafo para o fone em 14/11/2026: produto, categoria áudio, política de trocas, versão 3 vigente (a versão 2 aparece tracejada e esmaecida, bloqueada por status), documento e trecho; a campanha Black Friday 2027 aparece tracejada por estar fora da vigência](img/grafo-caminho-fone-2026.png) -->
+![Caminho do grafo para o fone em 14/11/2026: produto, categoria áudio, política de trocas, versão 3 vigente (a versão 2 aparece tracejada e esmaecida, bloqueada por status), documento e trecho; a campanha Black Friday 2027 aparece tracejada por estar fora da vigência](img/grafo-caminho-fone-2026.png)
 
 <details>
 <summary><b>💡 Clique para entender: o que o desenho mostra e de onde ele vem</b></summary>
@@ -1652,7 +1635,7 @@ No Codespaces: os `nodes` e `edges` crus provam que o desenho não é ilustraç�
 
 ```bash
 cd /home/vscode/environment/quantum-ai-assistant
-APP=$(terraform -chdir=infra-ecs output -raw app_url)
+APP=$(aws ssm get-parameter --name /qc-assistant/ecs/alb-url --query Parameter.Value --output text)
 PRODUTO=fone-bluetooth-qc
 curl -s "$APP/lab/meta" | python3 -c 'import json,sys; m=json.load(sys.stdin); print("produtos conhecidos:", [p["id"] for p in m["products"]])'
 curl -s "$APP/lab/graph/product/$PRODUTO?as_of_date=2026-11-14&tenant=quantum" > /tmp/graph.json
@@ -1866,7 +1849,7 @@ No Codespaces: a política do **Parceiro X** (60 dias, outro tenant) é muito **
 
 ```bash
 cd /home/vscode/environment/quantum-ai-assistant
-APP=$(terraform -chdir=infra-ecs output -raw app_url)
+APP=$(aws ssm get-parameter --name /qc-assistant/ecs/alb-url --query Parameter.Value --output text)
 curl -s -X POST "$APP/lab/compare" -H 'content-type: application/json' -d '{
   "question": "Qual o prazo para trocar um fone de ouvido?",
   "as_of_date": "2026-11-14", "tenant": "quantum", "user_role": "customer"
@@ -1958,7 +1941,7 @@ Na aba da Central e depois no terminal do Codespaces: troca, arrependimento, reg
 
 ```bash
 cd /home/vscode/environment/quantum-ai-assistant
-APP=$(terraform -chdir=infra-ecs output -raw app_url)
+APP=$(aws ssm get-parameter --name /qc-assistant/ecs/alb-url --query Parameter.Value --output text)
 for TOKEN in "" "lab-token-bruno" "lab-token-ana"; do
   curl -s -X POST "$APP/assistant/ask" -H 'content-type: application/json' \
     -d "{\"question\":\"Onde está o meu pedido Q-1001?\",\"order_id\":\"Q-1001\",\"auth_token\":\"$TOKEN\"}" > /tmp/ask.json
