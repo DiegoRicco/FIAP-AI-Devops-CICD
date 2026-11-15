@@ -2329,9 +2329,11 @@ O `cleanup.sh` nunca toca a coluna da direita: ele só **lê** a VPC e o runner,
 
 <a id="passo-23"></a>
 
-**23. Veja o que a limpeza faria, sem fazer**
+**23. Limpe o que é da Aula 5**
 
-No Codespaces. Antes de qualquer remoção, a lista: o dry-run mostra e não remove.
+No Codespaces. Primeiro a lista (23.1, não apaga nada), depois a limpeza de verdade (23.2). Sai a observabilidade e o runtime ECS; ficam o bucket, a rede `fiap-lab`, a API de pedidos, os segredos e o projeto GitLab (tabela acima).
+
+**23.1.** Veja o que seria apagado, sem apagar:
 
 ```bash
 cd /home/vscode/environment/quantum-ai-assistant
@@ -2426,8 +2428,24 @@ bash scripts/cloud/cleanup.sh --apply
 </blockquote>
 </details>
 
-> [!CAUTION]
-> **Só limpe quando a Aula 5 tiver acabado de verdade** (as duas demos). Nesta ordem: `bash ops/cloud/obs.sh destroy --apply` (observabilidade) e depois `bash scripts/cloud/cleanup.sh --apply` (runtime ECS e revisões de task definition; o script pede que você digite `destruir runtime ecs`). **Sem** `--with-secrets`: os seis segredos do SSM ficam para o Trabalho Final. Se a aula seguinte ainda usar o ambiente, prefira `make down` (só desliga as tasks; `make start ENV=all` religa a mesma revisão em 3 a 5 min, e `make ready` confere). A API de pedidos (`infra/`), o bucket `base-config-<SEU RM>` e a rede `fiap-lab` **ficam**: são a base do Trabalho Final, que sobe o próprio ambiente por scripts em cima deles.
+**23.2.** Limpe de verdade, nesta ordem (só com a Aula 5 encerrada, as duas demos):
+
+```bash
+cd /home/vscode/environment/quantum-ai-assistant
+bash ops/cloud/obs.sh destroy --apply
+bash scripts/cloud/cleanup.sh --apply
+```
+
+**Esperado:** o `obs.sh` mostra `Destroy complete! Resources: 9 destroyed.` e `obs: stack de observabilidade removida`; o `cleanup.sh` pede que você digite `destruir runtime ecs` e termina com `cleanup: pronto. VPC fiap-lab, runner, bucket, API de pedidos e observabilidade nao foram tocados.` Sem `--with-secrets`: os seis segredos do SSM ficam para o Trabalho Final.
+
+<details>
+<summary><b>💡 Clique para entender: por que nesta ordem e o que acontece se a aula seguinte ainda usar o runtime</b></summary>
+<blockquote>
+
+**Só limpe quando a Aula 5 tiver acabado de verdade** (as duas demos). Nesta ordem: `bash ops/cloud/obs.sh destroy --apply` (observabilidade) e depois `bash scripts/cloud/cleanup.sh --apply` (runtime ECS e revisões de task definition; o script pede que você digite `destruir runtime ecs`). **Sem** `--with-secrets`: os seis segredos do SSM ficam para o Trabalho Final. Se a aula seguinte ainda usar o ambiente, prefira `make down` (só desliga as tasks; `make start ENV=all` religa a mesma revisão em 3 a 5 min, e `make ready` confere). A API de pedidos (`infra/`), o bucket `base-config-<SEU RM>` e a rede `fiap-lab` **ficam**: são a base do Trabalho Final, que sobe o próprio ambiente por scripts em cima deles.
+
+</blockquote>
+</details>
 
 <details>
 <summary><b>🗑 Opcional: zerar tudo, inclusive segredos e API de pedidos (só se você não for usar a base depois)</b></summary>
