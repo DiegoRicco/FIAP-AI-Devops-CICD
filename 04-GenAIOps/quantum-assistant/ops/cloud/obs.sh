@@ -211,8 +211,11 @@ do_deploy() {
   local iid
   iid=$(instance_id); [ -n "$iid" ] || die "EC2 $PROJECT-obs nao existe (rode: obs.sh apply)"
   wait_ssm_online "$iid"
-  log "rodando o bootstrap na $iid via SSM (primeira vez: ~4 min de docker pull)"
-  ssm_run "$iid" "set -e; test -f /opt/qc-obs/instance.env || { echo 'user_data ainda nao terminou'; exit 1; }; . /opt/qc-obs/instance.env; aws s3 cp --only-show-errors s3://\$QC_CONFIG_BUCKET/quantum-assistant/obs-config/ops/cloud/bootstrap.sh /opt/qc-obs/bootstrap.sh; bash /opt/qc-obs/bootstrap.sh 2>&1 | tail -25" 1200 >&2
+  log "esperando o primeiro boot da $iid (cloud-init) e rodando o bootstrap via SSM (primeira vez: ~4 min de docker pull)"
+  # O SSM fica Online antes de o user_data terminar, e o proprio user_data roda o
+  # bootstrap.sh: sem esperar o cloud-init, o comando acha a EC2 sem instance.env
+  # (EC2 nova) ou disputa o apt/docker com o bootstrap do primeiro boot.
+  ssm_run "$iid" "cloud-init status --wait >/dev/null 2>&1 || true; set -e; test -f /opt/qc-obs/instance.env || { echo 'user_data ainda nao terminou'; exit 1; }; . /opt/qc-obs/instance.env; aws s3 cp --only-show-errors s3://\$QC_CONFIG_BUCKET/quantum-assistant/obs-config/ops/cloud/bootstrap.sh /opt/qc-obs/bootstrap.sh; bash /opt/qc-obs/bootstrap.sh 2>&1 | tail -25" 1200 >&2
 }
 
 do_url() {

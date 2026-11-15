@@ -386,6 +386,21 @@ A mensagem completa é `obs: ERRO: ALB ausente: rode make up (passo 5 da Demo 5.
 </details>
 
 <details>
+<summary><b>⚠ Se der erro: <code>user_data ainda nao terminou</code> e <code>comando SSM terminou em Failed</code></b></summary>
+<blockquote>
+
+A sua cópia do projeto é anterior a uma correção do curso: o bootstrap rodou antes de a EC2 nova terminar o primeiro boot. Nada se perdeu. Atualize a cópia e repita o mesmo comando; ele não recria nada e não reinicia as tasks de novo:
+
+```bash
+cd /workspaces/FIAP-AI-Devops-CICD && git pull origin master
+cp -r /workspaces/FIAP-AI-Devops-CICD/04-GenAIOps/quantum-assistant/. /home/vscode/environment/quantum-ai-assistant/
+cd /home/vscode/environment/quantum-ai-assistant && bash ops/cloud/obs.sh up
+```
+
+</blockquote>
+</details>
+
+<details>
 <summary><b>⚠ Se der erro: <code>credencial AWS invalida ou expirada</code></b></summary>
 <blockquote>
 
