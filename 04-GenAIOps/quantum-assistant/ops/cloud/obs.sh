@@ -122,6 +122,7 @@ tf_vars() {
 }
 
 do_apply() {
+  alb_exists || log "AVISO: ALB $ALB_NAME ausente; a EC2 sobe sem a regra /grafana (rode make up, passo 5 da Demo 5.1)"
   tf_init
   # shellcheck disable=SC2046
   tf apply -input=false -auto-approve $(tf_vars) >&2
@@ -140,13 +141,17 @@ do_apply() {
   restart_for_otlp
 }
 
+RESTARTED=""
+
 restart_for_otlp() {
   # A task le o endpoint via "secrets" do SSM, que o ECS so resolve quando a
   # task sobe: sem reiniciar, o live e o candidate da 5.1 seguem com "disabled"
   # e os paineis com metricas do app ficam vazios ate o proximo deploy.
   # --force-new-deployment reusa a revisao atual do service: mesma imagem, mesmo
   # digest e mesmo QC_RELEASE_ID; o release nao muda, so o valor lido no boot.
-  local svc desired started=""
+  # So dispara: a espera fica em wait_restarted, para o `up` rodar o bootstrap da
+  # EC2 enquanto o ECS troca as tasks (um nao depende do outro).
+  local svc desired
   for svc in "$PROJECT-live" "$PROJECT-candidate"; do
     desired=$(aws ecs describe-services --cluster "$CLUSTER" --services "$svc" \
       --query "services[?status=='ACTIVE'].desiredCount | [0]" --output text 2>/dev/null || true)
@@ -155,14 +160,19 @@ restart_for_otlp() {
     esac
     aws ecs update-service --cluster "$CLUSTER" --service "$svc" --force-new-deployment \
       --query 'service.serviceName' --output text >/dev/null
-    started="$started $svc"
+    RESTARTED="$RESTARTED $svc"
   done
-  [ -n "$started" ] || return 0
-  log "reiniciando${started} na mesma revisao: a task so le o endpoint OTLP novo quando sobe (cold start ~3-5 min)"
+  [ -n "$RESTARTED" ] || return 0
+  log "reiniciando${RESTARTED} na mesma revisao: a task so le o endpoint OTLP novo quando sobe (cold start ~3-5 min, em paralelo)"
+}
+
+wait_restarted() {
+  [ -n "$RESTARTED" ] || return 0
+  log "esperando${RESTARTED} estabilizar com o endpoint OTLP novo"
   # shellcheck disable=SC2086
-  aws ecs wait services-stable --cluster "$CLUSTER" --services $started \
-    || die "${started# } nao estabilizou em 10 min. O endpoint ja esta gravado, entao repetir o obs.sh nao reinicia de novo; depois de make diagnose ENV=live e make diagnose ENV=candidate, para cada um: aws ecs update-service --cluster $CLUSTER --service <nome> --force-new-deployment"
-  log "${started# } estavel(is) com o endpoint OTLP novo (mesma imagem, mesmo release)"
+  aws ecs wait services-stable --cluster "$CLUSTER" --services $RESTARTED \
+    || die "${RESTARTED# } nao estabilizou em 10 min. O endpoint ja esta gravado, entao repetir o obs.sh nao reinicia de novo; depois de make diagnose ENV=live e make diagnose ENV=candidate, para cada um: aws ecs update-service --cluster $CLUSTER --service <nome> --force-new-deployment"
+  log "${RESTARTED# } estavel(is) com o endpoint OTLP novo (mesma imagem, mesmo release)"
 }
 
 wait_ssm_online() {
@@ -245,9 +255,14 @@ need_aws
 case "$cmd" in
   secrets) do_secrets ;;
   sync) do_sync ;;
-  apply) do_apply ;;
+  apply) do_apply; wait_restarted ;;
   deploy) do_deploy ;;
-  up) do_secrets >/dev/null; do_sync >/dev/null; do_apply; do_deploy; do_url ;;
+  up)
+    # Sem ALB o apply passaria com attach_alb=false e o Grafana sumiria do
+    # endereco publico sem erro nenhum. destroy e status nao checam: precisam
+    # funcionar com o ALB ja apagado.
+    alb_exists || die "ALB ausente: rode make up (passo 5 da Demo 5.1)"
+    do_secrets >/dev/null; do_sync >/dev/null; do_apply; do_deploy; wait_restarted; do_url ;;
   status) do_status ;;
   url) do_url ;;
   destroy) do_destroy ;;

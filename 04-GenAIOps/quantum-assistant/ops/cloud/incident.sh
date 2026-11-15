@@ -65,13 +65,21 @@ runner_id() {
 }
 
 task_ip() {
-  local env="$1" arn ip
-  arn=$(aws ecs list-tasks --cluster "$CLUSTER" --service-name "$PROJECT-$env" --desired-status RUNNING \
-    --query 'taskArns[0]' --output text)
-  [ -n "$arn" ] && [ "$arn" != "None" ] || die "nenhuma task RUNNING em $PROJECT-$env"
-  ip=$(aws ecs describe-tasks --cluster "$CLUSTER" --tasks "$arn" \
-    --query "tasks[0].attachments[0].details[?name=='privateIPv4Address'].value | [0]" --output text)
-  [ -n "$ip" ] && [ "$ip" != "None" ] || die "nao achei o IP privado da task de $env"
+  # Durante um deploy o service roda a task velha e a nova juntas (max 200%):
+  # a primeira da lista pode ser a velha, que some em seguida. Por isso so vale
+  # a task RUNNING da revisao que o service esta implantando agora.
+  local env="$1" svc="$PROJECT-$1" td arns ip
+  td=$(aws ecs describe-services --cluster "$CLUSTER" --services "$svc" \
+    --query 'services[0].taskDefinition' --output text)
+  [ -n "$td" ] && [ "$td" != "None" ] || die "service $svc nao encontrado no cluster $CLUSTER"
+  arns=$(aws ecs list-tasks --cluster "$CLUSTER" --service-name "$svc" --desired-status RUNNING \
+    --query 'taskArns' --output text)
+  [ -n "$arns" ] && [ "$arns" != "None" ] || die "nenhuma task RUNNING em $svc"
+  # shellcheck disable=SC2086
+  ip=$(aws ecs describe-tasks --cluster "$CLUSTER" --tasks $arns \
+    --query "tasks[?taskDefinitionArn=='$td' && lastStatus=='RUNNING'] | [0].attachments[0].details[?name=='privateIPv4Address'].value | [0]" \
+    --output text)
+  [ -n "$ip" ] && [ "$ip" != "None" ] || die "nenhuma task RUNNING de $svc na revisao atual (${td##*/}); deploy em andamento? tente de novo em 1 min ou rode make diagnose ENV=$env"
   echo "$ip"
 }
 

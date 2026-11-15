@@ -51,7 +51,7 @@ h "tasks (rodando e paradas recentemente)"
 TASKS="$( { aws ecs list-tasks --cluster "$CLUSTER" --service-name "$SERVICE" --query 'taskArns' --output text;
             aws ecs list-tasks --cluster "$CLUSTER" --service-name "$SERVICE" --desired-status STOPPED --query 'taskArns[:3]' --output text; } | tr '\t' '\n' | grep -v None || true)"
 if [ -z "$TASKS" ]; then
-  echo "nenhuma task (desired=0? rode make up / make start)"
+  echo "nenhuma task (desired=0? rode make start ENV=$ENV_NAME, ou make deploy-all se nunca houve deploy)"
 else
   # shellcheck disable=SC2086
   aws ecs describe-tasks --cluster "$CLUSTER" --tasks $TASKS --output json \

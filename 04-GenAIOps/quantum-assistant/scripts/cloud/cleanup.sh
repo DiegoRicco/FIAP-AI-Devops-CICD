@@ -8,8 +8,9 @@
 #   - o bucket base-config-* e os states de outras keys;
 #   - a API de pedidos (state quantum-assistant/terraform.tfstate);
 #   - a observabilidade da 5.2 (state quantum-assistant/obs/terraform.tfstate):
-#     destrua-a antes com o cleanup de infra-obs, porque a regra /grafana dela
-#     fica pendurada no listener deste ALB.
+#     destrua-a antes (bash ops/cloud/obs.sh destroy --apply), porque a regra
+#     /grafana dela fica pendurada no listener deste ALB; o --apply recusa se a
+#     EC2 qc-assistant-obs ainda existir.
 # O que sai alem do Terraform (so com --apply): as revisoes de task definition
 # registradas pelo deploy.sh (familias qc-assistant-live/-candidate/-proof) e,
 # com --with-secrets, os SecureString de scripts/cloud/secrets.sh.
@@ -39,6 +40,16 @@ done
 log() { echo "cleanup: $*" >&2; }
 [ -n "$BUCKET" ] || BUCKET="$(aws s3api list-buckets --query 'Buckets[].Name' --output text | tr '\t' '\n' | grep '^base-config-' | head -1)"
 [ -n "$BUCKET" ] || { log "ERRO: nenhum bucket base-config-*"; exit 1; }
+
+# A regra /grafana da 5.2 mora no listener deste ALB: destruir o runtime com a
+# EC2 de observabilidade de pe deixa o state de infra-obs/ apontando para um
+# listener que nao existe mais, e o destroy dele passa a falhar.
+OBS_EC2="$(aws ec2 describe-instances --filters "Name=tag:Name,Values=$PROJECT-obs" \
+  "Name=instance-state-name,Values=pending,running,stopping,stopped" \
+  --query 'Reservations[].Instances[].InstanceId' --output text | awk '{print $1}')"
+OBS_MSG="a EC2 $PROJECT-obs ($OBS_EC2) ainda existe: rode antes bash ops/cloud/obs.sh destroy --apply"
+
+[ "$APPLY" = 0 ] || [ -z "$OBS_EC2" ] || { log "RECUSADO: $OBS_MSG; nada foi destruido"; exit 1; }
 
 # Copia de trabalho fora do repositorio: o init nao deixa .terraform no projeto.
 WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT
@@ -83,6 +94,7 @@ fi
 printf '%s\t%s\t%s\n' "keep" "VPC fiap-lab, runner, bucket $BUCKET, API de pedidos, observabilidade 5.2" "nunca tocados"
 
 if [ "$APPLY" = 0 ]; then
+  [ -z "$OBS_EC2" ] || log "AVISO: $OBS_MSG (o --apply vai recusar)"
   log "--dry-run: nada foi destruido. Para destruir: bash scripts/cloud/cleanup.sh --apply"
   exit 0
 fi

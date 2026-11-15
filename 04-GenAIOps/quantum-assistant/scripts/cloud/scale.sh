@@ -17,15 +17,22 @@ CLUSTER="${CLUSTER:-$PROJECT}"
 COUNT="${1:-}"; TARGET="${2:-all}"
 case "$COUNT" in 0|1) ;; *) echo "uso: scale.sh <0|1> [live|candidate|all]" >&2; exit 2 ;; esac
 case "$TARGET" in live|candidate) ENVS="$TARGET" ;; all) ENVS="live candidate" ;; *) echo "ambiente invalido: $TARGET" >&2; exit 2 ;; esac
+# Valida todos antes de escalar qualquer um: com "all", parar no candidate
+# depois de ligar o live deixaria a turma com metade dos ambientes de pe.
+if [ "$COUNT" = 1 ]; then
+  for env in $ENVS; do
+    svc="$PROJECT-$env"
+    td="$(aws ecs describe-services --cluster "$CLUSTER" --services "$svc" --query 'services[0].taskDefinition' --output text)"
+    # Ligar o template (imagem placeholder) nao serve para nada: exige deploy antes.
+    if [ "$(aws ecs describe-task-definition --task-definition "$td" \
+        --query "taskDefinition.containerDefinitions[?name=='app'].environment[] | [?name=='QC_IMAGE_DIGEST'].value | [0]" --output text)" = "template" ]; then
+      echo "scale: $svc ainda esta no template (sem imagem do app). Rode make deploy-all (ou deploy.sh) primeiro; nenhum ambiente foi ligado." >&2
+      exit 1
+    fi
+  done
+fi
 for env in $ENVS; do
   svc="$PROJECT-$env"
-  td="$(aws ecs describe-services --cluster "$CLUSTER" --services "$svc" --query 'services[0].taskDefinition' --output text)"
-  # Ligar o template (imagem placeholder) nao serve para nada: exige deploy antes.
-  if [ "$COUNT" = 1 ] && [ "$(aws ecs describe-task-definition --task-definition "$td" \
-      --query "taskDefinition.containerDefinitions[?name=='app'].environment[] | [?name=='QC_IMAGE_DIGEST'].value | [0]" --output text)" = "template" ]; then
-    echo "scale: $svc ainda esta no template (sem imagem do app). Rode make deploy-live (ou deploy.sh) primeiro." >&2
-    exit 1
-  fi
   aws ecs update-service --cluster "$CLUSTER" --service "$svc" --desired-count "$COUNT" --query 'service.serviceName' --output text >/dev/null
   echo "$svc desired=$COUNT"
 done
