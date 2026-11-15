@@ -38,10 +38,11 @@ ALUNO_RM ?= $(if $(filter default undefined,$(origin RM)),,$(RM))
 BOOTSTRAP_BUCKET = $(or $(BUCKET),$(if $(ALUNO_RM),base-config-$(ALUNO_RM)))
 
 RUNNER_DIR := $(COURSE_REPO)/04-GenAIOps/shared/runner
-TF_ECS := terraform -chdir=infra-ecs
-# Copia de trabalho do Terraform fora do projeto: o init nao deixa .terraform
-# nem lock no repositorio do aluno.
-export TF_DATA_DIR := $(HOME)/.cache/qc-assistant/tf-ecs
+# Cache do Terraform fora do projeto (o init nao deixa .terraform nem lock no
+# repositorio do aluno) e SO para o infra-ecs: exportado para todo o Makefile, ele
+# era dividido com o orders-up do bootstrap (outra key de state) e o make up
+# parava em "Backend configuration changed".
+TF_ECS := TF_DATA_DIR=$(HOME)/.cache/qc-assistant/tf-ecs terraform -chdir=infra-ecs
 
 .PHONY: links down-dry-run help bootstrap preflight runner runner-docker orders-up secrets mirror-neo4j up image deploy deploy-live deploy-candidate deploy-all ready diagnose down start plan destroy-dry-run course-repo
 
@@ -114,7 +115,9 @@ mirror-neo4j: ## Copia o Neo4j pinado (infra-ecs/neo4j-image.json) para o ECR
 	@bash scripts/cloud/mirror-neo4j.sh
 
 up: ## Cria ECR, cluster ECS, ALB e services (Terraform, state quantum-assistant/ecs/)
-	@$(TF_ECS) init -input=false -backend-config=bucket=$(BUCKET) >/dev/null
+	@# -reconfigure: o state vive no S3 (key fixa) e o cache so guarda o ponteiro do
+	@# backend; um cache antigo (outro bucket ou versao anterior deste Makefile) nao trava o init.
+	@$(TF_ECS) init -input=false -reconfigure -backend-config=bucket=$(BUCKET) >/dev/null
 	@# -auto-approve: o bloco do passo 5 e colado inteiro; sem ele o apply pede "yes",
 	@# recebe a linha seguinte como resposta, cancela, e o make image falha sem ECR.
 	@$(TF_ECS) apply -input=false -auto-approve
@@ -171,7 +174,7 @@ start: ## Liga de novo a task do ENV na mesma revisao
 	@bash scripts/cloud/start.sh $(ENV)
 
 plan: ## terraform plan do runtime (deve dizer "No changes" depois do up)
-	@$(TF_ECS) init -input=false -backend-config=bucket=$(BUCKET) >/dev/null
+	@$(TF_ECS) init -input=false -reconfigure -backend-config=bucket=$(BUCKET) >/dev/null
 	@$(TF_ECS) plan -input=false
 
 destroy-dry-run: ## Lista o que o cleanup apagaria (so o state do runtime ECS)

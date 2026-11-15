@@ -756,6 +756,23 @@ Resultado: a task não depende de internet para ficar pronta, o cold start cabe 
 </details>
 
 <details>
+<summary><b>⚠ Se der erro: <code>Backend configuration changed</code> no <code>make up</code></b></summary>
+<blockquote>
+
+A sua cópia do projeto é anterior a uma correção do curso (o cache do Terraform era dividido com a API de pedidos). Atualize a cópia e repita:
+
+```bash
+cd /workspaces/FIAP-AI-Devops-CICD && git pull origin master
+cp -r /workspaces/FIAP-AI-Devops-CICD/04-GenAIOps/quantum-assistant/. /home/vscode/environment/quantum-ai-assistant/
+cd /home/vscode/environment/quantum-ai-assistant && make up
+```
+
+Nada se perde: o state fica no S3, e o cache local só guarda o endereço dele.
+
+</blockquote>
+</details>
+
+<details>
 <summary><b>⚠ Se der erro: <code>AccessDenied</code> em <code>ssm:PutParameter</code></b></summary>
 <blockquote>
 
