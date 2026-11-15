@@ -38,7 +38,7 @@ Esta demo usa algumas palavras novas; o bloco abaixo define cada uma, para consu
 </blockquote>
 </details>
 
-Você é o **AI DevOps Engineer** da Quantum Commerce. Nesta demo você opera **o mesmo produto** que a Demo 5.1 deixou na AWS: faz um pipeline real ficar **vermelho** por uma aresta errada no grafo (e prova que o `live` não mudou), corrige e vê a promoção `candidate → live` por digest, injeta um incidente **sem commit** no grafo do `live`, vê o alerta de qualidade disparar enquanto HTTP e latência seguem verdes, acha o elo quebrado no trace, restaura, prova com replay e fecha com um postmortem que vira caso golden. É o último capítulo prático da disciplina.
+Você é o **AI DevOps Engineer** da Quantum Commerce. Nesta demo você opera **o mesmo produto** que a Demo 5.1 deixou na AWS: faz um pipeline real ficar **vermelho** por uma aresta errada no grafo (e prova que o `live` não mudou), corrige e vê a promoção `candidate → live` por digest, injeta um incidente **sem commit** no grafo do `live`, vê o alerta de qualidade disparar enquanto HTTP e latência seguem verdes, acha o elo quebrado no trace, restaura, prova com replay e fecha com um postmortem que vira caso golden. É o último capítulo prático da Aula 5; depois dele vem o Trabalho Final.
 
 Os comandos rodam em três lugares, e cada passo diz qual: **Codespaces** (terminal), **GitLab** (navegador) e **Grafana** (navegador, atrás do ALB da sua conta, com login; o Jaeger é lido **por dentro** do Grafana, como fonte de dados, e não tem endereço público).
 
@@ -88,7 +88,7 @@ Os blocos **💡 Clique para entender** trazem o aprofundamento; **📋 Saída c
 | [Parte 5](#parte-5---nenhum-commit-aconteceu-mesmo-assim-piorou) | 47–55 | Injetar `stale_graph_policy` no `live`; HTTP 200 e resposta errada; alerta crítico | [13](#passo-13) · [14](#passo-14) · [15](#passo-15) | 8 min |
 | [Parte 6](#parte-6---encontre-o-elo-quebrado) | 55–64 | Trace no Jaeger, painel do Diego, o elo quebrado, restore e replay | [16](#passo-16) · [17](#passo-17) · [18](#passo-18) · [19](#passo-19) | 9 min |
 | [Parte 7](#parte-7---transforme-incidente-em-aprendizado) | 64–72 | Postmortem (pré-preenchido: você completa horários, `trace_id` e versões), caso golden novo, Three Ways | [20](#passo-20) · [21](#passo-21) · [22](#passo-22) | 8 min |
-| [Encerramento](#encerramento-da-disciplina-e-limpeza) | 72–80 | O ciclo da disciplina e a limpeza segura, no fim do módulo | [23](#passo-23) · [24](#passo-24) | 8 min |
+| [Encerramento](#encerramento-da-aula-5-e-limpeza) | 72–80 | O que a Aula 5 fechou e a limpeza segura | [23](#passo-23) · [24](#passo-24) | 8 min |
 
 <details>
 <summary><b>💡 Por que operar é diferente de entregar, em 3 parágrafos</b></summary>
@@ -172,7 +172,7 @@ No Codespaces. A aula só funciona se o `live` estiver atendendo o release que a
 ```bash
 cd /home/vscode/environment/quantum-ai-assistant
 make ready | tail -1
-bash ops/cloud/incident.sh state --env live
+bash ops/cloud/incident.sh state --env live | jq
 ```
 
 **Esperado:** `HTTP 200` e, no JSON, `"in_sync": true` com `"active_mutations": []` (sem drift). Só lê; seguro repetir.
@@ -386,21 +386,6 @@ A mensagem completa é `obs: ERRO: ALB ausente: rode make up (passo 5 da Demo 5.
 </details>
 
 <details>
-<summary><b>⚠ Se der erro: <code>user_data ainda nao terminou</code> e <code>comando SSM terminou em Failed</code></b></summary>
-<blockquote>
-
-A sua cópia do projeto é anterior a uma correção do curso: o bootstrap rodou antes de a EC2 nova terminar o primeiro boot. Nada se perdeu. Atualize a cópia e repita o mesmo comando; ele não recria nada e não reinicia as tasks de novo:
-
-```bash
-cd /workspaces/FIAP-AI-Devops-CICD && git pull origin master
-cp -r /workspaces/FIAP-AI-Devops-CICD/04-GenAIOps/quantum-assistant/. /home/vscode/environment/quantum-ai-assistant/
-cd /home/vscode/environment/quantum-ai-assistant && bash ops/cloud/obs.sh up
-```
-
-</blockquote>
-</details>
-
-<details>
 <summary><b>⚠ Se der erro: <code>credencial AWS invalida ou expirada</code></b></summary>
 <blockquote>
 
@@ -572,8 +557,6 @@ O semáforo **Confiança do assistente agora** diz **Confiável** (verde), com *
 
 ![Dashboard da Helena no baseline: semáforo Confiável, 517 perguntas, Política vigente em 100%, Caminho do grafo em 95%, Pedidos sem status em 0% e nenhum probe errado nos últimos 2 minutos](img/grafana-helena-baseline.png)
 
-<!-- PRINT-HOMOLOGACAO: img/grafana-helena-baseline.png veio da rodada R3 (2026-11-14); o professor decide se troca -->
-
 <details>
 <summary><b>⚠ Se der erro: semáforo em cinza com <b>Amostra insuficiente</b></b></summary>
 <blockquote>
@@ -733,7 +716,6 @@ Os links abrem a **Visão técnica · SRE** (Diego) e a **Visão do negócio · 
 
 ![Dashboard do Diego no baseline: 1,20 req/s, Erros 5xx em 0,0%, Latência p95 de 61,67 ms, Probes corretos em 98%, n = 60 de mínimo 20 e Alertas disparando 0](img/grafana-diego-baseline.png)
 
-<!-- PRINT-HOMOLOGACAO: img/grafana-diego-baseline.png veio da rodada R3 (2026-11-14); o professor decide se troca -->
 
 <details>
 <summary><b>💡 Clique para entender: onde ficam os dashboards e o que o rodapé da Helena avisa</b></summary>
@@ -1067,11 +1049,9 @@ graph-gate-ci: seed/front matter incoerente: o golden de grafo nem roda (o JUnit
 </blockquote>
 </details>
 
-<!-- NOVA-IMAGEM: img/pipeline-vermelho-graph-gate.png | capturar: página do pipeline com preflight, security-gate e api-contract-gate verdes, retrieval-quality-gate, business-policy-gate e graph-policy-gate vermelhos, e package, deploy-candidate, postdeploy e promote em cinza (skipped) | depois de salvar o arquivo, descomente a linha abaixo -->
-<!-- ![Pipeline reprovado no stage evaluate: preflight, security-gate e api-contract-gate verdes; retrieval-quality-gate, business-policy-gate e graph-policy-gate vermelhos; package, deploy-candidate, postdeploy-synthetic-gate e promote-live cinza, não executados](img/pipeline-vermelho-graph-gate.png) -->
+![Pipeline reprovado no stage evaluate: preflight, security-gate e api-contract-gate verdes; retrieval-quality-gate, business-policy-gate e graph-policy-gate vermelhos; package, deploy-candidate, postdeploy-synthetic-gate e promote-live cinza, não executados](img/pipeline-vermelho-graph-gate.png)
 
-<!-- NOVA-IMAGEM: img/aba-tests-graph-gate.png | capturar: aba Tests do GitLab na suíte graph-policy-gate com os quatro testes reprovados e o seed.supersedes_invertido aberto, mostrando a mensagem da aresta invertida | depois de salvar o arquivo, descomente a linha abaixo -->
-<!-- ![Aba Tests do GitLab: suíte graph-policy-gate com quatro testes reprovados (seed.supersedes_invertido, seed.substituida_ativa, seed.duas_versoes_ativas, seed.consistencia) e a mensagem de seed.supersedes_invertido aberta: politica-trocas@v2 SUPERSEDES politica-trocas@v3, a versão antiga substitui a nova](img/aba-tests-graph-gate.png) -->
+![Aba Tests do GitLab: suíte graph-policy-gate com quatro testes reprovados (seed.supersedes_invertido, seed.substituida_ativa, seed.duas_versoes_ativas, seed.consistencia) e a mensagem de seed.supersedes_invertido aberta: politica-trocas@v2 SUPERSEDES politica-trocas@v3, a versão antiga substitui a nova](img/aba-tests-graph-gate.png)
 
 <details>
 <summary><b>💡 Clique para entender: o pipeline B2 da homologação e os três achados</b></summary>
@@ -1299,8 +1279,7 @@ Job succeeded
 </blockquote>
 </details>
 
-<!-- NOVA-IMAGEM: img/pipeline-verde-promote.png | capturar: página do pipeline inteiramente verde, do preflight ao promote-live, com o rollback manual no último stage | depois de salvar o arquivo, descomente a linha abaixo -->
-<!-- ![Pipeline verde: preflight, security-gate, api-contract-gate, retrieval-quality-gate, business-policy-gate e graph-policy-gate, package, deploy-candidate, postdeploy-synthetic-gate e promote-live, com o job rollback manual no último stage](img/pipeline-verde-promote.png) -->
+![Pipeline verde: preflight, security-gate, api-contract-gate, retrieval-quality-gate, business-policy-gate e graph-policy-gate, package, deploy-candidate, postdeploy-synthetic-gate e promote-live, com o job rollback manual no último stage](img/pipeline-verde-promote.png)
 
 <details>
 <summary><b>⚠ Se der erro: <code>postdeploy</code> vermelho com <code>image_digest</code> diferente</b></summary>
@@ -1644,11 +1623,8 @@ O que avisa é o **probe** rodando na AWS com gabarito, e o monitor comparando a
 
 ![Dashboard da Helena durante o incidente: semáforo Não confiável, política vigente em 89% e caminho do grafo em 78%, e a tabela Por que o semáforo está assim com Serviu uma política que não vale hoje (11 probes)](img/grafana-helena-incidente.png)
 
-<!-- PRINT-HOMOLOGACAO: img/grafana-helena-incidente.png veio da rodada R3 (2026-11-14); o professor decide se troca -->
 
 ![Dashboard do Diego no mesmo instante: Erros 5xx em 0,0% e Latência p95 de 68,57 ms como no baseline, mas Probes corretos em 74% e 8 alertas disparando](img/grafana-diego-incidente.png)
-
-<!-- PRINT-HOMOLOGACAO: img/grafana-diego-incidente.png veio da rodada R3 (2026-11-14); o professor decide se troca -->
 
 <details>
 <summary><b>💡 Clique para entender: o tempo até detecção, SLI, SLO, janela, n mínimo e os três estados</b></summary>
@@ -1732,7 +1708,11 @@ cd /home/vscode/environment/quantum-ai-assistant && make links painel-investigac
 
 **16.3. Filtre o log.** No topo do dashboard, no campo **Buscar no log (caso, motivo)**, digite `stale_source_served`.
 
+![Filtro de log no Grafana mostrando apenas linhas com stale_source_served](img/filtro-log-stale-source-served.png)
+
 **16.4.** Tecle **Enter**. Se não vier nada, troque o texto por `fail` e tecle Enter de novo.
+
+![Filtro de log no Grafana mostrando apenas linhas com stale_source_served](img/filtro-log-stale-source-served2.png)
 
 **Esperado:** o painel **Logs dos probes e do monitor de qualidade** mostra só as linhas com `stale_source_served`.
 
@@ -1802,8 +1782,6 @@ qc-probe       quality.evaluate          case_id=...  outcome=fail  reason=stale
 </details>
 
 ![Trace da resposta errada no Grafana: qc-probe quality.evaluate chamando POST /lab/compare, com os spans entity.link, graph.traverse e policy.version.filter, e os atributos do policy.version.filter abertos](img/trace-stale-graph.png)
-
-<!-- PRINT-HOMOLOGACAO: img/trace-stale-graph.png veio da rodada R3 (2026-11-14); o professor decide se troca -->
 
 <details>
 <summary><b>🔎 Opcional: compare com um trace certo</b></summary>
@@ -2007,7 +1985,6 @@ cd /home/vscode/environment/quantum-ai-assistant && make links painel-helena
 
 ![Dashboard da Helena depois do restore: semáforo Confiável de volta, Política vigente e Caminho do grafo em 100% e Pedidos sem status em 0%](img/grafana-helena-restaurado.png)
 
-<!-- PRINT-HOMOLOGACAO: img/grafana-helena-restaurado.png veio da rodada R3 (2026-11-14); o professor decide se troca -->
 
 <details>
 <summary><b>💡 Clique para entender: o replay em escala e por que o alerta resolve pela janela</b></summary>
@@ -2123,7 +2100,7 @@ head -1 evals/golden_graph_v1.jsonl | python3 -m json.tool --no-ensure-ascii
 <summary><b>💡 Clique para entender: os campos de um caso golden e por que o do incidente já existia</b></summary>
 <blockquote>
 
-É a seta de volta da disciplina: o par **pergunta → caminho e versão esperados** do incidente é exatamente o formato de um caso do `golden_graph_v1`. Primeiro você vê um caso existente, depois acrescenta o seu e roda o gate contra o **`live`** (o que está atendendo). O caso do `head -1` tem a pergunta `Comprei um fone de ouvido, qual o prazo para trocar?`.
+É a seta de volta do ciclo: o par **pergunta → caminho e versão esperados** do incidente é exatamente o formato de um caso do `golden_graph_v1`. Primeiro você vê um caso existente, depois acrescenta o seu e roda o gate contra o **`live`** (o que está atendendo). O caso do `head -1` tem a pergunta `Comprei um fone de ouvido, qual o prazo para trocar?`.
 
 O incidente nasceu de uma pergunta ("quantos dias para trocar um fone?") respondida pela estratégia `graph` com a versão errada. Com um caso golden para ela, o `graph-policy-gate` reprova qualquer release cuja semente ligue o fone à v2, e o `postdeploy` reprova qualquer candidate cujo grafo em runtime faça isso.
 
@@ -2292,7 +2269,7 @@ O cenário não pegou; confira `"in_sync": false` entre o `apply` e o gate.
 
 **22. Three Ways, e o que Helena pode prometer**
 
-Leitura e discussão, para fechar a disciplina com os nomes certos para o que você fez.
+Leitura e discussão, para fechar a Aula 5 com os nomes certos para o que você fez.
 
 ```mermaid
 flowchart LR
@@ -2321,9 +2298,9 @@ flowchart LR
 
 ---
 
-## Encerramento da disciplina e limpeza
+## Encerramento da Aula 5 e limpeza
 
-Nenhum comando nesta seção até o passo 23. Leia, discuta, e só então limpe.
+Nenhum comando nesta seção até o passo 23. Leia, discuta, e só então limpe. A limpeza desta seção desliga o que é **da Aula 5** e deixa de pé a **base** que o Trabalho Final vai usar.
 
 ### O que você construiu em cada módulo
 
@@ -2334,7 +2311,19 @@ Nenhum comando nesta seção até o passo 23. Leia, discuta, e só então limpe.
 | **03 CI/CD** (Aula 4) | Pipeline que testa e publica a cada push, com gates de infra e de comportamento | "Essa mudança é segura **antes** de publicar?" | O que acontece depois do deploy |
 | **04 GenAIOps** (Aula 5) | 5.1: a evidência por trás da resposta (BM25, vetor, grafo, vigência, tenant, data). 5.2: gate de grafo, release por digest, probes na AWS, incidente sem commit, trace, restore, postmortem | "Essa resposta se aplica? E ela continua se aplicando **depois**?" | A qualidade da resposta a cada cliente real |
 
-A pergunta central da disciplina tem resposta: aplicações experimentais de IA viram sistemas **reproduzíveis** (01, 02), **testáveis** (03, 5.1), **continuamente entregáveis** (03, 5.2) e **operáveis** (5.2), sem perder qualidade, segurança e controle. O [Trabalho Final](../../Trabalho-final/README.md) pede que você junte as peças.
+A pergunta central da disciplina agora tem todas as peças: aplicações experimentais de IA viram sistemas **reproduzíveis** (01, 02), **testáveis** (03, 5.1), **continuamente entregáveis** (03, 5.2) e **operáveis** (5.2), sem perder qualidade, segurança e controle. Ainda não é o fim: o **Trabalho Final**, o próximo bloco (ainda por vir), junta essas peças numa aplicação só.
+
+### O que a limpeza tira e o que ela deixa de pé
+
+| Sai (custa por hora e é só da Aula 5) | Fica (base do Trabalho Final) |
+|---|---|
+| Observabilidade da 5.2: EC2 `qc-assistant-obs`, Grafana, coletor (`obs.sh destroy --apply`) | Bucket `base-config-<SEU RM>` com os states |
+| Runtime ECS: cluster, serviços `live` e `candidate`, ALB, ECR, revisões de task definition (`cleanup.sh --apply`) | VPC `fiap-lab` e as subnets |
+| Runner da Aula 5: **desligado** no passo 24 (destruir é opcional) | API de pedidos: Lambda, DynamoDB e API Gateway (~US$ 0 parada) |
+| | Segredos do SSM: `/qc-assistant/<env>/{neo4j-password,neo4j-auth,admin-hmac}` |
+| | O projeto no GitLab, com o código |
+
+O `cleanup.sh` nunca toca a coluna da direita: ele só **lê** a VPC e o runner, e a API de pedidos e o bucket estão em outros states. Os segredos só sairiam com `--with-secrets`, que esta limpeza **não** usa.
 
 ---
 
@@ -2395,7 +2384,7 @@ cleanup: AVISO: a EC2 qc-assistant-obs (i-...) ainda existe: rode antes bash ops
 cleanup: --dry-run: nada foi destruido. Para destruir: bash scripts/cloud/cleanup.sh --apply
 ```
 
-Leia as linhas `keep`: elas são a lista do que o script **se recusa** a tocar, impressa toda vez. O `AVISO` aparece porque, neste ponto, a EC2 de observabilidade ainda está de pé (o `obs.sh destroy` acima foi só o dry-run): é o lembrete da ordem, não um erro. <!-- CONFIRMAR-SAIDA: linha AVISO do cleanup.sh com a EC2 de obs de pe, nao executada na AWS -->
+Leia as linhas `keep`: elas são a lista do que o script **se recusa** a tocar, impressa toda vez. A linha dos segredos sugere `use --with-secrets para apagar`: aqui você **não** usa, porque os segredos ficam para o Trabalho Final. O `AVISO` aparece porque, neste ponto, a EC2 de observabilidade ainda está de pé (o `obs.sh destroy` acima foi só o dry-run): é o lembrete da ordem, não um erro. <!-- CONFIRMAR-SAIDA: linha AVISO do cleanup.sh com a EC2 de obs de pe, nao executada na AWS -->
 
 </blockquote>
 </details>
@@ -2429,7 +2418,7 @@ A mensagem completa é `cleanup: RECUSADO: a EC2 qc-assistant-obs (i-...) ainda 
 ```bash
 cd /home/vscode/environment/quantum-ai-assistant
 bash ops/cloud/obs.sh destroy --apply
-bash scripts/cloud/cleanup.sh --apply --with-secrets
+bash scripts/cloud/cleanup.sh --apply
 ```
 
 **Esperado:** o `obs.sh destroy --apply` apaga os 9 recursos da observabilidade; depois, o `cleanup.sh` passa da checagem e pede que você digite `destruir runtime ecs`.
@@ -2438,15 +2427,24 @@ bash scripts/cloud/cleanup.sh --apply --with-secrets
 </details>
 
 > [!CAUTION]
-> **Só limpe quando a Aula 5 tiver acabado de verdade** (as duas demos). Nesta ordem: `bash ops/cloud/obs.sh destroy --apply` (observabilidade) e depois `bash scripts/cloud/cleanup.sh --apply --with-secrets` (runtime ECS, revisões de task definition e os seis segredos; o script pede que você digite `destruir runtime ecs`). Se a aula seguinte ainda usar o ambiente, prefira `make down` (só desliga as tasks; `make start ENV=all` religa a mesma revisão em 3 a 5 min, e `make ready` confere). A API de pedidos (`infra/`) custa ~US$ 0 parada e pode ficar; se quiser removê-la, há um **segundo** script, só dela: `bash scripts/cleanup.sh --dry-run` (sem `cloud/`; é o cleanup do Terraform de `infra/`, a API de pedidos) e depois `--apply`. A rede `fiap-lab` **nunca** é destruída: o Trabalho Final a usa.
+> **Só limpe quando a Aula 5 tiver acabado de verdade** (as duas demos). Nesta ordem: `bash ops/cloud/obs.sh destroy --apply` (observabilidade) e depois `bash scripts/cloud/cleanup.sh --apply` (runtime ECS e revisões de task definition; o script pede que você digite `destruir runtime ecs`). **Sem** `--with-secrets`: os seis segredos do SSM ficam para o Trabalho Final. Se a aula seguinte ainda usar o ambiente, prefira `make down` (só desliga as tasks; `make start ENV=all` religa a mesma revisão em 3 a 5 min, e `make ready` confere). A API de pedidos (`infra/`), o bucket `base-config-<SEU RM>` e a rede `fiap-lab` **ficam**: são a base do Trabalho Final, que sobe o próprio ambiente por scripts em cima deles.
+
+<details>
+<summary><b>🗑 Opcional: zerar tudo, inclusive segredos e API de pedidos (só se você não for usar a base depois)</b></summary>
+<blockquote>
+
+Não é o caminho da aula: o Trabalho Final precisa desta base. Se mesmo assim quiser apagar os seis segredos do SSM, troque o segundo comando da limpeza por `bash scripts/cloud/cleanup.sh --apply --with-secrets` (o dry-run com `--with-secrets` mostra as seis linhas `delete ssm`). A API de pedidos tem um **segundo** script, só dela: `bash scripts/cleanup.sh --dry-run` (sem `cloud/`; é o cleanup do Terraform de `infra/`) e depois `--apply`. A rede `fiap-lab` **nunca** é destruída.
+
+</blockquote>
+</details>
 
 ---
 
 <a id="passo-24"></a>
 
-**24. Desligue ou destrua o runner: fim do ciclo de nuvem**
+**24. Desligue o runner da Aula 5**
 
-No Codespaces. O runner é o único recurso que custa parado e sobrevive à limpeza acima. Se ainda vai voltar à Aula 5, **desligue** (reversível; `make runner`, no mesmo projeto, liga de volta sem pedir o token de novo):
+No Codespaces. O runner é o único recurso que custa parado e sobrevive à limpeza acima. O padrão é **desligar** (reversível; `make runner`, no mesmo projeto, liga de volta sem pedir o token de novo):
 
 ```bash
 INSTANCE=$(aws ec2 describe-instances --region us-east-1 --filters "Name=tag:Name,Values=quantum-ai-gitlab-runner" "Name=instance-state-name,Values=running,stopped" --query 'Reservations[].Instances[].InstanceId' --output text)
@@ -2492,10 +2490,10 @@ Ctrl+clique no link (Cmd+clique no Mac) para abrir no navegador (no menu, **Sett
 </details>
 
 <details>
-<summary><b>💡 Clique para entender: por que destruir aqui não deixa nada órfão</b></summary>
+<summary><b>💡 Clique para entender: por que desligar, e não destruir, é o padrão</b></summary>
 <blockquote>
 
-O [Trabalho Final](../../Trabalho-final/README.md#parte-0---preparação-provisionamento-entregue) **não** reaproveita este runner (ele sobe um novo, no projeto `trabalho-final`), então destruir aqui não deixa nada órfão.
+Desligado, o runner deixa de cobrar a hora da EC2 e volta em minutos se você precisar rever a Aula 5. O Trabalho Final provisiona o próprio ambiente por scripts sobre a base que ficou de pé (bucket, rede `fiap-lab`, API de pedidos, segredos e projeto GitLab), então destruir este runner é opcional e não deixa nada órfão.
 
 </blockquote>
 </details>
@@ -2521,7 +2519,7 @@ Outro `terraform` aberto.
 ### Checkpoint
 
 - `cleanup.sh --dry-run` listou só `qc-assistant-` e terminou com `nada foi destruido`
-- runner desligado (ou destruído, com `3 destroyed`); rede `fiap-lab` intacta
+- runner desligado (ou destruído, com `3 destroyed`); bucket, rede `fiap-lab`, API de pedidos e segredos do SSM intactos
 
 ---
 
@@ -2541,7 +2539,7 @@ Nesta demo você:
 
 ## Próximo passo
 
-Prossiga para o **[Trabalho Final](../../Trabalho-final/README.md)** (Aula 6), com um runner **novo** provisionado pela Parte 0 dele. Leve a P5: o trabalho vai pedir que você defenda decisões, não só que rode comandos. A versão anterior desta demo (pilha local no Codespaces) está em [LEGADO-local-demo.md](LEGADO-local-demo.md) e serve para estudar sem AWS.
+O próximo bloco é o **Trabalho Final**, que junta as peças das Aulas 2 a 5 e sobe o próprio ambiente por scripts sobre a base que ficou de pé. Leve a P5: o trabalho vai pedir que você defenda decisões, não só que rode comandos. A versão anterior desta demo (pilha local no Codespaces) está em [LEGADO-local-demo.md](LEGADO-local-demo.md) e serve para estudar sem AWS.
 
 ---
 
