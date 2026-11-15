@@ -562,6 +562,23 @@ Depois, em todos os casos, as linhas do Docker do runner (`docker_installed=alre
 </details>
 
 <details>
+<summary><b>⚠ Se der erro: <code>No rule to make target 'links'</code> (ou <code>'runner'</code> com outra saída)</b></summary>
+<blockquote>
+
+A sua cópia do projeto (passo 2) é anterior a uma atualização do curso: o `git pull` atualiza só `/workspaces/FIAP-AI-Devops-CICD`, não a cópia. Copie de novo e publique:
+
+```bash
+cp -r /workspaces/FIAP-AI-Devops-CICD/04-GenAIOps/quantum-assistant/. /home/vscode/environment/quantum-ai-assistant/
+cd /home/vscode/environment/quantum-ai-assistant
+git add -A && git commit -m "atualiza o assistente com a versao do curso" && git push
+```
+
+O pipeline desse push fica pendente até o runner existir (4.3). Depois repita o sub-passo em que parou.
+
+</blockquote>
+</details>
+
+<details>
 <summary><b>⚠ Se der erro: <code>TOKEN invalido: tem que comecar com glrt-</code></b></summary>
 <blockquote>
 
